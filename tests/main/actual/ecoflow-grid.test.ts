@@ -26,3 +26,11 @@ test('frequency 0 → off; flag true → on; watts only', () => {
 test('non-numeric values are ignored, never read as 0', () => {
   expect(detectGrid({ 'inv.acInVol': null, 'inv.acInFreq': '50' }).power).toBe('unknown');
 });
+test('frequency between 0 and 40 Hz is skipped, not read as off', () => {
+  for (const hz of [1, 39]) {
+    expect(detectGrid({ 'inv.acInFreq': hz })).toEqual({ power: 'unknown', reason: 'модель поки не підтримується', unsupported: true });
+    expect(detectGrid({ 'inv.acInFreq': hz, plugInInfoAcInFlag: 1 })).toEqual({ power: 'on', detail: 'вхід AC підключено' });
+    expect(detectGrid({ 'inv.acInFreq': hz, 'inv.inputWatts': 80 })).toEqual({ power: 'on', detail: 'на вході 80 Вт' });
+  }
+  expect(detectGrid({ 'inv.acInFreq': 40 }).power).toBe('on');
+});
