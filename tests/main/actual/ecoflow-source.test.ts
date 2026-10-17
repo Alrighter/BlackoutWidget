@@ -151,11 +151,9 @@ test('first quota/all alone is not fresh', async () => {
 });
 
 test('device offline → unknown, never off', async () => {
-  const { mqtt, begin, last, readings } = setup({ devices: [OFFLINE], quota: [vol(0), vol(1)] });
+  // quota/all changes at 1:00, so 0 V is even "fresh" — the offline list still wins.
+  const { begin, last, readings } = setup({ devices: [OFFLINE], quota: [vol(0), vol(1)] });
   await begin();
-  const c = mqtt.last();
-  c.emit('connect');
-  send(c, QUOTA_TOPIC, inv(0)); // fresh 0 V from a station that is offline
   await advance(MIN);
   expect(last()).toEqual({ power: 'unknown', observedAt: t(MIN), reason: 'станція не в мережі' });
   expect(readings.length).toBeGreaterThanOrEqual(3);
@@ -188,18 +186,70 @@ test('status topic beats the lagging device list while MQTT is connected', async
   expect(last()).toEqual({ power: 'unknown', observedAt: t(5 * MIN), reason: 'станція не в мережі' });
 });
 
-test('quota/all does not overwrite keys MQTT updated within 60 s', async () => {
-  const { mqtt, begin, last } = setup({ quota: [vol(229000)] });
+test('a /quota message is online evidence: a /status 0 from an earlier session no longer sticks', async () => {
+  const { mqtt, begin, last } = setup(); // the list says online throughout
+  await begin();
+  const c1 = mqtt.last();
+  c1.emit('connect');
+  await advance(30 * SEC);
+  send(c1, STATUS_TOPIC, status(0));
+  c1.emit('close'); // the station comes back while MQTT is down: its /status 1 is missed
+  await advance(10 * SEC);
+  const c2 = mqtt.last();
+  expect(c2).not.toBe(c1);
+  c2.emit('connect');
+  await advance(5 * MIN); // 5:40 — the 5:00 list still says online, unchanged since boot
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(5 * MIN), reason: 'станція не в мережі' });
+  send(c2, QUOTA_TOPIC, inv(229345));
+  expect(last()).toEqual({ power: 'on', observedAt: t(5 * MIN + 40 * SEC), detail: 'на вході 229 В' });
+});
+
+test('quota/all never overwrites a key MQTT sent while MQTT data is fresh (R8)', async () => {
+  const { mqtt, begin, last } = setup({ quota: [vol(229345)] });
   await begin();
   const c = mqtt.last();
   c.emit('connect');
   await advance(30 * SEC);
   send(c, QUOTA_TOPIC, inv(0));
   expect(last()).toEqual({ power: 'off', observedAt: t(30 * SEC), detail: 'на вході 0 В' });
-  await advance(30 * SEC); // quota/all at 1:00 still says 229 V; MQTT wrote the key 30 s ago
-  expect(last()).toEqual({ power: 'off', observedAt: t(30 * SEC), detail: 'на вході 0 В' });
-  await advance(MIN); // 2:00 — 90 s since MQTT: quota/all may write the key again
-  expect(last()).toEqual({ power: 'on', observedAt: t(30 * SEC), detail: 'на вході 229 В' });
+  // MQTT stays fresh through other keys; the lagging cache keeps saying 229 V.
+  for (let m = 1; m <= 3; m++) {
+    await advance(m === 1 ? 30 * SEC : MIN);
+    send(c, QUOTA_TOPIC, { typeCode: 'pdStatus', params: { soc: 80 + m } });
+  }
+  expect(last()).toEqual({ power: 'off', observedAt: t(3 * MIN), detail: 'на вході 0 В' });
+  await advance(MIN); // 4:00 — a quota/all after the last message
+  expect(last()).toEqual({ power: 'off', observedAt: t(3 * MIN), detail: 'на вході 0 В' });
+});
+
+test('after MQTT is silent for over 10 min, quota/all values apply again (R8)', async () => {
+  const quota = [...Array<Record<string, unknown>>(11).fill(vol(229345)), vol(229400)];
+  const { mqtt, begin, last } = setup({ quota });
+  await begin();
+  const c = mqtt.last();
+  c.emit('connect');
+  send(c, QUOTA_TOPIC, inv(0));
+  await advance(10 * MIN); // 10:00 — exactly 10 min since the message: still fresh, the MQTT key holds
+  expect(last()).toEqual({ power: 'off', observedAt: t(0), detail: 'на вході 0 В' });
+  await advance(MIN); // 11:00 — MQTT stale; quota/all changed, so it is fresh and wins every key
+  expect(last()).toEqual({ power: 'on', observedAt: t(11 * MIN), detail: 'на вході 229 В' });
+});
+
+test('keys MQTT sent in an earlier fresh period are not protected in a new one (R8)', async () => {
+  // quota/all fails 1:00–12:00, so nothing clears the old marks while MQTT is stale.
+  const net = new NetworkError('x');
+  const quota = [vol(229000), ...Array<Error>(12).fill(net), vol(229000)];
+  const { mqtt, begin, last } = setup({ quota });
+  await begin();
+  const c = mqtt.last();
+  c.emit('connect');
+  await advance(30 * SEC);
+  send(c, QUOTA_TOPIC, inv(0));
+  await advance(12 * MIN); // 12:30 — MQTT back after 12 min of silence, with another key
+  send(c, QUOTA_TOPIC, { typeCode: 'pdStatus', params: { soc: 80 } });
+  expect(last()).toEqual({ power: 'off', observedAt: t(12.5 * MIN), detail: 'на вході 0 В' });
+  await advance(30 * SEC); // 13:00 — quota/all works again and may write inv.acInVol
+  expect(last()).toEqual({ power: 'on', observedAt: t(12.5 * MIN), detail: 'на вході 229 В' });
 });
 
 test('network error → unknown «немає з’єднання з EcoFlow»; polling continues every 60 s', async () => {

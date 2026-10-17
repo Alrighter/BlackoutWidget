@@ -6,7 +6,7 @@ import { detectGrid } from './grid';
 import { normalizeQuotaMessage, parseStatusMessage } from './mqtt-message';
 
 export const QUOTA_POLL_MS = 60_000, DEVICES_POLL_MS = 5 * 60_000, KEY_ERROR_POLL_MS = 15 * 60_000,
-  FRESH_MS = 10 * 60_000, MQTT_WINS_MS = 60_000, MQTT_AUTH_PAUSE_MS = 30 * 60_000;
+  FRESH_MS = 10 * 60_000, MQTT_AUTH_PAUSE_MS = 30 * 60_000;
 export const MQTT_BACKOFF_MS = [10_000, 20_000, 40_000, 80_000, 160_000, 300_000];
 
 export interface MqttClientLike {
@@ -61,7 +61,8 @@ export class EcoflowSource implements ActualStateSource {
 
   /** Null prototype: a `__proto__` key from the cloud stays a plain key. */
   private readonly map: Record<string, unknown> = Object.create(null);
-  private readonly mqttAt = new Map<string, number>();
+  /** Keys MQTT sent during the current fresh MQTT period (ruling R8). */
+  private readonly mqttKeys = new Set<string>();
   private lastQuota: string | undefined;
   private freshAt: number | undefined;
   private mqttFreshAt: number | undefined;
@@ -170,22 +171,29 @@ export class EcoflowSource implements ActualStateSource {
     // The cloud serves its cache even for an offline station: only a change in content is a sign of life.
     if (this.lastQuota !== undefined && content !== this.lastQuota) this.freshAt = now;
     this.lastQuota = content;
-    for (const [k, v] of Object.entries(q)) {
-      const at = this.mqttAt.get(k);
-      if (at === undefined || now - at >= MQTT_WINS_MS) this.map[k] = v;
-    }
+    // Ruling R8: the cache can lag MQTT, and MQTT pushes a key only when it changes, so while MQTT is fresh its keys hold;
+    // once it is stale, quota/all wins every key again.
+    if (!this.mqttFresh(now)) this.mqttKeys.clear();
+    for (const [k, v] of Object.entries(q)) if (!this.mqttKeys.has(k)) this.map[k] = v;
     this.logUnsupported();
   }
 
   private applyMqttQuota(q: Record<string, unknown>): void {
     const now = this.now();
+    if (!this.mqttFresh(now)) this.mqttKeys.clear(); // a new fresh period: keys from an earlier one no longer hold
     for (const [k, v] of Object.entries(q)) {
       this.map[k] = v;
-      this.mqttAt.set(k, now);
+      this.mqttKeys.add(k);
     }
     this.freshAt = this.mqttFreshAt = now;
+    // A station that pushes quotas is online, whatever an older /status said.
+    this.status = { online: true, changedAt: now };
     this.logUnsupported();
     this.evaluate();
+  }
+
+  private mqttFresh(now: number): boolean {
+    return this.mqttFreshAt !== undefined && now - this.mqttFreshAt <= FRESH_MS;
   }
 
   private applyStatus(online: boolean): void {
@@ -222,8 +230,7 @@ export class EcoflowSource implements ActualStateSource {
     const err = this.polls.quota.error ?? this.polls.devices.error;
     // Ruling R7: fresh MQTT quotas outrank a failing HTTP side (some models answer 1006 over REST yet push over MQTT);
     // a pure function of the current state, so no unknown/on flip-flop while the error lasts.
-    const mqttFresh = this.mqttFreshAt !== undefined && now - this.mqttFreshAt <= FRESH_MS;
-    if (err !== undefined && !mqttFresh) return unknown(errorReason(err));
+    if (err !== undefined && !this.mqttFresh(now)) return unknown(errorReason(err));
     if (this.found === false) return unknown('станцію не знайдено в акаунті');
     if (this.online() === false) return unknown('станція не в мережі');
     if (this.freshAt === undefined || now - this.freshAt > FRESH_MS) return unknown('дані станції не оновлюються');
