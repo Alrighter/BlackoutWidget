@@ -10,8 +10,9 @@ const STALE_REASON = 'дані станції не оновлюються';
 const iso = (ms: number) => new Date(ms).toISOString();
 
 /**
- * Turns readings into a confirmed on/off/unknown state and its transition journal. A change counts after it has held
- * for CONFIRM_MS; a time without fresh data is recorded as `unknown` from the last fresh reading, never as off.
+ * Turns readings into a confirmed on/off/unknown state and its transition journal. A change counts once its readings'
+ * observation times span CONFIRM_MS (wall-clock time only decides freshness and gaps); a time without fresh data is
+ * recorded as `unknown` from the last fresh reading, never as off.
  */
 export class ActualStateService {
   private readonly now: () => number;
@@ -103,7 +104,8 @@ export class ActualStateService {
       } else {
         if (this.candidate?.power !== r.power) this.candidate = { power: r.power, firstAt: observedAt, lastBefore: this.lastKnownObservedAt };
         const { firstAt, lastBefore } = this.candidate;
-        if (now - firstAt >= CONFIRM_MS) {
+        // Observed evidence must span CONFIRM_MS (ruling R6): a re-emitted old observation is not 60 s of holding.
+        if (observedAt - firstAt >= CONFIRM_MS) {
           this.confirmed = r.power;
           this.candidate = undefined;
           this.lastKnownObservedAt = observedAt;

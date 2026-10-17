@@ -90,6 +90,33 @@ test('on → off transition timestamp is the first off reading; approx false whe
   expect(log.info).toHaveBeenCalledWith(`actual: off since ${t(5.5)}`);
 });
 
+test('a candidate re-created from a lagging observedAt needs 60 s of observed evidence (ruling R6)', () => {
+  const { svc, begin, at, journal } = setup();
+  begin();
+  for (let m = 0; m <= 5; m += 0.5) at(m, 'on');
+  const F = 5.5;
+  at(F, 'off'); // one 0 V message
+  at(F + 20 / 60, 'unknown', { reason: 'станція не в мережі' });
+  at(F + 70 / 60, 'off', { observedAt: t(F) }); // back online, unchanged data re-emitted
+  expect(svc.getStatus()?.power).toBe('unknown');
+  expect(journal().transitions.map(x => x.power)).toEqual(['on', 'unknown']);
+  at(F + 80 / 60, 'off');
+  expect(svc.getStatus()).toMatchObject({ power: 'off', since: t(F) });
+  expect(journal().transitions.at(-1)).toStrictEqual({ at: t(F), power: 'off', approx: false, lastBefore: t(5) });
+});
+
+test('repeated readings with the same old observedAt never confirm (ruling R6)', () => {
+  const { svc, begin, at, journal } = setup();
+  begin();
+  for (let m = 0; m <= 5; m += 0.5) at(m, 'on');
+  for (let m = 5.5; m <= 15; m += 0.5) at(m, 'off', { observedAt: t(5.5) });
+  expect(svc.getStatus()?.power).toBe('on');
+  expect(journal().transitions.map(x => x.power)).toEqual(['on']);
+  at(16, 'off', { observedAt: t(5.5) }); // a static map decays to unknown, never to off
+  expect(svc.getStatus()).toMatchObject({ power: 'unknown', reason: STALE });
+  expect(journal().transitions.map(x => x.power)).toEqual(['on', 'unknown']);
+});
+
 test('unknown readings never create off', () => {
   const { svc, log, begin, at, journal } = setup();
   begin();
