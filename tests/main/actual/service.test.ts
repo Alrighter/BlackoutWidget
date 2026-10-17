@@ -1,10 +1,10 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HistoryStore, buildSegments, pruneTransitions, type HistoryData, type Transition } from '../../../src/main/actual/history';
-import { ActualStateService, CHECK_MS, KEEP_MS } from '../../../src/main/actual/service';
+import { ActualStateService, CHECK_MS, KEEP_MS, safeActualStatus } from '../../../src/main/actual/service';
 import type { ActualReading, ActualStateSource } from '../../../src/main/actual/types';
-import type { ActualPower } from '../../../src/shared/types';
+import type { ActualPower, ActualStatus } from '../../../src/shared/types';
 
 const base = Date.parse('2026-10-17T10:00:00Z');
 const MIN = 60_000;
@@ -234,6 +234,49 @@ test('prunes transitions older than 30 days but keeps the last one before the cu
   begin();
   at(0, 'on'); at(1, 'on');
   expect(journal().transitions).toStrictEqual([...old.slice(2), { at: t(0), power: 'on', approx: true, lastBefore: d(-20) }]);
+});
+
+test('a journal with malformed entries reads as its valid entries only; the service starts on it', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'bw-hist-')), 'actual-history.json');
+  const valid: Transition[] = [
+    { at: t(0), power: 'on', approx: false }, { at: t(5), power: 'off', approx: true, lastBefore: t(1) }, { at: t(8), power: 'unknown' },
+  ];
+  writeFileSync(file, JSON.stringify({
+    transitions: [
+      null, valid[0], {}, { at: 5, power: 'on' }, { at: 'x', power: 'on' }, { at: t(3), power: 'maybe' }, 'on', [t(3), 'on'],
+      valid[1], { at: t(6), power: 'on', approx: 'yes' }, { at: t(7), power: 'on', lastBefore: 7 }, valid[2],
+    ],
+    lastObservedAt: 12345,
+  }));
+  expect(new HistoryStore(file).read()).toStrictEqual({ transitions: valid });
+  writeFileSync(file, JSON.stringify({ transitions: [null, { at: t(0), power: 'off' }, { at: 'x', power: 'on' }], lastObservedAt: t(2) }));
+  const svc = new ActualStateService({ history: new HistoryStore(file), log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } });
+  running.push(svc);
+  vi.setSystemTime(ms(5));
+  svc.start(fakeSource().source, LABEL);
+  expect(svc.getStatus()).toEqual({
+    sourceLabel: LABEL, power: 'unknown', observedAt: t(2),
+    history: [{ power: 'off', start: t(0), end: t(2) }, { power: 'unknown', start: t(2) }],
+  });
+});
+
+test('safeActualStatus: a throwing getStatus gives null and logs once per distinct message', () => {
+  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const status: ActualStatus = { sourceLabel: LABEL, power: 'on', history: [] };
+  const results: (Error | ActualStatus)[] =[new TypeError('a'), new TypeError('a'), new Error('b'), new Error('b'), status, new TypeError('a')];
+  const get = safeActualStatus(() => {
+    const r = results.shift()!;
+    if (r instanceof Error) throw r;
+    return r;
+  }, log);
+  expect([get(), get(), get(), get()]).toEqual([null, null, null, null]);
+  expect(log.error.mock.calls).toEqual([
+    ['actual: could not compose the status', expect.objectContaining({ message: 'a' })],
+    ['actual: could not compose the status', expect.objectContaining({ message: 'b' })],
+  ]);
+  expect(get()).toBe(status);
+  expect(get()).toBeNull(); // a recurrence after a good call is news again
+  expect(log.error).toHaveBeenCalledTimes(3);
 });
 
 test('history in status covers 7 days, last segment open', () => {

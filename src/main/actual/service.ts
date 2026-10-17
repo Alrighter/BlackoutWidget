@@ -10,6 +10,26 @@ const STALE_REASON = 'дані станції не оновлюються';
 const iso = (ms: number) => new Date(ms).toISOString();
 
 /**
+ * Every published state goes through getStatus: a failure there must cost the actual part only, never the DTEK state.
+ * Logged once per distinct message, not on every 60 s publish.
+ */
+export function safeActualStatus(getStatus: () => ActualStatus | null, log: Logger): () => ActualStatus | null {
+  let logged: string | undefined;
+  return () => {
+    try {
+      const status = getStatus();
+      logged = undefined;
+      return status;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message !== logged) log.error('actual: could not compose the status', err);
+      logged = message;
+      return null;
+    }
+  };
+}
+
+/**
  * Turns readings into a confirmed on/off/unknown state and its transition journal. A change counts once its readings'
  * observation times span CONFIRM_MS (wall-clock time only decides freshness and gaps); a time without fresh data is
  * recorded as `unknown` from the last fresh reading, never as off.

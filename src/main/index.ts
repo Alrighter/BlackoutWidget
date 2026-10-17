@@ -7,7 +7,7 @@ import { electronEncryptor, electronFetch, mqttConnect } from './actual/electron
 import { HistoryStore } from './actual/history';
 import { createActualSources } from './actual/registry';
 import { SecretStore } from './actual/secrets';
-import { ActualStateService } from './actual/service';
+import { ActualStateService, safeActualStatus } from './actual/service';
 import { FileLogger } from './file-logger';
 import { broadcastState, registerIpc } from './ipc';
 import { consoleLogger, type Logger } from './log';
@@ -77,7 +77,8 @@ async function bootstrap(log: Logger): Promise<void> {
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: store.getSettings().autostart });
   };
   // Every state that reaches a window or the tray goes through composeState.
-  const composeState = (s: AppState): AppState => ({ ...s, actual: actualService.getStatus() });
+  const actualStatus = safeActualStatus(() => actualService.getStatus(), log);
+  const composeState = (s: AppState): AppState => ({ ...s, actual: actualStatus() });
   const getState = () => composeState(service.getState());
   const publishState = (state: AppState) => {
     tray.update(state);
