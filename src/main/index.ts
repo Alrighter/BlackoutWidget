@@ -84,6 +84,11 @@ async function bootstrap(log: Logger): Promise<void> {
     broadcastState(state, [mainWindow, widget]);
   };
   const publish = () => publishState(getState());
+  const settingsSaved = (patch: Partial<Settings>) => {
+    if (patch.widgetStyle) widget.setStyle(patch.widgetStyle);
+    applyAutostart();
+    publish();
+  };
   const updateSettings = (patch: Partial<Settings>) => {
     try {
       store.updateSettings(patch);
@@ -93,9 +98,12 @@ async function bootstrap(log: Logger): Promise<void> {
       publish();
       return;
     }
-    if (patch.widgetStyle) widget.setStyle(patch.widgetStyle);
-    applyAutostart();
-    publish();
+    settingsSaved(patch);
+  };
+  /** Throws when the settings file cannot be written, so the EcoFlow save/disconnect can report it (ruling R10). */
+  const saveSettingsOrThrow = (patch: Partial<Settings>) => {
+    store.updateSettings(patch);
+    settingsSaved(patch);
   };
 
   const startActual = createActualRestart({
@@ -105,7 +113,7 @@ async function bootstrap(log: Logger): Promise<void> {
   const restartActual = () => { if (!startActual()) publish(); };
   const actualActions = createActualActions({
     makeApi: (region, keys) => new EcoflowApi(region, keys, { fetch: electronFetch }),
-    secrets, getSettings: () => store.getSettings(), updateSettings, restartActual, log,
+    secrets, getSettings: () => store.getSettings(), updateSettings: saveSettingsOrThrow, restartActual, log,
   });
 
   const solveCaptcha = async () => {

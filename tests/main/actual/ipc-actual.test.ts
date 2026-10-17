@@ -31,7 +31,9 @@ function fakeApi(o: { devices?: EcoflowDevice[] | Error; quota?: Record<string, 
 
 const fakeLog = () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
-function setup(o: { api?: EcoflowApiLike; settings?: Partial<Settings>; saveSecrets?: () => void; removeSecrets?: () => void } = {}) {
+function setup(o: {
+  api?: EcoflowApiLike; settings?: Partial<Settings>; saveSecrets?: () => void; removeSecrets?: () => void; saveSettings?: () => void;
+} = {}) {
   const order: string[] = [];
   let settings: Settings = { ...DEFAULT_SETTINGS, ...o.settings };
   const api = o.api ?? fakeApi();
@@ -42,7 +44,11 @@ function setup(o: { api?: EcoflowApiLike; settings?: Partial<Settings>; saveSecr
       remove: vi.fn((_id: string) => { order.push('secrets.remove'); o.removeSecrets?.(); }),
     },
     getSettings: () => settings,
-    updateSettings: vi.fn((patch: Partial<Settings>) => { order.push('updateSettings'); settings = { ...settings, ...patch }; }),
+    updateSettings: vi.fn((patch: Partial<Settings>) => {
+      order.push('updateSettings');
+      o.saveSettings?.();
+      settings = { ...settings, ...patch };
+    }),
     restartActual: vi.fn(() => { order.push('restartActual'); }),
     log: fakeLog(),
   } satisfies ActualActionsDeps;
@@ -166,6 +172,29 @@ test('save: an unreadable secrets file → the same error, logged, settings unto
   expect(deps.log.error).toHaveBeenCalledTimes(1);
   expect(deps.updateSettings).not.toHaveBeenCalled();
   expect(deps.restartActual).not.toHaveBeenCalled();
+});
+
+test('save: settings cannot be written → error, keys kept, no restart (ruling R10)', async () => {
+  const { actions, deps, order, settings } = setup({ saveSettings: () => { throw new Error(`EBUSY: settings.json ${SECRET}`); } });
+  expect(await actions.save(KEYS, DEVICE)).toEqual({ ok: false, error: 'Не вдалося зберегти налаштування. Спробуйте ще раз.' });
+  expect(order).toEqual(['secrets.save', 'updateSettings']);
+  expect(deps.secrets.remove).not.toHaveBeenCalled();
+  expect(settings().actualSource).toBeNull();
+  expect(deps.log.error).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(deps.log.error.mock.calls)).toContain('EBUSY');
+  expect(JSON.stringify(deps.log.error.mock.calls)).not.toContain(SECRET);
+});
+
+test('disconnect: settings cannot be written → rejects, keys kept, no restart (ruling R10)', async () => {
+  const { actions, deps, order, settings } = setup({
+    settings: { actualSource: CONFIG }, saveSettings: () => { throw new Error('EBUSY: settings.json'); },
+  });
+  await expect(actions.disconnect()).rejects.toThrow('EBUSY: settings.json');
+  expect(order).toEqual(['updateSettings']);
+  expect(deps.secrets.remove).not.toHaveBeenCalled();
+  expect(deps.restartActual).not.toHaveBeenCalled();
+  expect(settings().actualSource).toEqual(CONFIG);
+  expect(deps.log.error).toHaveBeenCalledTimes(1);
 });
 
 test('disconnect: clears settings and secrets, keeps clientId', async () => {

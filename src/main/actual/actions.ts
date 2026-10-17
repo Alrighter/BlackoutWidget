@@ -12,6 +12,7 @@ import type { ActualSourceFactory, ActualStateSource } from './types';
 const REGIONS: readonly unknown[] = ['eu', 'us'] satisfies EcoflowRegion[];
 const BAD_INPUT = 'Перевірте введені дані';
 const CONNECT_FAILED = 'Не вдалося зв’язатися з EcoFlow';
+const SETTINGS_FAILED = 'Не вдалося зберегти налаштування. Спробуйте ще раз.';
 export const KEYS_MISSING_REASON = 'Ключі EcoFlow не знайдено — введіть їх знову в налаштуваннях';
 const CLIENT_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -19,6 +20,7 @@ export interface ActualActionsDeps {
   makeApi(region: EcoflowRegion, keys: EcoflowKeys): EcoflowApiLike;
   secrets: Pick<SecretStore, 'save' | 'remove'>;
   getSettings(): Settings;
+  /** Throws when the settings cannot be written: save and disconnect must not report a change that did not happen. */
   updateSettings(patch: Partial<Settings>): void;
   /** Re-reads the settings and keys and restarts ActualStateService. */
   restartActual(): void;
@@ -116,18 +118,30 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
         }
         return { ok: false, error: new SecretsUnavailableError().message };
       }
-      deps.updateSettings({
-        actualSource: {
-          id: 'ecoflow', region: input.region, deviceSn: station.sn, deviceName: station.label, accessKeyHint: maskKey(input.keys.accessKey),
-        },
-        ecoflowClientId: deps.getSettings().ecoflowClientId || makeClientId(deps.random),
-      });
+      try {
+        deps.updateSettings({
+          actualSource: {
+            id: 'ecoflow', region: input.region, deviceSn: station.sn, deviceName: station.label, accessKeyHint: maskKey(input.keys.accessKey),
+          },
+          ecoflowClientId: deps.getSettings().ecoflowClientId || makeClientId(deps.random),
+        });
+      } catch (err) {
+        // The keys just stored are not rolled back (ruling R10): a retry overwrites them.
+        deps.log.error(`actual: could not save the EcoFlow settings — ${scrub(describeError(err), input.keys)}`);
+        return { ok: false, error: SETTINGS_FAILED };
+      }
       deps.restartActual();
       return { ok: true };
     },
 
     async disconnect() {
-      deps.updateSettings({ actualSource: null });
+      try {
+        deps.updateSettings({ actualSource: null });
+      } catch (err) {
+        // The settings still point at the source, so its keys must stay too.
+        deps.log.error('actual: could not save the settings on disconnect', err);
+        throw err;
+      }
       try {
         deps.secrets.remove('ecoflow');
       } catch (err) {
