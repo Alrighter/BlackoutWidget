@@ -23,7 +23,8 @@
 - Щонайбільше 2 лінії на будинок (Лінія N = N-та черга після `slice(0,2)` + фільтр, §4.4).
 - Розміри віджета (DIP): compact 290×150, ring 236×260, timeline 400×200.
 - Жодних сторонніх сервісів/телеметрії, крім сайту джерела.
-- Коміти: тема + тіло, **без** `Co-Authored-By` і без будь-яких рядків-атрибуцій Claude.
+- Коміти: тема + тіло, **без** `Co-Authored-By` і без будь-яких рядків-атрибуцій Claude (правило користувача, переважає будь-які шаблони).
+- Ручні перевірки (Tasks 4, 10–12) ідуть на робочій машині користувача: Win+D, перезапуск explorer.exe, вимкнення мережі, перетягування мишкою — лише з його згоди або його руками. Скріншоти обрізати до області віджета й видаляти після перевірки.
 - Чисті модулі (`src/shared/**`, `src/main/providers/dtek-krem/parse.ts`, `src/main/store.ts`, `src/main/scheduler.ts`, `src/main/refresh.ts`, `src/main/tray-menu.ts`, `src/main/widget/position.ts`, `src/main/widget/glass.ts`, `src/main/widget/wallpaper-parse.ts`) не імпортують `electron` (дозволено лише `import type`).
 
 ## Review Focus
@@ -105,7 +106,7 @@ export type WidgetBackground = { kind: 'image'; dataUrl: string } | { kind: 'tin
 
 Run: `npm init -y`, потім `npm i react react-dom koffi` і `npm i -D electron@44 electron-vite vite @vitejs/plugin-react typescript vitest jsdom @testing-library/react @testing-library/user-event @testing-library/jest-dom electron-builder @types/node @types/react @types/react-dom`.
 У `package.json`: `"main": "out/main/index.js"`, scripts `dev: electron-vite dev`, `build: electron-vite build`, `typecheck: tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json`, `test: vitest run`.
-`electron.vite.config.ts`: main input `src/main/index.ts`; preload `src/preload/index.ts`; renderer з плагіном react і двома входами `app: src/renderer/app.html`, `widget: src/renderer/widget.html`. `vitest.config.ts`: `include: ['tests/**/*.test.{ts,tsx}']`, env `node` (renderer-тести вмикають jsdom коментарем `// @vitest-environment jsdom`), `setupFiles` з `@testing-library/jest-dom/vitest`.
+`electron.vite.config.ts`: main input `src/main/index.ts`; preload `src/preload/index.ts`; залежності main/preload — external (`externalizeDepsPlugin` або дефолт вашої версії electron-vite), щоб Vite не бандлив нативний `.node` koffi; renderer з плагіном react і двома входами `app: src/renderer/app.html`, `widget: src/renderer/widget.html`. `vitest.config.ts`: `include: ['tests/**/*.test.{ts,tsx}']`, env `node` (renderer-тести вмикають jsdom коментарем `// @vitest-environment jsdom`), `setupFiles` з `@testing-library/jest-dom/vitest`.
 Тимчасовий `src/main/index.ts`: на `app.whenReady` відкрити вікно 400×300 з `app.html` (dev: `process.env.ELECTRON_RENDERER_URL + '/app.html'`, prod: `loadFile(join(__dirname, '../renderer/app.html'))`).
 
 - [ ] **Step 2: Написати падаючий тест часу**
@@ -438,7 +439,9 @@ export function findProvider(list: ScheduleProvider[], id: string): ScheduleProv
 - `fetchSnapshot(address)`: `evaluate(getHomeNumScript(city, street, fact.update))`; `status !== 200` або невалідний JSON → `session.reload()`, перечитати `READ_FACT`, повторити **один** раз; друга невдача → `ProviderError('Сайт ДТЕК повернув помилку')`. Якщо у відповіді є `fact`/`preset` — замінити кешовані. Будинку немає → `ProviderError('Будинок не знайдено у відповіді ДТЕК')`. Лінії — `deriveLines`; група = `lines[address.lineIndex-1]?.groupId ?? address.groupId`; `days = factToDays(fact, group)`; `currentOutage = parseCurrentOutage(entry)`; `sourceUpdatedAt = fact.update`; `fetchedAt = new Date().toISOString()`.
 - `listHouses(city, street)`: той самий `getHomeNum` → `parseHouses`.
 - `showVerification()` → `session.showForUser()`.
-- `BrowserSession`: `show:false` BrowserWindow 1280×900 з `partition`; `loadURL` ігнорує `ERR_ABORTED` (Imperva перезавантажує сторінку); поллінг `readyCheck` кожні 500 мс до `readyTimeoutMs` → `CaptchaRequiredError('Сайт просить пройти перевірку')`. Не запускати два `ensureReady` паралельно (спільний проміс). `showForUser()`: `win.show()`, поллінг без таймауту, коли готово — `win.hide()`.
+- `BrowserSession`: `show:false` BrowserWindow 1280×900 з `partition`; `loadURL` ігнорує `ERR_ABORTED` (−3, Imperva перезавантажує сторінку); поллінг `readyCheck` кожні 500 мс до `readyTimeoutMs`; відмова `executeJavaScript` під час перезавантаження = «ще не готово». Не запускати два `ensureReady` паралельно (спільний проміс). `showForUser()`: `win.show()`, поллінг без таймауту, коли готово — `win.hide()`.
+- **Мережа ≠ капча** (автозапуск часто стартує до Wi-Fi): `did-fail-load` з кодом ≠ −3 → `ProviderError('Немає з’єднання з сайтом ДТЕК')` (іде в backoff, онлайн-тригер відновить). `CaptchaRequiredError('Сайт просить пройти перевірку')` — лише якщо завантажилась справжня сторінка (URL на `dtek-krem.com.ua`, без помилки завантаження), але `DisconSchedule` так і не з'явився. Після будь-якої невдачі наступний `ensureReady` робить нове `loadURL`, а не поллить мертву сторінку.
+- **Не довбити ДТЕК і не вантажити зайве:** у `session.webRequest.onBeforeRequest` пропускати лише хости `*.dtek-krem.com.ua` (GTM/GA/Hotjar блокувати). Після готовності сторінки вимкнути її власні фонові оновлення: `DisconSchedule.ajax.getStreetsInvisibly = () => {}; DisconSchedule.ajax.checkDisconUpdate = () => {};` (окремий скрипт `NEUTRALIZE_TIMERS` у `page-scripts.ts`).
 
 - [ ] **Step 1: Написати падаючі тести з фейковою сесією**
 
@@ -502,7 +505,7 @@ test('listHouses parses lines', async () => {
 - [ ] **Step 3: Реалізувати `page-scripts.ts`, `index.ts`, `registry.ts`** (`getHomeNumScript` — як у прототипі: `URLSearchParams` з `method`, `data[i][name]/[value]`, `fetch('/ua/ajax', { method:'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-CSRF-Token': <meta csrf-token>, 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' })`; значення вставляти через `JSON.stringify`).
 - [ ] **Step 4: Тести зелені.** Run: `npx vitest run tests/providers` → PASS.
 - [ ] **Step 5: Реалізувати `browser-session.ts` і `smoke-dtek.ts`** — smoke: на `app.whenReady` створити провайдер через `createProviders(o => new BrowserSession(o))`, `fetchSnapshot` для адреси вище, надрукувати `{ sourceUpdatedAt, lines, today: slotRuns(days[0].slots) }`, `app.quit()`.
-- [ ] **Step 6: Перевірити наживо.** Run: `npm run build` і `npx electron out/main/smoke-dtek.js` → у виводі `lines` з `GPV1.2`, `GPV4.2` і `sourceUpdatedAt` сьогоднішньої дати; другий запуск помітно швидший (cookies збережені).
+- [ ] **Step 6: Перевірити наживо.** Run: `npm run build` і `npx electron out/main/smoke-dtek.js` → у виводі `lines` з `GPV1.2`, `GPV4.2` і `sourceUpdatedAt` сьогоднішньої дати (тобто перевірка Imperva проходить і з заблокованими сторонніми хостами); другий запуск помітно швидший (cookies збережені). Офлайн-перевірка (попросити користувача або вимкнути мережевий адаптер з його дозволу): без мережі smoke завершується `ProviderError` «Немає з’єднання…», а **не** капчею.
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "Add hidden-browser session and DTEK KREM provider"`
 
 ---
@@ -718,7 +721,7 @@ export function trayIconName(view: WidgetView | null): 'on' | 'off' | 'emergency
 - `main-window.ts`: `export class MainWindow { constructor(preload: string); open(view?: MainView): void }` — 900×640, `title: 'Графік відключень'`, на win32 `backgroundMaterial: 'mica'`; закриття ховає вікно (застосунок живе в треї); `open(view)` шле в renderer `view` через query-параметр або IPC.
 - `previewLines`: `listHouses` → лінії будинку → для кожної `fetchSnapshot({...addr, lineIndex, groupId})` → `{ line, today: days.find(d => d.date === kyivDateKey(new Date())) ?? null }`.
 
-**Bootstrap (`index.ts`):** `requestSingleInstanceLock` (другий запуск → `mainWindow.open()`); `app.setAppUserModelId('ua.blackoutwidget.app')`; не виходити на `window-all-closed`; `AppStore(app.getPath('userData'))`; `createProviders(o => new BrowserSession(o))`; `RefreshService`; `RefreshScheduler(() => service.refresh())` → `start()`; `powerMonitor.on('resume') → trigger('resume')`; `net.isOnline()` поллінг кожні 30 с, перехід false→true → `trigger('online')`; `app.setLoginItemSettings({ openAtLogin: settings.autostart })` при старті й при зміні; `solveCaptcha` → `await provider.showVerification()` → `scheduler.trigger('manual')`; `refreshNow` → `scheduler.trigger('manual')`; кожну хвилину й на кожен `state` — оновити іконку/підказку трею через `computeWidgetView`; без адреси — `mainWindow.open('setup')`. Віджет підключається в Task 10.
+**Bootstrap (`index.ts`):** `requestSingleInstanceLock` (другий запуск → `mainWindow.open()`); `app.setAppUserModelId('ua.blackoutwidget.app')`; не виходити на `window-all-closed`; `AppStore(app.getPath('userData'))`; `createProviders(o => new BrowserSession(o))`; `RefreshService`; `RefreshScheduler(() => service.refresh())` → `start()`; `powerMonitor.on('resume') → trigger('resume')`; `net.isOnline()` поллінг кожні 30 с, перехід false→true → `trigger('online')`; `app.setLoginItemSettings({ openAtLogin: settings.autostart })` при старті й при зміні — **лише якщо `app.isPackaged`** (інакше кожен `npm run dev` пише голий `electron.exe` у HKCU Run); `solveCaptcha` → `await provider.showVerification()` → `scheduler.trigger('manual')`; `refreshNow` → `scheduler.trigger('manual')`; кожну хвилину й на кожен `state` — оновити іконку/підказку трею через `computeWidgetView`; без адреси — `mainWindow.open('setup')`. Віджет підключається в Task 10.
 
 - [ ] **Step 1: Написати падаючі тести меню трею**
 
@@ -967,8 +970,9 @@ test('right click opens context menu', () => {
 
 - [ ] **Step 2: Запустити — має впасти.** Run: `npx vitest run tests/main/position.test.ts tests/renderer/pointer.test.tsx` → FAIL.
 - [ ] **Step 3: Реалізувати `position.ts`, `usePointerGestures.ts`.** Тести → PASS.
-- [ ] **Step 4: Реалізувати `desktop-pin.ts`, `pin-win32.ts`, `widget-window.ts`, підключити в `index.ts`/`ipc.ts`/`tray.ts`.** Стиль з налаштувань → розмір вікна змінюється при `setWidgetStyle`.
-- [ ] **Step 5: Ручна перевірка на Windows 11 (записати результати в опис коміту)**
+- [ ] **Step 4: Спершу перевірити справжню конфігурацію вікна прикріпленою.** Прототип прикріплював *acrylic*-вікно; `transparent:true, hasShadow:false` з `SetParent` ще не перевірене. Реалізувати `pin-win32.ts` + мінімальне вікно віджета, запустити й перевірити: вікно видно після прикріплення, прозорі кути прозорі, і клік по віджету приходить у сам віджет (лог у renderer), а не в шар іконок робочого столу. Лише після цього будувати решту.
+- [ ] **Step 5: Реалізувати `desktop-pin.ts`, `widget-window.ts`, підключити в `index.ts`/`ipc.ts`/`tray.ts`.** Стиль з налаштувань → розмір вікна змінюється при `setWidgetStyle`.
+- [ ] **Step 6: Ручна перевірка на Windows 11 (записати результати в опис коміту)**
 
 Run: `npm run dev`, потім:
 1. Віджет у правому верхньому куті; інші вікна його перекривають.
@@ -978,7 +982,7 @@ Run: `npm run dev`, потім:
 5. Перезапуск застосунку → позиція та стиль збережені.
 6. «Перемістити віджет» з трею → перетягнути → «Готово» → віджет знову прикріплений (перевірити Win+D).
 
-- [ ] **Step 6: Commit** — `git add -A && git commit -m "Pin widget window to the Windows desktop with drag, click and move mode"` (тіло — результати чек-листа).
+- [ ] **Step 7: Commit** — `git add -A && git commit -m "Pin widget window to the Windows desktop with drag, click and move mode"` (тіло — результати чек-листа).
 
 ---
 
