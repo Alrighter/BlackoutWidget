@@ -27,6 +27,11 @@ const api: RendererApi = {
   widgetDrag: (phase, x, y) => ipcRenderer.send(IPC.widgetDrag, phase, x, y),
   onMoveMode: cb => subscribe(IPC.widgetMoveMode, cb),
   endMoveMode: () => ipcRenderer.send(IPC.widgetMoveDone),
+  ecoflowTest: i => ipcRenderer.invoke(IPC.ecoflowTest, i),
+  ecoflowPreview: (i, sn) => ipcRenderer.invoke(IPC.ecoflowPreview, i, sn),
+  ecoflowSave: (i, device) => ipcRenderer.invoke(IPC.ecoflowSave, i, device),
+  actualDisconnect: () => ipcRenderer.invoke(IPC.actualDisconnect),
+  openEcoflowHelp: () => ipcRenderer.send(IPC.openEcoflowHelp),
 };
 
 contextBridge.exposeInMainWorld('api', api);

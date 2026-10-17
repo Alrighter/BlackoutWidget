@@ -1,6 +1,13 @@
-import { app, dialog, net, powerMonitor } from 'electron';
+import { app, dialog, net, powerMonitor, shell } from 'electron';
 import { join } from 'node:path';
 import type { AppState, Settings } from '../shared/types';
+import { createActualActions, createActualRestart } from './actual/actions';
+import { EcoflowApi } from './actual/ecoflow/api';
+import { electronEncryptor, electronFetch, mqttConnect } from './actual/electron-deps';
+import { HistoryStore } from './actual/history';
+import { createActualSources } from './actual/registry';
+import { SecretStore } from './actual/secrets';
+import { ActualStateService } from './actual/service';
 import { FileLogger } from './file-logger';
 import { broadcastState, registerIpc } from './ipc';
 import { consoleLogger, type Logger } from './log';
@@ -15,6 +22,8 @@ import { buildWidgetMenu, type TrayActions } from './tray-menu';
 import { createDesktopPinner } from './widget/desktop-pin';
 import { startGlassUpdater } from './widget/glass-updater';
 import { WidgetWindow } from './widget/widget-window';
+
+const ECOFLOW_HELP_URL = 'https://developer-eu.ecoflow.com/';
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -48,10 +57,14 @@ async function bootstrap(log: Logger): Promise<void> {
   await app.whenReady();
   log.info(`Blackout Widget ${app.getVersion()} starting`);
 
-  const store = new AppStore(app.getPath('userData'));
+  const userData = app.getPath('userData');
+  const store = new AppStore(userData);
   const providers = createProviders(o => new BrowserSession(o, log), log);
   const service = new RefreshService({ store, getProvider: id => findProvider(providers, id) });
   const scheduler = new RefreshScheduler(() => service.refresh());
+  const secrets = new SecretStore(join(userData, 'secrets.json'), electronEncryptor);
+  const actualService = new ActualStateService({ history: new HistoryStore(join(userData, 'actual-history.json')), log });
+  const actualSources = createActualSources({ fetch: electronFetch, connect: mqttConnect });
   const preload = join(__dirname, '../preload/index.js');
   const mainWindow = new MainWindow(preload);
   const pinner = createDesktopPinner(log);
@@ -63,11 +76,14 @@ async function bootstrap(log: Logger): Promise<void> {
     // Dev runs must never write a bare electron.exe into HKCU Run.
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: store.getSettings().autostart });
   };
+  // Every state that reaches a window or the tray goes through composeState.
+  const composeState = (s: AppState): AppState => ({ ...s, actual: actualService.getStatus() });
+  const getState = () => composeState(service.getState());
   const publishState = (state: AppState) => {
     tray.update(state);
     broadcastState(state, [mainWindow, widget]);
   };
-  const publish = () => publishState(service.getState());
+  const publish = () => publishState(getState());
   const updateSettings = (patch: Partial<Settings>) => {
     try {
       store.updateSettings(patch);
@@ -81,6 +97,16 @@ async function bootstrap(log: Logger): Promise<void> {
     applyAutostart();
     publish();
   };
+
+  const startActual = createActualRestart({
+    getSettings: () => store.getSettings(), updateSettings, secrets, service: actualService, sources: actualSources, log,
+  });
+  // A failed start may have shut the old source down without an onChange.
+  const restartActual = () => { if (!startActual()) publish(); };
+  const actualActions = createActualActions({
+    makeApi: (region, keys) => new EcoflowApi(region, keys, { fetch: electronFetch }),
+    secrets, getSettings: () => store.getSettings(), updateSettings, restartActual, log,
+  });
 
   const solveCaptcha = async () => {
     const address = store.getSettings().address;
@@ -103,22 +129,33 @@ async function bootstrap(log: Logger): Promise<void> {
   const tray = new AppTray(actions);
 
   registerIpc({
-    providers, service, scheduler, updateSettings, solveCaptcha,
+    providers, service, scheduler, updateSettings, solveCaptcha, getState, actualActions,
     openMainWindow: view => mainWindow.open(view),
     widgetDrag: (phase, x, y) => widget.drag(phase, x, y),
     widgetContextMenu: () => widget.popupMenu(buildWidgetMenu(store.getSettings().widgetStyle, actions)),
     endMoveMode: () => widget.endMoveMode(),
+    openEcoflowHelp: () => {
+      shell.openExternal(ECOFLOW_HELP_URL).catch(err => log.error('opening the EcoFlow developer site failed', err));
+    },
   });
 
-  service.onState(publishState);
-  setInterval(publish, 60_000); // keeps tray icon/tooltip in step with the clock
+  service.onState(s => publishState(composeState(s)));
+  const stopActualUpdates = actualService.onChange(publish);
+  // Keeps the tray icon/tooltip in step with the clock, and actual.observedAt current (the service emits no change for it).
+  setInterval(publish, 60_000);
 
   applyAutostart();
+  restartActual();
   publish();
   scheduler.start();
   widget.show();
   const stopGlass = process.platform === 'win32' ? startGlassUpdater(widget) : () => {};
-  app.on('will-quit', () => { stopGlass(); pinner.dispose(); });
+  app.on('will-quit', () => {
+    stopGlass();
+    pinner.dispose();
+    stopActualUpdates();
+    actualService.stop(); // closes the journal with a gap and ends the MQTT session
+  });
 
   powerMonitor.on('resume', () => scheduler.trigger('resume'));
   let online = net.isOnline();
