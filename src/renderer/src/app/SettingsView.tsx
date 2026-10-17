@@ -1,5 +1,6 @@
 import type { RendererApi } from '../../../shared/ipc';
 import type { AppState } from '../../../shared/types';
+import { ActualSettings } from './ActualSettings';
 import { STYLES } from './widget-styles';
 
 export function SettingsView({ state, api, onChangeAddress }: { state: AppState; api: RendererApi; onChangeAddress(): void }) {
@@ -22,6 +23,7 @@ export function SettingsView({ state, api, onChangeAddress }: { state: AppState;
           ))}
         </div>
       </section>
+      <ActualSettings state={state} api={api} />
       <section>
         <label className="switch">
           <input type="checkbox" role="switch" checked={autostart} onChange={e => void api.setAutostart(e.target.checked)} />
