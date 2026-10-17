@@ -86,8 +86,10 @@ test('emergency whose end has passed → schedule state', () => {
 test('emergency without an end: overrides only while the snapshot is fresh', () => {
   const fresh = withOutage({ kind: 'emergency', text: 'Екстрене відключення' });
   expect(fresh.state).toBe('emergency'); expect(fresh.outageBadge).toBe('Екстрене');
-  const stale = withOutage({ kind: 'emergency', text: 'Екстрене відключення', end: 'невідомо' }, '2026-10-17T07:50:00.000Z'); // 60 min old
+  const stale = withOutage({ kind: 'emergency', text: 'Екстрене відключення' }, '2026-10-17T07:50:00.000Z'); // 60 min old
   expect(stale.state).toBe('on'); expect(stale.outageBadge).toBeUndefined(); expect(stale.stale).toBe(true);
+  const unreadableEnd = withOutage({ kind: 'emergency', text: 'Екстрене відключення', end: 'невідомо' }, '2026-10-17T07:50:00.000Z');
+  expect(unreadableEnd.state).toBe('on');
 });
 test("kind 'other' never overrides and gets no badge", () => {
   const v = withOutage({ kind: 'other', text: 'Планові ремонтні роботи', start: '10:00 17.10.2026', end: '17:00 17.10.2026' });

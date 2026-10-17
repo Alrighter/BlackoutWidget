@@ -25,7 +25,8 @@ npx electron out/main/smoke-dtek.js
 
 Перевірка типів: `npm run typecheck`.
 
-Журнал роботи: `%APPDATA%\blackoutwidget\logs\app.log` (до ~1 МБ; попередній — `app.log.1`).
+Журнал роботи: `logs\app.log` у теці даних застосунку (Electron `userData`; під час розробки —
+`%APPDATA%\blackoutwidget`), до ~1 МБ, попередній — `app.log.1`. Точний шлях показує вікно помилки запуску.
 Туди пишуться помилки джерела, сирі поля поточного відключення з відповіді ДТЕК
 і невідомі статуси годин.
 
