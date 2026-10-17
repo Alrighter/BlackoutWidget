@@ -54,6 +54,20 @@ test('active outage: the house and line steps warn that the line list may be inc
   expect(await screen.findByText('Лінія 2 · Черга 4.2')).toBeInTheDocument();
   expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
 });
+test('active outage and one line: the line step is shown, needs an explicit choice, nothing is saved before it', async () => {
+  const api = mockApi([{ house: '40', outageActive: true, lines: [two[0].lines[0]] }]); const onDone = vi.fn(); const user = userEvent.setup();
+  render(<SetupWizard api={api} onDone={onDone} />); await pickAddress(user);
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(await screen.findByText('Лінія 1 · Черга 1.2')).toBeInTheDocument();
+  expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
+  expect(api.previewLines).toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
+  expect(api.saveAddress).not.toHaveBeenCalled();
+  await user.click(screen.getByText('Лінія 1 · Черга 1.2')); await user.click(screen.getByRole('button', { name: 'Далі' }));
+  await user.click(screen.getByRole('button', { name: 'Готово' }));
+  expect(api.saveAddress).toHaveBeenCalledWith({ providerId: 'dtek-krem', city: 'м. Біла Церква', street: 'бул. Грушевського Михайла', house: '40', lineIndex: 1, groupId: 'GPV1.2' });
+  expect(onDone).toHaveBeenCalled();
+});
 test('active outage and no lines: only the outage note, still blocked', async () => {
   const api = mockApi([{ house: '40', outageActive: true, lines: [] }]); const user = userEvent.setup();
   render(<SetupWizard api={api} onDone={() => {}} />); await pickAddress(user);

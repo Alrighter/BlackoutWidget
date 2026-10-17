@@ -91,11 +91,13 @@ export function SetupWizard({ api, onDone }: { api: RendererApi; onDone(): void 
     : step === 'line' ? !!line
     : !saving;
 
-  const order: Step[] = ['provider', 'city', 'street', 'house', ...(houseLines.length > 1 ? ['line' as const] : []), 'style'];
+  // During an outage the list holds only the outage's queues, so the line must always be chosen explicitly.
+  const needsLineStep = houseLines.length > 1 || houseOutage;
+  const order: Step[] = ['provider', 'city', 'street', 'house', ...(needsLineStep ? ['line' as const] : []), 'style'];
   const back = () => setStep(order[Math.max(0, order.indexOf(step) - 1)]);
   const next = async () => {
     if (step !== 'style') {
-      if (step === 'house' && houseLines.length === 1) setLine(houseLines[0]);
+      if (step === 'house' && houseLines.length === 1 && !houseOutage) setLine(houseLines[0]);
       setStep(order[order.indexOf(step) + 1]);
       return;
     }
