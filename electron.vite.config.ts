@@ -11,6 +11,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           'smoke-dtek': resolve(__dirname, 'src/main/smoke-dtek.ts'),
+          'smoke-ecoflow': resolve(__dirname, 'src/main/smoke-ecoflow.ts'),
         },
       },
     },
