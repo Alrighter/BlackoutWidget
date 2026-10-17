@@ -1,4 +1,5 @@
-import type { CurrentOutage, DaySchedule, ScheduleSnapshot, Slot } from './types';
+import type { ActualStatus, CurrentOutage, DaySchedule, ScheduleSnapshot, Slot } from './types';
+import { ACTUAL_STALE_MS, dayStrip, sinceText, type StripPart } from './actual-view';
 import { addDays, formatHM, kyivDateKey, kyivMinutesOfDay, kyivWallTimeToInstant, parseDtekDateTime } from './time';
 
 export const STALE_AFTER_MIN = 45;
@@ -11,7 +12,9 @@ export interface WidgetView {
   lineLabel: string;
   updatedText: string;
   stale: boolean; outageBadge?: OutageBadgeText;
+  actual?: WidgetActual; actualUnknownReason?: string; actualStrip?: StripPart[];
 }
+export interface WidgetActual { power: 'on' | 'off'; sinceText?: string; mismatch: boolean }
 export type OutageBadgeText = 'Аварійне' | 'Екстрене';
 
 export function formatDurationLong(min: number): string {
@@ -70,7 +73,7 @@ function minutesUntil(at: Date, now: Date): number {
   return Math.ceil((at.getTime() - now.getTime()) / 60000);
 }
 
-export function computeWidgetView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
+function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
   const todayKey = kyivDateKey(now);
   const today = snapshot.days.find(d => d.date === todayKey) ?? null;
   const tomorrow = snapshot.days.find(d => d.date === addDays(todayKey, 1)) ?? null;
@@ -138,5 +141,33 @@ export function computeWidgetView(snapshot: ScheduleSnapshot, now: Date): Widget
     nextText: `${lead} ${when} · через ${formatDurationLong(left)}`,
     countdownShort: formatDurationShort(left),
     countdownCaption: caption,
+  };
+}
+
+/** The schedule view, overridden by a fresh actual reading (spec §6.2). */
+export function computeWidgetView(snapshot: ScheduleSnapshot, now: Date, actual?: ActualStatus | null): WidgetView {
+  const view = scheduleView(snapshot, now);
+  if (!actual) return view;
+  const strip = dayStrip(actual.history, view.todayKey, now);
+  const observed = Date.parse(actual.observedAt ?? '');
+  // Written as "not fresh" so that an unreadable observedAt counts as stale.
+  const fresh = actual.power !== 'unknown' && now.getTime() - observed <= ACTUAL_STALE_MS;
+  if (!fresh || actual.power === 'unknown') {
+    return { ...view, actualUnknownReason: actual.reason ?? 'немає свіжих даних', actualStrip: strip };
+  }
+  const power = actual.power;
+  const since = actual.since && !Number.isNaN(Date.parse(actual.since))
+    ? sinceText(actual.since, actual.sinceApprox === true, now) : undefined;
+  const mismatch = power === 'off'
+    ? view.state === 'on'
+    : view.state === 'off' || view.state === 'emergency';
+  const state: PowerState = view.state === 'emergency' && power === 'off' ? 'emergency' : power;
+  const widgetActual: WidgetActual = { power, ...(since ? { sinceText: since } : {}), mismatch };
+  if (!mismatch) return { ...view, state, title: TITLES[state], actual: widgetActual, actualStrip: strip };
+  const { countdownShort: _s, countdownCaption: _c, ...rest } = view;
+  return {
+    ...rest, state, title: TITLES[state],
+    nextText: since ? `Не за графіком · ${since}` : 'Не за графіком',
+    actual: widgetActual, actualStrip: strip,
   };
 }

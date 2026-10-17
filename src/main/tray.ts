@@ -20,7 +20,7 @@ export class AppTray {
   }
 
   update(state: AppState, now = new Date()): void {
-    const view = state.snapshot ? computeWidgetView(state.snapshot, now) : null;
+    const view = state.snapshot ? computeWidgetView(state.snapshot, now, state.actual) : null;
     const icon = trayIconName(view);
     if (icon !== this.lastIcon) {
       this.lastIcon = icon;
