@@ -2,13 +2,16 @@ import { ipcMain } from 'electron';
 import { CAPTCHA_MARKER, IPC, type MainView } from '../shared/ipc';
 import { kyivDateKey } from '../shared/time';
 import type { Address, AppState, DaySchedule, LineInfo, Settings, WidgetStyle } from '../shared/types';
+import type { ActualActions } from './actual/actions';
 import { findProvider } from './providers/registry';
 import { CaptchaRequiredError, type ScheduleProvider } from './providers/types';
 import type { TriggerReason } from './scheduler';
 
 export interface IpcDeps {
   providers: ScheduleProvider[];
-  service: { getState(): AppState; setAddress(a: Address): Promise<void> };
+  service: { setAddress(a: Address): Promise<void> };
+  /** The state the windows get: schedule state plus the actual-power status. */
+  getState(): AppState;
   scheduler: { trigger(reason: TriggerReason): void };
   /** Persists the patch, applies side effects (autostart) and republishes state. */
   updateSettings(patch: Partial<Settings>): void;
@@ -19,6 +22,8 @@ export interface IpcDeps {
   widgetContextMenu(): void;
   /** The widget's «Готово» button. */
   endMoveMode(): void;
+  actualActions: ActualActions;
+  openEcoflowHelp(): void;
 }
 
 /** One of the app's own windows; the hidden DTEK session window never gets app state. */
@@ -58,7 +63,7 @@ export function registerIpc(deps: IpcDeps): void {
   const handle = (channel: string, fn: (...args: any[]) => unknown) =>
     ipcMain.handle(channel, (_e, ...args) => fn(...args));
 
-  handle(IPC.getState, () => deps.service.getState());
+  handle(IPC.getState, () => deps.getState());
   handle(IPC.listProviders, () => deps.providers.map(p => ({ id: p.id, displayName: p.displayName })));
   handle(IPC.listCities, (id: string) => markCaptcha(provider(id).listCities()));
   handle(IPC.listStreets, (id: string, city: string) => markCaptcha(provider(id).listStreets(city)));
@@ -73,6 +78,10 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.setAutostart, (on: boolean) => deps.updateSettings({ autostart: !!on }));
   handle(IPC.refreshNow, () => deps.scheduler.trigger('manual'));
   handle(IPC.solveCaptcha, () => deps.solveCaptcha());
+  handle(IPC.ecoflowTest, (i: unknown) => deps.actualActions.test(i));
+  handle(IPC.ecoflowPreview, (i: unknown, sn: unknown) => deps.actualActions.preview(i, sn));
+  handle(IPC.ecoflowSave, (i: unknown, device: unknown) => deps.actualActions.save(i, device));
+  handle(IPC.actualDisconnect, () => deps.actualActions.disconnect());
 
   ipcMain.on(IPC.openMainWindow, (_e, view?: MainView) => deps.openMainWindow(view));
   ipcMain.on(IPC.widgetContextMenu, () => deps.widgetContextMenu());
@@ -80,6 +89,7 @@ export function registerIpc(deps: IpcDeps): void {
     if (isDragPhase(phase) && isCoord(x) && isCoord(y)) deps.widgetDrag(phase, x, y);
   });
   ipcMain.on(IPC.widgetMoveDone, () => deps.endMoveMode());
+  ipcMain.on(IPC.openEcoflowHelp, () => deps.openEcoflowHelp());
 }
 
 export function broadcastState(state: AppState, targets: StateTarget[]): void {

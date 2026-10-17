@@ -1,4 +1,6 @@
-import type { Address, AppState, DaySchedule, HouseInfo, LineInfo, WidgetBackground, WidgetStyle } from './types';
+import type {
+  ActualPower, Address, AppState, DaySchedule, EcoflowRegion, HouseInfo, LineInfo, WidgetBackground, WidgetStyle,
+} from './types';
 
 export const IPC = {
   getState: 'state:get', state: 'state:changed', background: 'widget:background',
@@ -7,12 +9,23 @@ export const IPC = {
   setAutostart: 'settings:autostart', refreshNow: 'refresh:now', solveCaptcha: 'captcha:solve',
   openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag', navigate: 'window:navigate',
   widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
+  ecoflowTest: 'actual:ecoflow-test', ecoflowPreview: 'actual:ecoflow-preview', ecoflowSave: 'actual:ecoflow-save',
+  actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
 export const CAPTCHA_MARKER = 'CAPTCHA_REQUIRED';
 
 export type MainView = 'schedule' | 'settings' | 'setup';
+
+/** Keys travel renderer → main only in these calls; no result ever carries them back. */
+export interface EcoflowKeysInput { region: EcoflowRegion; accessKey: string; secretKey: string }
+export interface EcoflowDeviceView { sn: string; label: string; online: boolean }
+export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[] } | { ok: false; error: string };
+export type EcoflowPreviewResult =
+  | { ok: true; online: boolean; power: ActualPower; detail?: string; reason?: string; unsupported?: boolean }
+  | { ok: false; error: string };
+export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export interface RendererApi {
   getState(): Promise<AppState>;
@@ -37,6 +50,14 @@ export interface RendererApi {
   onMoveMode(cb: (on: boolean) => void): () => void;
   /** The widget's «Готово» button: save the position and pin the widget again. */
   endMoveMode(): void;
+  ecoflowTest(i: EcoflowKeysInput): Promise<EcoflowTestResult>;
+  /** HTTP only: never opens MQTT, so it spends none of the account's daily clientIds. */
+  ecoflowPreview(i: EcoflowKeysInput, sn: string): Promise<EcoflowPreviewResult>;
+  ecoflowSave(i: EcoflowKeysInput, device: { sn: string; label: string }): Promise<ActionResult>;
+  /** Forgets the source and its keys; the history and the clientId stay. */
+  actualDisconnect(): Promise<void>;
+  /** Opens the EcoFlow developer site (a fixed address) in the browser. */
+  openEcoflowHelp(): void;
 }
 
 declare global { interface Window { api: RendererApi } }

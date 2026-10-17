@@ -3,6 +3,8 @@ import type { RendererApi } from '../../../shared/ipc';
 import { addDays, formatDM, formatHM } from '../../../shared/time';
 import type { AppState, DaySchedule } from '../../../shared/types';
 import { computeWidgetView, slotRuns } from '../../../shared/widget-state';
+import { formatOutage, recentOutages } from '../../../shared/actual-view';
+import { ActualStrip } from './ActualStrip';
 import { DayStrip } from './DayStrip';
 
 const hm = (slotIndex: number) => `${String(Math.floor(slotIndex / 2)).padStart(2, '0')}:${slotIndex % 2 ? '30' : '00'}`;
@@ -17,9 +19,10 @@ function outageRanges(day: DaySchedule): string {
 export function ScheduleView({ state, now, api }: { state: AppState; now: Date; api: RendererApi }) {
   const [tab, setTab] = useState<'today' | 'tomorrow'>('today');
   const { snapshot } = state;
-  const view = snapshot ? computeWidgetView(snapshot, now) : null;
+  const view = snapshot ? computeWidgetView(snapshot, now, state.actual) : null;
   const todayKey = view?.todayKey ?? '';
   const tomorrowKey = todayKey ? addDays(todayKey, 1) : '';
+  const outages = state.actual ? recentOutages(state.actual.history, now) : [];
   const day = tab === 'today' ? view?.today ?? null : view?.tomorrow ?? null;
 
   return (
@@ -56,6 +59,12 @@ export function ScheduleView({ state, now, api }: { state: AppState; now: Date; 
           {day ? (
             <>
               <DayStrip slots={day.slots} labels />
+              {state.actual && tab === 'today' && (
+                <div className="actual-row">
+                  <span className="muted actual-label">Фактично</span>
+                  <ActualStrip parts={view.actualStrip ?? []} />
+                </div>
+              )}
               <p className="ranges">{outageRanges(day)}</p>
               <div className="legend muted">
                 <span><i className="half on" /> Світло є</span>
@@ -71,6 +80,16 @@ export function ScheduleView({ state, now, api }: { state: AppState; now: Date; 
             {`Оновлено о ${formatHM(new Date(snapshot.fetchedAt))}${snapshot.sourceUpdatedAt ? ` · графік ДТЕК від ${snapshot.sourceUpdatedAt}` : ''}`}
           </p>
         </div>
+      )}
+      {snapshot && state.actual && (
+        <section className="panel outages">
+          <h3>Фактичні відключення</h3>
+          {outages.length ? (
+            <ul>{outages.map(o => <li key={o.start}>{formatOutage(o, now)}</li>)}</ul>
+          ) : (
+            <p className="muted">За останні 7 днів відключень не зафіксовано</p>
+          )}
+        </section>
       )}
     </div>
   );

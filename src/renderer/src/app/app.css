@@ -68,6 +68,20 @@ button.link { background: transparent; border-color: transparent; align-self: fl
 .card:hover { background: var(--card-hover); }
 .card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 
+.actual-settings { display: flex; flex-direction: column; gap: 8px; }
+.actual-settings h2, .actual-settings h3, .actual-settings p { margin: 0; }
+.actual-settings h3 { font-size: 14px; font-weight: 650; }
+.actual-form, .stations { display: flex; flex-direction: column; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field input, .field select {
+  font: inherit; color: inherit; padding: 8px 12px; border-radius: 10px; outline: none;
+  border: 1px solid var(--panel-border); background: var(--card);
+}
+.field input:focus, .field select:focus { border-color: var(--accent); }
+.row { display: flex; gap: 8px; align-items: center; }
+.station { display: flex; gap: 8px; align-items: center; }
+.error { color: var(--danger, #d33); }
+
 .autocomplete input {
   width: 100%; font: inherit; color: inherit; padding: 9px 12px; border-radius: 10px;
   border: 1px solid var(--panel-border); background: var(--card); outline: none;
@@ -95,3 +109,13 @@ button.link { background: transparent; border-color: transparent; align-self: fl
 .settings section { padding: 10px 0; border-bottom: 1px solid var(--panel-border); }
 .settings section:last-child { border-bottom: 0; }
 .switch { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+
+.actual-row { margin-top: 10px; }
+.actual-label { display: block; margin-bottom: 3px; }
+.actual-strip { position: relative; height: 8px; border-radius: 4px; background: var(--cell); overflow: hidden; }
+.actual-part { position: absolute; top: 0; bottom: 0; }
+.actual-part.off { background: #ff6b5b; }
+.actual-part.unknown { background: repeating-linear-gradient(45deg, var(--muted) 0 3px, transparent 3px 6px); }
+.actual-part.on { background: transparent; }
+.outages h3 { font-size: 14px; font-weight: 650; margin: 0 0 6px; }
+.outages ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }

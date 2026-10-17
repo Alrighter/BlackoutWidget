@@ -1,11 +1,24 @@
 import type { WidgetView } from '../../../shared/widget-state';
 import { OutageBadge } from './OutageBadge';
 
+/** Which source the state comes from: a bolt when it is the live EcoFlow reading, a muted one when the source is silent. */
+export function SourceMark({ view }: { view: WidgetView }) {
+  const unknown = view.actualUnknownReason !== undefined;
+  if (!view.actual && !unknown) return null;
+  return (
+    <span className={unknown ? 'w-src w-src-unk' : 'w-src'} data-actual={unknown ? 'unknown' : 'live'}
+      title={unknown ? `EcoFlow: ${view.actualUnknownReason}` : 'Фактичний стан · EcoFlow'}>
+      <svg viewBox="0 0 10 14" width="8" height="11" aria-hidden="true"><path d="M6 0 0 8h4l-1 6 7-9H6z" fill="currentColor" /></svg>
+    </span>
+  );
+}
+
 export function Status({ view }: { view: WidgetView }) {
   return (
     <div className={`w-status${view.title.length > 14 ? ' w-long' : ''}`}>
       <span className={`w-dot ${view.state}`} />
       <span className="w-ellipsis" title={view.title}>{view.title}</span>
+      <SourceMark view={view} />
       {view.outageBadge && <OutageBadge text={view.outageBadge} />}
     </div>
   );

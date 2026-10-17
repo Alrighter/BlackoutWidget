@@ -22,6 +22,17 @@ function fit(text: string, size: number, maxW: number): { textLength?: number; l
   return text.length * size * 0.52 > maxW ? { textLength: maxW, lengthAdjust: 'spacingAndGlyphs' } : {};
 }
 
+/** Inner arc for a stretch of the day with actual outage (Kyiv minutes of 0..1440). */
+function ActualArc({ startMin, endMin }: { startMin: number; endMin: number }) {
+  const r = R - 12;
+  const c = 2 * Math.PI * r;
+  return (
+    <circle cx="100" cy="100" r={r} fill="none" stroke="#ff6b5b" strokeWidth="3" strokeLinecap="round"
+      strokeDasharray={`${((endMin - startMin) / 1440) * c} ${c}`}
+      transform={`rotate(${(startMin / 1440) * 360 - 90} 100 100)`} data-actual-arc="off" />
+  );
+}
+
 export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChanged: boolean }) {
   const runs = view.today ? slotRuns(view.today.slots).filter(r => r.slot === 'off' || r.slot === 'maybe-off') : [];
   const a = view.nowFraction * 2 * Math.PI - Math.PI / 2;
@@ -43,6 +54,7 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
         </defs>
         <circle cx="100" cy="100" r={R} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="14" />
         {runs.map(r => <Arc key={r.start} start={r.start} end={r.end} slot={r.slot} />)}
+        {view.actualStrip?.filter(p => p.power === 'off').map(p => <ActualArc key={p.startMin} startMin={p.startMin} endMin={p.endMin} />)}
         {view.today && <circle cx={nx} cy={ny} r="6" fill="#fff" style={{ filter: 'drop-shadow(0 0 4px #fff)' }} />}
         <g fontSize="10" textAnchor="middle" className="w-svg-label">
           <text x="100" y="42">00</text><text x="160" y="104">06</text><text x="100" y="166">12</text><text x="40" y="104">18</text>
@@ -59,6 +71,14 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
             <text key={i} x="100" y={114 + i * 14} fontSize="10" className="w-svg-sub" {...fit(l, 10, 124)}>{l}</text>
           ))}
         </g>
+        {(view.actual || view.actualUnknownReason !== undefined) && (
+          // Above the title, in the free space inside the ring.
+          <g data-actual={view.actual ? 'live' : 'unknown'} transform="translate(95 55) scale(1)"
+            style={view.actual ? { color: '#5dffa8' } : { color: 'var(--tick)', opacity: 0.7 }}>
+            <title>{view.actual ? 'Фактичний стан · EcoFlow' : `EcoFlow: ${view.actualUnknownReason}`}</title>
+            <path d="M6 0 0 8h4l-1 6 7-9H6z" fill="currentColor" />
+          </g>
+        )}
         {view.outageBadge && (
           <g textAnchor="middle">
             <rect x={100 - badgeW / 2} y={badgeY} width={badgeW} height="17" rx="8.5" fill="rgba(255,77,77,0.85)" />

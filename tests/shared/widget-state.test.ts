@@ -1,6 +1,6 @@
 import { computeWidgetView, slotRuns, formatDurationLong, formatDurationShort } from '../../src/shared/widget-state';
 import { fixtureSnapshot } from '../helpers/snapshot';
-import type { CurrentOutage } from '../../src/shared/types';
+import type { ActualStatus, CurrentOutage } from '../../src/shared/types';
 const at = (iso: string) => new Date(iso);
 const allOn = (date: string) => ({ date, slots: Array(48).fill('on') });
 
@@ -106,4 +106,82 @@ test('emergency for other queues does not override the saved queue (GPV1.2)', ()
   expect(withOutage({ ...base, groups: ['GPV4.2'] }).outageBadge).toBeUndefined();
   expect(withOutage({ ...base, groups: ['GPV4.2', 'GPV1.2'] }).state).toBe('emergency');
   expect(withOutage({ ...base, groups: [] }).state).toBe('emergency');
+});
+
+describe('with an actual reading', () => {
+  const ON_SLOT = at('2026-10-17T08:50:00Z');   // 11:50 Kyiv, schedule: on
+  const OFF_SLOT = at('2026-10-17T13:00:00Z');  // 16:00 Kyiv, schedule: off
+  const SINCE = '2026-10-17T07:10:00Z';         // 10:10 Kyiv
+  const act = (power: 'on' | 'off' | 'unknown', now = ON_SLOT, over: Partial<ActualStatus> = {}): ActualStatus => ({
+    sourceLabel: 'EcoFlow', power, since: SINCE,
+    observedAt: new Date(now.getTime() - 30_000).toISOString(), history: [{ power, start: SINCE }], ...over,
+  });
+  const emergency = () => fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення', end: '17:00 17.10.2026' } });
+
+  test('fresh actual off while schedule says on → mismatch, no countdown', () => {
+    const v = computeWidgetView(fixtureSnapshot(), ON_SLOT, act('off'));
+    expect(v.state).toBe('off'); expect(v.title).toBe('Світла немає');
+    expect(v.nextText).toBe('Не за графіком · з 10:10');
+    expect(v.countdownShort).toBeUndefined(); expect(v.countdownCaption).toBeUndefined();
+    expect(v.actual).toEqual({ power: 'off', sinceText: 'з 10:10', mismatch: true });
+    expect(v.actualStrip).toEqual([{ startMin: 610, endMin: 710, power: 'off' }]);
+    expect(v.actualUnknownReason).toBeUndefined();
+  });
+  test('mismatch without since', () => {
+    const v = computeWidgetView(fixtureSnapshot(), ON_SLOT, act('off', ON_SLOT, { since: undefined }));
+    expect(v.nextText).toBe('Не за графіком'); expect(v.actual).toEqual({ power: 'off', mismatch: true });
+  });
+  test('fresh actual on while schedule says off → mismatch', () => {
+    const v = computeWidgetView(fixtureSnapshot(), OFF_SLOT, act('on', OFF_SLOT));
+    expect(v.state).toBe('on'); expect(v.title).toBe('Світло є'); expect(v.actual?.mismatch).toBe(true);
+    expect(v.countdownShort).toBeUndefined();
+  });
+  test('fresh actual matching schedule keeps schedule texts and countdown', () => {
+    const v = computeWidgetView(fixtureSnapshot(), ON_SLOT, act('on'));
+    expect(v.state).toBe('on'); expect(v.nextText).toBe('Вимкнення о 15:00 · через 3 год 10 хв');
+    expect(v.countdownShort).toBe('3:10'); expect(v.countdownCaption).toBe('до вимкнення о 15:00');
+    expect(v.actual).toEqual({ power: 'on', sinceText: 'з 10:10', mismatch: false });
+    const off = computeWidgetView(fixtureSnapshot(), OFF_SLOT, act('off', OFF_SLOT));
+    expect(off.state).toBe('off'); expect(off.nextText).toBe('Увімкнуть о 19:00 · через 3 год'); expect(off.actual?.mismatch).toBe(false);
+  });
+  test('actual on matches a maybe-off schedule slot', () => {
+    const d = allOn('2026-10-17'); d.slots[23] = 'maybe-off';
+    const v = computeWidgetView({ ...fixtureSnapshot(), days: [d] }, ON_SLOT, act('on'));
+    expect(v.actual?.mismatch).toBe(false); expect(v.state).toBe('on');
+  });
+  test('missing schedule for today counts as a match and keeps its text', () => {
+    const v = computeWidgetView({ ...fixtureSnapshot(), days: [] }, ON_SLOT, act('on'));
+    expect(v.actual?.mismatch).toBe(false); expect(v.state).toBe('on'); expect(v.nextText).toBe('Графік на сьогодні ще не отримано');
+  });
+  test('actual off during DTEK emergency → emergency texts stay', () => {
+    const v = computeWidgetView(emergency(), ON_SLOT, act('off'));
+    expect(v.state).toBe('emergency'); expect(v.nextText).toBe('Аварійне · орієнтовно до 17:00');
+    expect(v.countdownCaption).toBe('до орієнтовного увімкнення'); expect(v.outageBadge).toBe('Аварійне');
+    expect(v.actual?.mismatch).toBe(false);
+  });
+  test('actual on during DTEK emergency → mismatch, badge kept', () => {
+    const v = computeWidgetView(emergency(), ON_SLOT, act('on'));
+    expect(v.state).toBe('on'); expect(v.title).toBe('Світло є'); expect(v.outageBadge).toBe('Аварійне');
+    expect(v.nextText).toBe('Не за графіком · з 10:10'); expect(v.countdownShort).toBeUndefined(); expect(v.actual?.mismatch).toBe(true);
+  });
+  test('stale actual (observedAt 11 min ago) falls back to schedule with unknown reason', () => {
+    const plain = computeWidgetView(fixtureSnapshot(), ON_SLOT);
+    const v = computeWidgetView(fixtureSnapshot(), ON_SLOT, act('off', ON_SLOT, { observedAt: new Date(ON_SLOT.getTime() - 11 * 60_000).toISOString() }));
+    expect(v).toMatchObject(plain); expect(v.actual).toBeUndefined();
+    expect(v.actualUnknownReason).toBe('немає свіжих даних'); expect(v.actualStrip).toBeDefined();
+    const edge = computeWidgetView(fixtureSnapshot(), ON_SLOT, act('off', ON_SLOT, { observedAt: new Date(ON_SLOT.getTime() - 10 * 60_000).toISOString() }));
+    expect(edge.actual?.mismatch).toBe(true);
+  });
+  test('actual unknown → schedule view + actualUnknownReason', () => {
+    const v = computeWidgetView(fixtureSnapshot(), ON_SLOT, act('unknown', ON_SLOT, { reason: 'Станція не на зв’язку' }));
+    expect(v).toMatchObject(computeWidgetView(fixtureSnapshot(), ON_SLOT));
+    expect(v.actualUnknownReason).toBe('Станція не на зв’язку'); expect(v.actual).toBeUndefined();
+    expect(computeWidgetView(fixtureSnapshot(), ON_SLOT, act('unknown', ON_SLOT, { observedAt: undefined })).actualUnknownReason).toBe('немає свіжих даних');
+  });
+  test('no actual → identical to previous behaviour', () => {
+    const plain = computeWidgetView(fixtureSnapshot(), ON_SLOT);
+    expect(computeWidgetView(fixtureSnapshot(), ON_SLOT, null)).toEqual(plain);
+    expect(computeWidgetView(fixtureSnapshot(), ON_SLOT, undefined)).toEqual(plain);
+    expect('actualUnknownReason' in plain).toBe(false); expect('actualStrip' in plain).toBe(false); expect('actual' in plain).toBe(false);
+  });
 });
