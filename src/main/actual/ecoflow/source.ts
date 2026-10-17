@@ -64,6 +64,7 @@ export class EcoflowSource implements ActualStateSource {
   private readonly mqttAt = new Map<string, number>();
   private lastQuota: string | undefined;
   private freshAt: number | undefined;
+  private mqttFreshAt: number | undefined;
   private found: boolean | undefined;
   private listed: Seen | undefined;
   private status: Seen | undefined;
@@ -182,7 +183,7 @@ export class EcoflowSource implements ActualStateSource {
       this.map[k] = v;
       this.mqttAt.set(k, now);
     }
-    this.freshAt = now;
+    this.freshAt = this.mqttFreshAt = now;
     this.logUnsupported();
     this.evaluate();
   }
@@ -219,7 +220,10 @@ export class EcoflowSource implements ActualStateSource {
   private reading(now: number): ActualReading {
     const unknown = (reason: string): ActualReading => ({ power: 'unknown', observedAt: new Date(now).toISOString(), reason });
     const err = this.polls.quota.error ?? this.polls.devices.error;
-    if (err !== undefined) return unknown(errorReason(err));
+    // Ruling R7: fresh MQTT quotas outrank a failing HTTP side (some models answer 1006 over REST yet push over MQTT);
+    // a pure function of the current state, so no unknown/on flip-flop while the error lasts.
+    const mqttFresh = this.mqttFreshAt !== undefined && now - this.mqttFreshAt <= FRESH_MS;
+    if (err !== undefined && !mqttFresh) return unknown(errorReason(err));
     if (this.found === false) return unknown('станцію не знайдено в акаунті');
     if (this.online() === false) return unknown('станція не в мережі');
     if (this.freshAt === undefined || now - this.freshAt > FRESH_MS) return unknown('дані станції не оновлюються');

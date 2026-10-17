@@ -204,7 +204,7 @@ test('quota/all does not overwrite keys MQTT updated within 60 s', async () => {
 
 test('network error → unknown «немає з’єднання з EcoFlow»; polling continues every 60 s', async () => {
   const net = () => new NetworkError('Немає з’єднання з EcoFlow');
-  const { api, log, begin, last } = setup({ quota: [net(), net(), vol(229000), vol(229100)] });
+  const { api, log, begin, last } = setup({ quota: [net(), net(), vol(229000), vol(229100), net()] });
   await begin();
   expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: NO_LINK });
   await advance(MIN);
@@ -215,20 +215,61 @@ test('network error → unknown «немає з’єднання з EcoFlow»; p
   expect(last()).toEqual({ power: 'unknown', observedAt: t(2 * MIN), reason: STALE });
   await advance(MIN);
   expect(last()).toEqual({ power: 'on', observedAt: t(3 * MIN), detail: 'на вході 229 В' });
+  // Fresh only through quota/all (no MQTT): a new failure decides at once.
+  await advance(MIN);
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(4 * MIN), reason: NO_LINK });
   // One log line per outage, the code only.
-  expect(log.warn.mock.calls.filter(([m]) => m === 'ecoflow: quota/all failed')).toEqual([['ecoflow: quota/all failed', 'network']]);
+  expect(log.warn.mock.calls.filter(([m]) => m === 'ecoflow: quota/all failed')).toEqual([
+    ['ecoflow: quota/all failed', 'network'], ['ecoflow: quota/all failed', 'network'],
+  ]);
 });
 
 test('a failed device list is over once quota/all works again', async () => {
-  const { mqtt, begin, last } = setup({ devices: [ONLINE, new NetworkError('x'), ONLINE] });
+  // No MQTT here: freshness comes from a changing quota/all, so only the error rule decides.
+  const quota = Array.from({ length: 8 }, (_, i) => vol(229000 + i));
+  const { begin, last } = setup({ devices: [ONLINE, new NetworkError('x'), ONLINE], quota });
+  await begin();
+  await advance(5 * MIN); // 5:00 — the list fails, quota/all in the same tick works
+  await advance(MIN);
+  expect(last()).toEqual({ power: 'on', observedAt: t(6 * MIN), detail: 'на вході 229 В' });
+});
+
+test('fresh MQTT quotas outrank a quota/all that keeps answering 1006 (R7)', async () => {
+  const { mqtt, log, begin, last } = setup({ quota: [new EcoflowApiError('1006', 'current device is not allowed to get device info')] });
+  await begin();
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: new EcoflowApiError('1006').message });
+  const c = mqtt.last();
+  c.emit('connect');
+  send(c, QUOTA_TOPIC, inv(229345));
+  expect(last()).toEqual({ power: 'on', observedAt: t(0), detail: 'на вході 229 В' });
+  await advance(30 * SEC);
+  send(c, QUOTA_TOPIC, inv(0));
+  expect(last()).toEqual({ power: 'off', observedAt: t(30 * SEC), detail: 'на вході 0 В' });
+  await advance(30 * SEC); // 1:00 — quota/all fails again; the error is only logged
+  expect(last()).toEqual({ power: 'off', observedAt: t(30 * SEC), detail: 'на вході 0 В' });
+  expect(log.warn.mock.calls.filter(([m]) => m === 'ecoflow: quota/all failed')).toEqual([['ecoflow: quota/all failed', '1006']]);
+
+  // MQTT falls silent: once its data is over 10 min old the error still in force decides again.
+  await advance(9 * MIN); // 10:00 — 9.5 min since the last message
+  expect(last()).toEqual({ power: 'off', observedAt: t(30 * SEC), detail: 'на вході 0 В' });
+  await advance(MIN);
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(11 * MIN), reason: new EcoflowApiError('1006').message });
+});
+
+test('network error on HTTP with fresh MQTT quotas → the MQTT verdict (R7)', async () => {
+  const net = () => new NetworkError('Немає з’єднання з EcoFlow');
+  const { mqtt, begin, last } = setup({ devices: [ONLINE, net()], quota: [vol(229000), net()] });
   await begin();
   const c = mqtt.last();
   c.emit('connect');
-  await advance(4 * MIN + 30 * SEC);
-  send(c, QUOTA_TOPIC, inv(229345));
-  await advance(30 * SEC); // 5:00 — the list fails, quota/all in the same tick works
   await advance(MIN);
-  expect(last()).toEqual({ power: 'on', observedAt: t(4.5 * MIN), detail: 'на вході 229 В' });
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(MIN), reason: NO_LINK });
+  await advance(30 * SEC);
+  send(c, QUOTA_TOPIC, inv(229345));
+  expect(last()).toEqual({ power: 'on', observedAt: t(1.5 * MIN), detail: 'на вході 229 В' });
+  // At 5:00 the list fails too; "online" stays the last list flag.
+  await advance(4.5 * MIN);
+  expect(last()).toEqual({ power: 'on', observedAt: t(1.5 * MIN), detail: 'на вході 229 В' });
 });
 
 test('a poll still in flight when its timer fires skips that tick', async () => {
