@@ -1,6 +1,11 @@
 import type { Address, HouseInfo, ScheduleSnapshot } from '../../shared/types';
 
+/** Shown when the source could not be reached at all (also the message of NetworkError). */
+export const OFFLINE_MESSAGE = 'Немає з’єднання з сайтом ДТЕК';
+
 export class ProviderError extends Error {}
+/** The request never reached the source (no connection): retried on quick backoff, not bound by the 5-min floor. */
+export class NetworkError extends ProviderError {}
 export class CaptchaRequiredError extends Error {}
 
 export interface PageSession {

@@ -11,6 +11,20 @@ export const READ_CITIES = 'Object.keys(DisconSchedule.streets)';
 export const NEUTRALIZE_TIMERS =
   'DisconSchedule.ajax.getStreetsInvisibly = () => {}; DisconSchedule.ajax.checkDisconUpdate = () => {}; true';
 
+/** The page's own background AJAX methods (see NEUTRALIZE_TIMERS); a backstop in case the page kept references to them. */
+export const PAGE_POLL_METHODS = ['checkDisconUpdate', 'getStreetsInvisibly'];
+
+/** True for a page-initiated poll: POST /ua/ajax whose form body names one of PAGE_POLL_METHODS. Our getHomeNum passes. */
+export function isPagePollRequest(req: { method: string; url: string; body: string | null }): boolean {
+  if (req.method.toUpperCase() !== 'POST' || req.body === null) return false;
+  try {
+    if (new URL(req.url).pathname !== '/ua/ajax') return false;
+    return PAGE_POLL_METHODS.includes(new URLSearchParams(req.body).get('method') ?? '');
+  } catch {
+    return false;
+  }
+}
+
 export function readStreetsScript(city: string): string {
   return `(DisconSchedule.streets[${JSON.stringify(city)}] || []).slice()`;
 }

@@ -1,6 +1,7 @@
 import { app, session } from 'electron';
 import { BrowserSession } from './providers/browser-session';
 import { createProviders, findProvider } from './providers/registry';
+import { consoleLogger } from './log';
 import { slotRuns } from '../shared/widget-state';
 
 const PARTITION = 'persist:dtek-krem';
@@ -9,7 +10,8 @@ const offline = process.argv.includes('--offline');
 async function main(): Promise<number> {
   const started = Date.now();
   if (offline) await session.fromPartition(PARTITION).enableNetworkEmulation({ offline: true });
-  const providers = createProviders(o => new BrowserSession(o));
+  // Console only: the smoke run must never write into a userData log.
+  const providers = createProviders(o => new BrowserSession(o, consoleLogger), consoleLogger);
   try {
     const provider = findProvider(providers, 'dtek-krem');
     const snap = await provider.fetchSnapshot({

@@ -1,5 +1,5 @@
 import stale from '../fixtures/dtek-krem/getHomeNum-stale-updateFact.json';
-import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage } from '../../src/main/providers/dtek-krem/parse';
+import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage, hasOutageFields } from '../../src/main/providers/dtek-krem/parse';
 import { ProviderError } from '../../src/main/providers/types';
 const resp = parseHomeNumResponse(stale);
 const fact = resp.fact!; const names = resp.preset!.sch_names;
@@ -57,4 +57,24 @@ test('parseHomeNumResponse rejects garbage', () => {
   expect(() => parseHomeNumResponse('<html>')).toThrow(ProviderError);
   expect(() => parseHomeNumResponse({ result: false })).toThrow(ProviderError);
   expect(() => parseHomeNumResponse({ result: true })).toThrow(ProviderError);
+});
+test('factToDays reports statuses it does not know (they become unknown slots)', () => {
+  const ts = Object.keys(fact.data)[0];
+  const odd = { ...fact, data: { [ts]: { ...fact.data[ts], 'GPV1.2': { ...fact.data[ts]['GPV1.2'], '1': 'weird', '2': 'weird', '3': 'odd' } } } };
+  const seen: string[] = [];
+  const days = factToDays(odd, 'GPV1.2', s => seen.push(s));
+  expect(seen).toEqual(['weird', 'weird', 'odd']);
+  expect(days[0].slots.slice(0, 6)).toEqual(['unknown', 'unknown', 'unknown', 'unknown', 'unknown', 'unknown']);
+  const none: string[] = [];
+  factToDays(fact, 'GPV1.2', s => none.push(s));
+  expect(none).toEqual([]);
+});
+test('hasOutageFields: only when type/sub_type/dates are non-empty or voluntarily/cek non-null', () => {
+  const e = resp.data['40'];
+  expect(hasOutageFields(e)).toBe(false);
+  expect(hasOutageFields({ ...e, type: '  ' })).toBe(false);
+  expect(hasOutageFields({ ...e, sub_type: 'Екстрене відключення' })).toBe(true);
+  expect(hasOutageFields({ ...e, end_date: '17:00 17.10.2026' })).toBe(true);
+  expect(hasOutageFields({ ...e, voluntarily: false })).toBe(true);
+  expect(hasOutageFields({ ...e, cek: 0 })).toBe(true);
 });

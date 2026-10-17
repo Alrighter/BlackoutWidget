@@ -27,7 +27,10 @@ export function hourToSlots(status: string): [Slot, Slot] {
   }
 }
 
-export function factToDays(fact: DtekFact, groupId: string): DaySchedule[] {
+const KNOWN_STATUSES = new Set(['yes', 'no', 'first', 'second', 'maybe', 'mfirst', 'msecond']);
+
+/** `onUnknownStatus` is told about every hour status the mapping does not know (it becomes `unknown` slots). */
+export function factToDays(fact: DtekFact, groupId: string, onUnknownStatus?: (status: string) => void): DaySchedule[] {
   const days: DaySchedule[] = [];
   for (const [ts, groups] of Object.entries(fact.data)) {
     const hours = groups[groupId];
@@ -35,6 +38,7 @@ export function factToDays(fact: DtekFact, groupId: string): DaySchedule[] {
     const slots: Slot[] = [];
     for (let h = 1; h <= 24; h++) {
       const status = hours[String(h)];
+      if (status !== undefined && !KNOWN_STATUSES.has(status)) onUnknownStatus?.(String(status));
       slots.push(...(status === undefined ? (['unknown', 'unknown'] as [Slot, Slot]) : hourToSlots(status)));
     }
     days.push({ date: kyivDateKey(new Date(Number(ts) * 1000)), slots });
@@ -55,6 +59,16 @@ export function parseHouses(resp: DtekHomeNumResponse, fact: DtekFact, schNames:
     house,
     lines: deriveLines(entry.sub_type_reason ?? [], fact, schNames),
   }));
+}
+
+const OUTAGE_FIELDS = ['type', 'sub_type', 'start_date', 'end_date', 'voluntarily', 'cek'] as const;
+
+/** True when any field that may describe a current outage is filled (non-empty string / non-null value): worth logging raw. */
+export function hasOutageFields(entry: DtekHouseEntry): boolean {
+  return OUTAGE_FIELDS.some(k => {
+    const v: unknown = entry[k];
+    return v !== null && v !== undefined && !(typeof v === 'string' && v.trim() === '');
+  });
 }
 
 export function parseCurrentOutage(entry: DtekHouseEntry): CurrentOutage | undefined {

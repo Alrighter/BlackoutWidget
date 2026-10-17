@@ -1,9 +1,12 @@
 import { DtekKremProvider } from './dtek-krem';
-import { DTEK_URL, NEUTRALIZE_TIMERS, READY_CHECK } from './dtek-krem/page-scripts';
+import { DTEK_URL, NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek-krem/page-scripts';
 import type { SessionOptions } from './browser-session';
+import { silentLogger, type Logger } from '../log';
 import { ProviderError, type PageSession, type ScheduleProvider } from './types';
 
-export function createProviders(makeSession: (o: SessionOptions) => PageSession): ScheduleProvider[] {
+export function createProviders(
+  makeSession: (o: SessionOptions) => PageSession, log: Logger = silentLogger,
+): ScheduleProvider[] {
   return [
     new DtekKremProvider(makeSession({
       url: DTEK_URL,
@@ -11,7 +14,8 @@ export function createProviders(makeSession: (o: SessionOptions) => PageSession)
       readyCheck: READY_CHECK,
       allowedHosts: ['dtek-krem.com.ua'],
       afterReady: NEUTRALIZE_TIMERS,
-    })),
+      blockRequest: isPagePollRequest,
+    }), log),
   ];
 }
 
