@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import type { ScheduleSnapshot, Settings } from '../shared/types';
 
-export const DEFAULT_SETTINGS: Settings = { address: null, widgetStyle: 'compact', autostart: true, widgetPosition: null };
+export const DEFAULT_SETTINGS: Settings = { address: null, widgetStyle: 'compact', autostart: true, widgetPosition: null, actualSource: null };
 export const READ_RETRIES = 3;
 export const READ_RETRY_MS = 50;
 

@@ -15,8 +15,20 @@ export interface ScheduleSnapshot {
 }
 export type WidgetStyle = 'compact' | 'ring' | 'timeline';
 export interface WidgetPosition { x: number; y: number; displayId: number }
-export interface Settings { address: Address | null; widgetStyle: WidgetStyle; autostart: boolean; widgetPosition: WidgetPosition | null }
+export interface Settings {
+  address: Address | null; widgetStyle: WidgetStyle; autostart: boolean; widgetPosition: WidgetPosition | null;
+  actualSource: ActualSourceConfig | null; ecoflowClientId?: string;
+}
 export type RefreshPhase = 'idle' | 'refreshing' | 'ok' | 'error' | 'captcha';
-export interface AppState { settings: Settings; snapshot: ScheduleSnapshot | null; phase: RefreshPhase; lastError?: string; lineChanged: boolean }
+export interface AppState { settings: Settings; snapshot: ScheduleSnapshot | null; phase: RefreshPhase; lastError?: string; lineChanged: boolean; actual?: ActualStatus | null }
 export type WidgetBackground = { kind: 'image'; dataUrl: string } | { kind: 'tint' };
 export type EcoflowRegion = 'eu' | 'us';
+export type ActualPower = 'on' | 'off' | 'unknown';
+export interface ActualSegment { power: ActualPower; start: string; end?: string; startApprox?: boolean }
+export interface ActualStatus {
+  sourceLabel: string; power: ActualPower; since?: string; sinceApprox?: boolean;
+  observedAt?: string; reason?: string; detail?: string;
+  /** Segments of the last 7 days in time order; the last one is open (no `end`). */
+  history: ActualSegment[];
+}
+export interface ActualSourceConfig { id: 'ecoflow'; region: EcoflowRegion; deviceSn: string; deviceName: string; accessKeyHint: string }

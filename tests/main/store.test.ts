@@ -60,3 +60,12 @@ test('snapshot read failure keeps the last snapshot instead of throwing', () => 
   locked = true;
   expect(store.getSnapshot()?.groupId).toBe('GPV1.2');
 });
+
+test('old settings.json without actualSource reads as null', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bw-'));
+  writeFileSync(join(dir, 'settings.json'), '{"widgetStyle":"ring"}');
+  const s = new AppStore(dir).getSettings();
+  expect(s.widgetStyle).toBe('ring');
+  expect(s.actualSource).toBeNull();
+  expect(DEFAULT_SETTINGS.actualSource).toBeNull();
+});
