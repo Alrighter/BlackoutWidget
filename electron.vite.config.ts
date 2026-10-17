@@ -7,7 +7,12 @@ export default defineConfig({
   // native koffi .node binary is never bundled.
   main: {
     build: {
-      rollupOptions: { input: { index: resolve(__dirname, 'src/main/index.ts') } },
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'smoke-dtek': resolve(__dirname, 'src/main/smoke-dtek.ts'),
+        },
+      },
     },
   },
   preload: {
