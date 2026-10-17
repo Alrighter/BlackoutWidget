@@ -12,6 +12,7 @@ export interface PageSession {
   ensureReady(): Promise<void>; // throws CaptchaRequiredError on timeout
   evaluate<T>(js: string): Promise<T>;
   reload(): Promise<void>;
+  isOnline(): boolean; // the OS-level connectivity hint (electron net.isOnline())
   showForUser(): Promise<void>; // shows the window, resolves when the page is ready again
   dispose(): void;
 }

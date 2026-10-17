@@ -1,5 +1,6 @@
 import { app, BrowserWindow, net, session as electronSession, type UploadData } from 'electron';
 import { silentLogger, type Logger } from '../log';
+import { isConnectivityError } from './net-errors';
 import { CaptchaRequiredError, NetworkError, OFFLINE_MESSAGE, ProviderError, type PageSession } from './types';
 
 export interface SessionOptions {
@@ -78,6 +79,10 @@ export class BrowserSession implements PageSession {
     return this.ensureReady();
   }
 
+  isOnline(): boolean {
+    return net.isOnline();
+  }
+
   async showForUser(): Promise<void> {
     const win = this.window();
     this.showing = true;
@@ -116,12 +121,12 @@ export class BrowserSession implements PageSession {
     win.webContents.loadURL(this.opts.url).catch((e: { errno?: number; code?: string }) => {
       if (e?.errno === ERR_ABORTED || e?.code === 'ERR_ABORTED') return;
       this.netError = true;
-      this.netFailure ??= { errno: e?.errno, code: e?.code };
+      this.netFailure ??= { code: e?.errno, name: e?.code };
     });
 
     const deadline = Date.now() + (this.opts.readyTimeoutMs ?? 30000);
     while (this.showing || Date.now() < deadline) {
-      if (this.netError) throw this.networkError();
+      if (this.netError) throw this.loadError();
       if (win.isDestroyed()) throw new ProviderError('Вікно ДТЕК закрито');
       if (await this.check(win)) {
         this.loaded = true;
@@ -130,7 +135,7 @@ export class BrowserSession implements PageSession {
       }
       await sleep(POLL_MS);
     }
-    if (this.netError) throw this.networkError();
+    if (this.netError) throw this.loadError();
     if (!net.isOnline()) throw new NetworkError(OFFLINE_MESSAGE, { cause: 'net.isOnline() = false at the ready timeout' });
     // Captcha only when we are online AND the real page is what loaded.
     if (this.onSourceHost(win) && (await this.check(win, REAL_PAGE_CHECK))) {
@@ -140,8 +145,12 @@ export class BrowserSession implements PageSession {
     throw new ProviderError(OFFLINE_MESSAGE, { cause: { url: win.isDestroyed() ? undefined : win.webContents.getURL() } });
   }
 
-  private networkError(): NetworkError {
-    return new NetworkError(OFFLINE_MESSAGE, { cause: this.netFailure });
+  /** NetworkError only for real connectivity failures; a failure after DTEK was contacted must obey the 5-minute floor. */
+  private loadError(): ProviderError {
+    const code = (this.netFailure as { code?: unknown } | undefined)?.code;
+    return isConnectivityError(typeof code === 'number' ? code : 0, net.isOnline())
+      ? new NetworkError(OFFLINE_MESSAGE, { cause: this.netFailure })
+      : new ProviderError('Сайт ДТЕК повернув помилку', { cause: this.netFailure });
   }
 
   private async runAfterReady(win: BrowserWindow): Promise<void> {

@@ -14,7 +14,7 @@ const addr = { providerId: 'dtek-krem', city: C, street: S, house: '40', lineInd
 const oldFact = { ...stale.fact, update: '17.10.2026 09:40' };
 function fakeSession(replies: Record<string, unknown[]>) {
   return {
-    ensureReady: vi.fn(async () => {}), showForUser: vi.fn(async () => {}), dispose: vi.fn(), reload: vi.fn(async () => {}),
+    ensureReady: vi.fn(async () => {}), showForUser: vi.fn(async () => {}), dispose: vi.fn(), reload: vi.fn(async () => {}), isOnline: vi.fn(() => true),
     evaluate: vi.fn(async (js: string) => { const q = replies[js]; if (!q?.length) throw new Error('unexpected ' + js.slice(0, 60)); return q.shift(); }) };
 }
 test('first fetch sends cached updateFact and adopts fresh fact', async () => {
@@ -92,12 +92,20 @@ test('page script reports in-page failures as status 0', () => {
 
 const factReply = () => ({ fact: stale.fact, schNames: stale.preset.sch_names });
 const homeNum = getHomeNumScript(C, S, '17.10.2026 11:55');
-test('status 0 on both attempts (in-page fetch failed) → NetworkError with the offline message', async () => {
+test('status 0 on both attempts while online (DTEK slow / reset) → plain ProviderError, not offline', async () => {
   const s = fakeSession({ [READ_FACT]: [factReply(), factReply()], [homeNum]: [{ status: 0, body: '' }, { status: 0, body: '' }] });
+  const err = await new DtekKremProvider(s as any).fetchSnapshot(addr).catch(e => e);
+  expect(err).toBeInstanceOf(ProviderError);
+  expect(err).not.toBeInstanceOf(NetworkError);
+  expect(err.message).toBe('Сайт ДТЕК не відповідає');
+  expect(s.reload).toHaveBeenCalledTimes(1);
+});
+test('status 0 on both attempts while offline → NetworkError with the offline message', async () => {
+  const s = fakeSession({ [READ_FACT]: [factReply(), factReply()], [homeNum]: [{ status: 0, body: '' }, { status: 0, body: '' }] });
+  s.isOnline.mockReturnValue(false);
   const err = await new DtekKremProvider(s as any).fetchSnapshot(addr).catch(e => e);
   expect(err).toBeInstanceOf(NetworkError);
   expect(err.message).toBe('Немає з’єднання з сайтом ДТЕК');
-  expect(s.reload).toHaveBeenCalledTimes(1);
 });
 test('status 0 then 403 → plain ProviderError (the site answered)', async () => {
   const s = fakeSession({ [READ_FACT]: [factReply(), factReply()], [homeNum]: [{ status: 0, body: '' }, { status: 403, body: '<html>' }] });

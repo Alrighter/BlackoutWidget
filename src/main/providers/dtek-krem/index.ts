@@ -122,8 +122,12 @@ export class DtekKremProvider implements ScheduleProvider {
       }
       statuses.push(status);
       if (attempt >= 1) {
-        // status 0 = the in-page fetch itself failed (no response); twice in a row means no connection.
-        if (statuses.every(s => s === 0)) throw new NetworkError(OFFLINE_MESSAGE, { cause: { statuses } });
+        // status 0 = the in-page fetch itself failed (no response). The reload in between succeeded, so DTEK was
+        // reached: unless the machine is really offline, this is a timeout/reset that must obey the 5-minute floor.
+        if (statuses.every(s => s === 0)) {
+          if (!this.session.isOnline()) throw new NetworkError(OFFLINE_MESSAGE, { cause: { statuses } });
+          throw new ProviderError('Сайт ДТЕК не відповідає', { cause: { statuses } });
+        }
         throw new ProviderError('Сайт ДТЕК повернув помилку', { cause: { statuses } });
       }
       await this.session.reload();
