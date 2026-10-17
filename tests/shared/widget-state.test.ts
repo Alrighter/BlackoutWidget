@@ -1,5 +1,6 @@
 import { computeWidgetView, slotRuns, formatDurationLong, formatDurationShort } from '../../src/shared/widget-state';
 import { fixtureSnapshot } from '../helpers/snapshot';
+import type { CurrentOutage } from '../../src/shared/types';
 const at = (iso: string) => new Date(iso);
 const allOn = (date: string) => ({ date, slots: Array(48).fill('on') });
 
@@ -64,4 +65,35 @@ test('slotRuns GPV1.2', () =>
 test('duration formats', () => {
   expect(formatDurationLong(190)).toBe('3 год 10 хв'); expect(formatDurationLong(45)).toBe('45 хв'); expect(formatDurationLong(60)).toBe('1 год');
   expect(formatDurationShort(190)).toBe('3:10'); expect(formatDurationShort(45)).toBe('0:45');
+});
+
+// Fixture: fetchedAt 11:48 Kyiv; at 11:50 the schedule says «Світло є» until 15:00.
+const NOW = at('2026-10-17T08:50:00Z');
+const withOutage = (o: CurrentOutage, fetchedAt?: string) =>
+  computeWidgetView(fixtureSnapshot({ currentOutage: o, ...(fetchedAt ? { fetchedAt } : {}) }), NOW);
+test('emergency that has not started yet → schedule state', () => {
+  const v = withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: '13:00 17.10.2026', end: '17:00 17.10.2026' });
+  expect(v.state).toBe('on'); expect(v.outageBadge).toBeUndefined();
+});
+test('emergency that already started (or has an unreadable start) overrides', () => {
+  expect(withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: '10:05 17.10.2026', end: '17:00 17.10.2026' }).state).toBe('emergency');
+  expect(withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: 'незабаром', end: '17:00 17.10.2026' }).state).toBe('emergency');
+});
+test('emergency whose end has passed → schedule state', () => {
+  const v = withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: '08:00 17.10.2026', end: '11:00 17.10.2026' });
+  expect(v.state).toBe('on'); expect(v.outageBadge).toBeUndefined(); expect(v.nextText).toBe('Вимкнення о 15:00 · через 3 год 10 хв');
+});
+test('emergency without an end: overrides only while the snapshot is fresh', () => {
+  const fresh = withOutage({ kind: 'emergency', text: 'Екстрене відключення' });
+  expect(fresh.state).toBe('emergency'); expect(fresh.outageBadge).toBe('Екстрене');
+  const stale = withOutage({ kind: 'emergency', text: 'Екстрене відключення', end: 'невідомо' }, '2026-10-17T07:50:00.000Z'); // 60 min old
+  expect(stale.state).toBe('on'); expect(stale.outageBadge).toBeUndefined(); expect(stale.stale).toBe(true);
+});
+test("kind 'other' never overrides and gets no badge", () => {
+  const v = withOutage({ kind: 'other', text: 'Планові ремонтні роботи', start: '10:00 17.10.2026', end: '17:00 17.10.2026' });
+  expect(v.state).toBe('on'); expect(v.title).toBe('Світло є'); expect(v.outageBadge).toBeUndefined();
+});
+test('an unreadable fetchedAt counts as stale and does not break the view', () => {
+  const v = computeWidgetView(fixtureSnapshot({ fetchedAt: 'not a date' }), NOW);
+  expect(v.stale).toBe(true); expect(v.updatedText).toBe('оновлено --:--'); expect(v.state).toBe('on');
 });
