@@ -563,19 +563,23 @@ test('a retained /quota message is not online evidence and not fresh MQTT data a
   expect(b.last()).toEqual({ power: 'unknown', observedAt: t(10 * SEC), reason: new EcoflowApiError('1006').message });
 });
 
-test('a retained replay does not overwrite a key live MQTT sent while its data is fresh (R8, R14)', async () => {
-  const { mqtt, begin, last } = setup({ quota: [vol(229345)] });
+test('a retained replay is merged even over a key live MQTT sent while fresh: the grid may have changed meanwhile (R14)', async () => {
+  const { mqtt, begin, last } = setup({ quota: [vol(0)] });
   await begin();
   const c1 = mqtt.last();
   c1.emit('connect');
   send(c1, QUOTA_TOPIC, inv(0));
   expect(last()).toEqual({ power: 'off', observedAt: t(0), detail: 'на вході 0 В' });
-  c1.emit('close');
+  c1.emit('close'); // the grid comes back while MQTT is down
   await advance(10 * SEC);
   const c2 = mqtt.last();
   c2.emit('connect');
-  send(c2, QUOTA_TOPIC, inv(229345), { retain: true }); // the broker's older value, replayed on subscribe
-  expect(last()).toEqual({ power: 'off', observedAt: t(0), detail: 'на вході 0 В' });
+  send(c2, QUOTA_TOPIC, inv(229345), { retain: true }); // the broker's last message, replayed on subscribe
+  // Merged at once, but the freshness is still the last live message's.
+  expect(last()).toEqual({ power: 'on', observedAt: t(0), detail: 'на вході 229 В' });
+  await advance(10 * SEC);
+  send(c2, QUOTA_TOPIC, { typeCode: 'pdStatus', params: { soc: 80 } });
+  expect(last()).toEqual({ power: 'on', observedAt: t(20 * SEC), detail: 'на вході 229 В' });
 });
 
 test('a server echo of the keys never reaches a reading or a log line', async () => {

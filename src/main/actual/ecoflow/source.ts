@@ -181,22 +181,19 @@ export class EcoflowSource implements ActualStateSource {
     // The cloud serves its cache even for an offline station: only a change in content is a sign of life.
     if (this.lastQuota !== undefined && content !== this.lastQuota) this.freshAt = now;
     this.lastQuota = content;
-    this.mergeLagging(q, now);
+    // Ruling R8: the cache can lag MQTT, and MQTT pushes a key only when it changes, so while MQTT is fresh its keys hold;
+    // once it is stale, quota/all wins every key again.
+    if (!this.mqttFresh(now)) this.mqttKeys.clear();
+    for (const [k, v] of Object.entries(q)) if (!this.mqttKeys.has(k)) this.map[k] = v;
     this.logUnsupported();
   }
 
   /**
-   * Ruling R8: quota/all and retained replays can lag MQTT, and MQTT pushes a key only when it changes, so while MQTT is
-   * fresh its keys hold; once it is stale, these values win every key again.
+   * Ruling R14: the broker replays its last message on subscribe — merged, as it may carry a change made while MQTT was
+   * down, but it is no freshness, online evidence or session proof.
    */
-  private mergeLagging(q: Record<string, unknown>, now: number): void {
-    if (!this.mqttFresh(now)) this.mqttKeys.clear();
-    for (const [k, v] of Object.entries(q)) if (!this.mqttKeys.has(k)) this.map[k] = v;
-  }
-
-  /** Ruling R14: the broker's replay of an older message, merged like quota/all — no freshness, online evidence or proof. */
   private applyRetainedQuota(q: Record<string, unknown>): void {
-    this.mergeLagging(q, this.now());
+    for (const [k, v] of Object.entries(q)) this.map[k] = v;
     this.logUnsupported();
     this.evaluate();
   }
