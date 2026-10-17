@@ -1,17 +1,23 @@
 export const INTERVAL_MS = 15 * 60_000, JITTER_MS = 60_000, MIN_GAP_MS = 5 * 60_000;
 export const BACKOFF_MS = [60_000, 120_000, 240_000, 480_000, 900_000];
 export type TriggerReason = 'resume' | 'online' | 'manual';
+/**
+ * 'ok' — success (or nothing to do); 'failed' — the attempt reached the source and failed (bound by the 5-min floor);
+ * 'offline' — the source was never reached (no connection): plain quick backoff.
+ */
+export type RunOutcome = 'ok' | 'failed' | 'offline';
 
 export class RefreshScheduler {
   private readonly random: () => number;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private dueAt = 0;
   private lastStart: number | null = null;
+  private lastOutcome: RunOutcome | null = null;
   private failures = 0;
   private running = false;
   private active = false;
 
-  constructor(private readonly run: () => Promise<boolean>, deps: { random?: () => number } = {}) {
+  constructor(private readonly run: () => Promise<RunOutcome>, deps: { random?: () => number } = {}) {
     this.random = deps.random ?? Math.random;
   }
 
@@ -25,7 +31,9 @@ export class RefreshScheduler {
     if (!this.active || this.running) return;
     const now = Date.now();
     if (reason === 'manual') return this.schedule(0);
-    const earliest = this.lastStart === null ? now : this.lastStart + MIN_GAP_MS;
+    // Coming back online right after a failure that never reached the source: nothing to protect, go now.
+    const skipGap = reason === 'online' && this.lastOutcome === 'offline';
+    const earliest = this.lastStart === null || skipGap ? now : this.lastStart + MIN_GAP_MS;
     const target = Math.max(now, earliest);
     if (this.timer === null || target < this.dueAt) this.schedule(target - now);
   }
@@ -50,17 +58,22 @@ export class RefreshScheduler {
     this.timer = null;
     if (!this.active || this.running) return;
     this.running = true;
-    this.lastStart = Date.now();
-    let ok = false;
-    try { ok = await this.run(); } catch { ok = false; }
+    const started = Date.now();
+    this.lastStart = started;
+    let outcome: RunOutcome;
+    // A throwing run is a bug, not a known offline state: treat it as having reached the source.
+    try { outcome = await this.run(); } catch { outcome = 'failed'; }
     this.running = false;
+    this.lastOutcome = outcome;
     if (!this.active) return;
-    if (ok) {
+    if (outcome === 'ok') {
       this.failures = 0;
       this.schedule(INTERVAL_MS + (this.random() * 2 - 1) * JITTER_MS);
-    } else {
-      this.failures++;
-      this.schedule(BACKOFF_MS[Math.min(this.failures - 1, BACKOFF_MS.length - 1)]);
+      return;
     }
+    this.failures++;
+    const backoff = BACKOFF_MS[Math.min(this.failures - 1, BACKOFF_MS.length - 1)];
+    // Anything that reached the source never runs again automatically within MIN_GAP_MS of its start.
+    this.schedule(outcome === 'failed' ? Math.max(backoff, started + MIN_GAP_MS - Date.now()) : backoff);
   }
 }

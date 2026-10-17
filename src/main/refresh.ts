@@ -1,20 +1,23 @@
 import type { Address, AppState, RefreshPhase, ScheduleSnapshot } from '../shared/types';
-import { CaptchaRequiredError } from './providers/types';
+import { CaptchaRequiredError, NetworkError } from './providers/types';
 import type { ScheduleProvider } from './providers/types';
+import type { RunOutcome } from './scheduler';
 import type { AppStore } from './store';
 
 export class RefreshService {
   private phase: RefreshPhase = 'idle';
   private lastError: string | undefined;
   private listeners = new Set<(s: AppState) => void>();
-  private inFlight: Promise<boolean> | null = null;
+  private inFlight: Promise<RunOutcome> | null = null;
 
   constructor(private readonly deps: { store: AppStore; getProvider(id: string): ScheduleProvider }) {}
 
   getState(): AppState {
     const settings = this.deps.store.getSettings();
-    const snapshot = this.deps.store.getSnapshot();
     const a = settings.address;
+    // A snapshot cached for another address must never be shown as this one's schedule.
+    const stored = this.deps.store.getSnapshot();
+    const snapshot = stored && sameAddress(a, stored.address) ? stored : null;
     const lineChanged = !!a && !!snapshot && snapshot.lines[a.lineIndex - 1]?.groupId !== a.groupId;
     const state: AppState = { settings, snapshot, phase: this.phase, lineChanged };
     if (this.lastError !== undefined) state.lastError = this.lastError;
@@ -26,8 +29,11 @@ export class RefreshService {
     return () => { this.listeners.delete(cb); };
   }
 
-  /** true = success or nothing to do (no address). Never runs two requests in parallel. */
-  refresh(): Promise<boolean> {
+  /**
+   * 'ok' = success or nothing to do (no address); 'offline' = the source was never reached (NetworkError);
+   * 'failed' = any other failure. Never runs two requests in parallel.
+   */
+  refresh(): Promise<RunOutcome> {
     if (this.inFlight) return this.inFlight;
     const p = this.runLoop().finally(() => { this.inFlight = null; });
     this.inFlight = p;
@@ -42,20 +48,20 @@ export class RefreshService {
     await this.refresh();
   }
 
-  private async runLoop(): Promise<boolean> {
+  private async runLoop(): Promise<RunOutcome> {
     for (;;) {
       const r = await this.doRefresh();
       if (r !== 'stale') return r;
     }
   }
 
-  private async doRefresh(): Promise<boolean | 'stale'> {
+  private async doRefresh(): Promise<RunOutcome | 'stale'> {
     const address = this.deps.store.getSettings().address;
     if (!address) {
       this.phase = 'idle';
       this.lastError = undefined;
       this.emit();
-      return true;
+      return 'ok';
     }
     this.phase = 'refreshing';
     this.emit();
@@ -72,12 +78,12 @@ export class RefreshService {
       this.phase = 'ok';
       this.lastError = undefined;
       this.emit();
-      return true;
+      return 'ok';
     }
     this.phase = error instanceof CaptchaRequiredError ? 'captcha' : 'error';
     this.lastError = error instanceof Error ? error.message : String(error);
     this.emit();
-    return false;
+    return error instanceof NetworkError ? 'offline' : 'failed';
   }
 
   private emit(): void {

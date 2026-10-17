@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AppStore } from '../../src/main/store';
 import { RefreshService } from '../../src/main/refresh';
-import { CaptchaRequiredError, ProviderError } from '../../src/main/providers/types';
+import { CaptchaRequiredError, NetworkError, ProviderError } from '../../src/main/providers/types';
 import type { ScheduleProvider } from '../../src/main/providers/types';
 import type { ScheduleSnapshot } from '../../src/shared/types';
 import { fixtureSnapshot } from '../helpers/snapshot';
@@ -22,7 +22,7 @@ test('starts with cached snapshot before any refresh (offline start)', () => {
 test('successful refresh saves snapshot, phase ok, emits', async () => {
   const { svc, store } = setup(async () => fixtureSnapshot());
   const seen: string[] = []; svc.onState(s => seen.push(s.phase));
-  expect(await svc.refresh()).toBe(true);
+  expect(await svc.refresh()).toBe('ok');
   expect(seen).toEqual(['refreshing', 'ok']); expect(store.getSnapshot()).not.toBeNull();
 });
 test('new sourceUpdatedAt replaces snapshot and emits', async () => {
@@ -32,13 +32,30 @@ test('new sourceUpdatedAt replaces snapshot and emits', async () => {
 });
 test('provider error keeps previous snapshot', async () => {
   const { svc } = setup(async () => { throw new ProviderError('Сайт ДТЕК повернув помилку'); }, { cached: fixtureSnapshot() });
-  expect(await svc.refresh()).toBe(false);
+  expect(await svc.refresh()).toBe('failed');
   expect(svc.getState()).toMatchObject({ phase: 'error', lastError: 'Сайт ДТЕК повернув помилку' });
   expect(svc.getState().snapshot).not.toBeNull();
 });
-test('captcha → phase captcha', async () => {
+test('captcha → phase captcha, outcome failed (it reached the site)', async () => {
   const { svc } = setup(async () => { throw new CaptchaRequiredError('x'); });
-  await svc.refresh(); expect(svc.getState().phase).toBe('captcha');
+  expect(await svc.refresh()).toBe('failed'); expect(svc.getState().phase).toBe('captcha');
+});
+test('NetworkError → outcome offline, phase error with the offline message', async () => {
+  const { svc } = setup(async () => { throw new NetworkError('Немає з’єднання з сайтом ДТЕК'); }, { cached: fixtureSnapshot() });
+  expect(await svc.refresh()).toBe('offline');
+  expect(svc.getState()).toMatchObject({ phase: 'error', lastError: 'Немає з’єднання з сайтом ДТЕК' });
+  expect(svc.getState().snapshot).not.toBeNull();
+});
+test('a stored snapshot for a different address is never returned', () => {
+  const other = { ...fixtureSnapshot(), address: { ...addr, house: '13' } };
+  const { svc, store } = setup(async () => fixtureSnapshot(), { cached: other });
+  expect(store.getSnapshot()?.address.house).toBe('13');
+  expect(svc.getState()).toMatchObject({ snapshot: null, lineChanged: false });
+  store.updateSettings({ address: { ...addr, lineIndex: 2, groupId: 'GPV4.2' } });
+  store.setSnapshot(fixtureSnapshot());
+  expect(svc.getState().snapshot).toBeNull(); // same house, other line
+  store.updateSettings({ address: null });
+  expect(svc.getState().snapshot).toBeNull();
 });
 test('lineChanged when group under lineIndex differs or line vanished', async () => {
   const swapped = { ...fixtureSnapshot(), lines: [{ index: 1, groupId: 'GPV3.1', label: 'Черга 3.1' }] };
@@ -46,10 +63,10 @@ test('lineChanged when group under lineIndex differs or line vanished', async ()
   const b = setup(async () => ({ ...fixtureSnapshot(), lines: [] })); await b.svc.refresh(); expect(b.svc.getState().lineChanged).toBe(true);
   const c = setup(async () => fixtureSnapshot()); await c.svc.refresh(); expect(c.svc.getState().lineChanged).toBe(false);
 });
-test('no address → no provider call, returns true, phase idle', async () => {
+test('no address → no provider call, returns ok, phase idle', async () => {
   const { svc, store, provider } = setup(async () => fixtureSnapshot());
   store.updateSettings({ address: null });
-  expect(await svc.refresh()).toBe(true); expect(provider.fetchSnapshot).not.toHaveBeenCalled();
+  expect(await svc.refresh()).toBe('ok'); expect(provider.fetchSnapshot).not.toHaveBeenCalled();
   expect(svc.getState().phase).toBe('idle');
 });
 
@@ -59,7 +76,7 @@ test('throwing listener does not change outcome or block other listeners', async
   const seen: string[] = [];
   svc.onState(() => { throw new Error('boom'); });
   svc.onState(s => seen.push(s.phase));
-  expect(await svc.refresh()).toBe(true);
+  expect(await svc.refresh()).toBe('ok');
   expect(svc.getState().phase).toBe('ok');
   expect(seen).toEqual(['refreshing', 'ok']);
   err.mockRestore();
