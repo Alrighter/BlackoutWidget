@@ -34,3 +34,15 @@ test('frequency between 0 and 40 Hz is skipped, not read as off', () => {
   }
   expect(detectGrid({ 'inv.acInFreq': 40 }).power).toBe('on');
 });
+test('voltage off with a grid frequency is a conflict → unknown (ruling R13)', () => {
+  const conflict = { power: 'unknown', reason: 'покази суперечать одне одному', unsupported: false };
+  // A firmware reporting inv.acInVol in volts would read 0.23 V.
+  expect(detectGrid({ 'inv.acInVol': 230, 'inv.acInFreq': 50 })).toEqual(conflict);
+  expect(detectGrid({ plugInInfoAcInVol: 0, plugInInfoAcInFeq: 40 })).toEqual(conflict);
+  expect(detectGrid({ 'inv.acInVol': 49999, plugInInfoAcInFeq: 50, plugInInfoAcInFlag: 1 })).toEqual(conflict);
+  // Voltage on is unaffected; frequency 0, a skipped 0–40 Hz or garbage frequency leaves voltage off as off.
+  expect(detectGrid({ 'inv.acInVol': 229345, 'inv.acInFreq': 0 })).toEqual({ power: 'on', detail: 'на вході 229 В' });
+  expect(detectGrid({ 'inv.acInVol': 0, 'inv.acInFreq': 0 })).toEqual({ power: 'off', detail: 'на вході 0 В' });
+  expect(detectGrid({ 'inv.acInVol': 0, 'inv.acInFreq': 30 })).toEqual({ power: 'off', detail: 'на вході 0 В' });
+  expect(detectGrid({ 'inv.acInVol': 0, 'inv.acInFreq': '50' })).toEqual({ power: 'off', detail: 'на вході 0 В' });
+});

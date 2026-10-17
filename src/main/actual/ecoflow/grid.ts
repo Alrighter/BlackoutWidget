@@ -39,9 +39,15 @@ const flag = (v: unknown): boolean | null => {
 
 export function detectGrid(quota: Quota): GridVerdict {
   const v = pick(quota, ['inv.acInVol', 'plugInInfoAcInVol', 'hs_yj751_pd_backend_addr.inAcC20Vol'], volts);
-  if (v !== null) return { power: v >= GRID_MIN_VOLTS ? 'on' : 'off', detail: `на вході ${Math.round(v)} В` };
-
   const hz = pick(quota, ['inv.acInFreq', 'plugInInfoAcInFeq'], freq);
+  if (v !== null) {
+    if (v >= GRID_MIN_VOLTS) return { power: 'on', detail: `на вході ${Math.round(v)} В` };
+    // Ruling R13: a grid frequency next to "no voltage" is a conflict, never off (the mV unit of inv.acInVol is
+    // unconfirmed on some firmware: volts read as mV would be 0.23 V forever).
+    if (hz !== null && hz >= GRID_MIN_HZ) return { power: 'unknown', reason: 'покази суперечать одне одному', unsupported: false };
+    return { power: 'off', detail: `на вході ${Math.round(v)} В` };
+  }
+
   if (hz !== null) return { power: hz >= GRID_MIN_HZ ? 'on' : 'off', detail: `на вході ${Math.round(hz)} Гц` };
 
   const f = pick(quota, ['plugInInfoAcInFlag'], flag);
