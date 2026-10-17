@@ -41,3 +41,8 @@ export function computeCrop(
   if (x1 <= x0 || y1 <= y0) return null;
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
+
+/** Change-detection key for the 60 s poll: differs whenever the wallpaper path, style, mtime or readability changes. */
+export function wallpaperSignature(wp: { path: string; style: WallpaperStyle } | null, mtimeMs: number): string {
+  return wp ? `${wp.path}|${wp.style}|${mtimeMs}` : 'none';
+}

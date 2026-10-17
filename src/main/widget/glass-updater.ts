@@ -1,8 +1,7 @@
 import { nativeImage, screen } from 'electron';
 import { statSync } from 'node:fs';
-import { IPC } from '../../shared/ipc';
 import type { WidgetBackground } from '../../shared/types';
-import { computeCrop, type Rect } from './glass';
+import { computeCrop, wallpaperSignature, type Rect } from './glass';
 import type { WidgetWindow } from './widget-window';
 import { readWallpaper } from './wallpaper-win32';
 
@@ -30,7 +29,7 @@ export function startGlassUpdater(widget: WidgetWindow): () => void {
     try {
       do {
         again = false;
-        widget.send(IPC.background, await compute());
+        widget.setBackground(await compute());
       } while (again);
     } finally {
       running = false;
@@ -40,8 +39,8 @@ export function startGlassUpdater(widget: WidgetWindow): () => void {
   const compute = async (): Promise<WidgetBackground> => {
     try {
       const wp = await readWallpaper();
+      seen = signature(wp);
       if (!wp) return TINT;
-      seen = signature(wp.path, wp.style);
       const image = nativeImage.createFromPath(wp.path);
       if (image.isEmpty()) return TINT;
       const dip = widget.getBoundsDip();
@@ -65,13 +64,13 @@ export function startGlassUpdater(widget: WidgetWindow): () => void {
     }
   };
 
-  const signature = (path: string, style: string) => `${path}|${style}|${mtimeOf(path)}`;
+  const signature = (wp: Awaited<ReturnType<typeof readWallpaper>>) => wallpaperSignature(wp, wp ? mtimeOf(wp.path) : 0);
   const trigger = () => { void update(); };
 
   // Cheap poll: re-crop only when the wallpaper path, style or file mtime changed.
   const poll = setInterval(() => {
     readWallpaper()
-      .then(wp => { if (wp && signature(wp.path, wp.style) !== seen) trigger(); })
+      .then(wp => { if (signature(wp) !== seen) trigger(); })
       .catch(() => {});
   }, 60_000);
 

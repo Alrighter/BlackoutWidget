@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, screen, type MenuItemConstructorOptions, type Rectangle } from 'electron';
 import { join } from 'node:path';
 import { IPC } from '../../shared/ipc';
-import type { WidgetPosition, WidgetStyle } from '../../shared/types';
+import type { WidgetBackground, WidgetPosition, WidgetStyle } from '../../shared/types';
 import type { AppStore } from '../store';
 import type { DesktopPinner } from './desktop-pin';
 import { placeWidget, WIDGET_SIZES } from './position';
@@ -18,6 +18,7 @@ export class WidgetWindow {
   private bounds: Rectangle;
   private dragFrom: { x: number; y: number; screenX: number; screenY: number } | null = null;
   private moveMode = false;
+  private background: WidgetBackground | null = null;
   private quitting = false;
   private readonly movedListeners: (() => void)[] = [];
 
@@ -47,6 +48,12 @@ export class WidgetWindow {
 
   send(channel: string, payload: unknown): void {
     if (this.win && !this.win.isDestroyed()) this.win.webContents.send(channel, payload);
+  }
+
+  /** Remembers the background and (re)sends it on every renderer load, so a send before the renderer subscribed is not lost. */
+  setBackground(background: WidgetBackground): void {
+    this.background = background;
+    this.send(IPC.background, background);
   }
 
   /** New position = position at 'start' + cursor travel since 'start' (screen DIP); 'end' clamps and saves. */
@@ -157,6 +164,7 @@ export class WidgetWindow {
     });
     win.webContents.on('did-finish-load', () => {
       if (this.moveMode) win.webContents.send(IPC.widgetMoveMode, true); // renderer reloaded mid move mode
+      if (this.background) win.webContents.send(IPC.background, this.background);
     });
     if (!app.isPackaged) win.webContents.on('console-message', e => console.log(`[widget] ${e.message}`));
     const url = process.env.ELECTRON_RENDERER_URL;

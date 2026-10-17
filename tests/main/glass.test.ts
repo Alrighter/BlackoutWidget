@@ -1,4 +1,4 @@
-import { computeCrop, type Rect } from '../../src/main/widget/glass';
+import { computeCrop, wallpaperSignature, type Rect } from '../../src/main/widget/glass';
 
 const mon = { x: 0, y: 0, width: 2560, height: 1440 };
 const expectRect = (a: Rect | null, e: Rect) => { expect(a).not.toBeNull(); for (const k of ['x', 'y', 'width', 'height'] as const) expect(a![k]).toBeCloseTo(e[k], 6); };
@@ -27,4 +27,13 @@ test('span uses the virtual screen', () => {
   const virt = { x: 0, y: 0, width: 5120, height: 1440 };
   expectRect(computeCrop({ width: 5120, height: 1440 }, 'span', { x: 2560, y: 0, width: 2560, height: 1440 }, virt, { x: 2660, y: 100, width: 290, height: 150 }),
     { x: 2660, y: 100, width: 290, height: 150 });
+});
+
+test('wallpaperSignature changes on path, style, mtime and readability', () => {
+  const a = wallpaperSignature({ path: 'a.jpg', style: 'fill' }, 1);
+  expect(wallpaperSignature({ path: 'a.jpg', style: 'fill' }, 1)).toBe(a);
+  expect(wallpaperSignature({ path: 'b.jpg', style: 'fill' }, 1)).not.toBe(a);
+  expect(wallpaperSignature({ path: 'a.jpg', style: 'fit' }, 1)).not.toBe(a);
+  expect(wallpaperSignature({ path: 'a.jpg', style: 'fill' }, 2)).not.toBe(a);
+  expect(wallpaperSignature(null, 0)).not.toBe(a); // readable -> unreadable triggers a (tint) update
 });
