@@ -1,3 +1,4 @@
+import type { StripPart } from '../../../shared/actual-view';
 import type { DaySchedule, Slot } from '../../../shared/types';
 
 const CLASS: Record<Slot, string> = { on: 'on', off: 'off', 'maybe-off': 'maybe', unknown: 'unk' };
@@ -16,6 +17,18 @@ export function DayBar({ day, nowFraction }: { day: DaySchedule | null; nowFract
         </div>
       ))}
       {nowFraction !== undefined && <div className="w-now" style={{ left: `calc(${nowFraction * 100}% - 1px)` }} />}
+    </div>
+  );
+}
+
+/** Thin line under today's bar: when power was actually off (solid) or unknown (hatched); on is transparent, in % of the 1440-minute day. */
+export function ActualLine({ parts }: { parts: StripPart[] }) {
+  return (
+    <div className="w-actual-line">
+      {parts.map((p, i) => (
+        <span key={i} data-actual-part={p.power} className={`w-ap ${p.power}`}
+          style={{ left: `${(p.startMin / 1440) * 100}%`, width: `${((p.endMin - p.startMin) / 1440) * 100}%` }} />
+      ))}
     </div>
   );
 }

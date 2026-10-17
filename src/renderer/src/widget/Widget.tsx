@@ -19,7 +19,7 @@ export function Widget({ state, now, background }: { state: AppState; now: Date;
   if (!state.settings.address) {
     body = <div className="w-status"><span>Налаштуйте адресу</span></div>;
   } else {
-    const view = state.snapshot ? computeWidgetView(state.snapshot, now) : emptyView(now);
+    const view = state.snapshot ? computeWidgetView(state.snapshot, now, state.actual) : emptyView(now);
     const props = { view, lineChanged: state.lineChanged };
     body = style === 'ring' ? <RingWidget {...props} /> : style === 'timeline' ? <TimelineWidget {...props} /> : <CompactWidget {...props} />;
   }
