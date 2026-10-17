@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { ipcMain } from 'electron';
 import { CAPTCHA_MARKER, IPC, type MainView } from '../shared/ipc';
 import { kyivDateKey } from '../shared/time';
 import type { Address, AppState, DaySchedule, LineInfo, Settings, WidgetStyle } from '../shared/types';
@@ -15,9 +15,20 @@ export interface IpcDeps {
   openMainWindow(view?: MainView): void;
   /** Shows the verification window (saved address's provider, else the first one) and refreshes afterwards. */
   solveCaptcha(): Promise<void>;
+  widgetDrag(phase: DragPhase, screenX: number, screenY: number): void;
+  widgetContextMenu(): void;
+  /** The widget's «Готово» button. */
+  endMoveMode(): void;
 }
 
+/** One of the app's own windows; the hidden DTEK session window never gets app state. */
+export interface StateTarget { send(channel: string, payload: unknown): void }
+
+type DragPhase = 'start' | 'move' | 'end';
+
 const STYLES: WidgetStyle[] = ['compact', 'ring', 'timeline'];
+const isDragPhase = (v: unknown): v is DragPhase => v === 'start' || v === 'move' || v === 'end';
+const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 export async function previewLines(
   provider: ScheduleProvider, city: string, street: string, house: string, now = new Date(),
@@ -64,13 +75,13 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.solveCaptcha, () => deps.solveCaptcha());
 
   ipcMain.on(IPC.openMainWindow, (_e, view?: MainView) => deps.openMainWindow(view));
-  // Widget window (context menu, dragging) is wired in Task 10.
-  ipcMain.on(IPC.widgetContextMenu, () => {});
-  ipcMain.on(IPC.widgetDrag, () => {});
+  ipcMain.on(IPC.widgetContextMenu, () => deps.widgetContextMenu());
+  ipcMain.on(IPC.widgetDrag, (_e, phase: unknown, x: unknown, y: unknown) => {
+    if (isDragPhase(phase) && isCoord(x) && isCoord(y)) deps.widgetDrag(phase, x, y);
+  });
+  ipcMain.on(IPC.widgetMoveDone, () => deps.endMoveMode());
 }
 
-export function broadcastState(state: AppState): void {
-  for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) w.webContents.send(IPC.state, state);
-  }
+export function broadcastState(state: AppState, targets: StateTarget[]): void {
+  for (const t of targets) t.send(IPC.state, state);
 }

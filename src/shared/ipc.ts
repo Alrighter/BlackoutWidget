@@ -6,6 +6,7 @@ export const IPC = {
   previewLines: 'addr:preview-lines', saveAddress: 'settings:address', setWidgetStyle: 'settings:style',
   setAutostart: 'settings:autostart', refreshNow: 'refresh:now', solveCaptcha: 'captcha:solve',
   openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag', navigate: 'window:navigate',
+  widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
@@ -32,6 +33,10 @@ export interface RendererApi {
   onNavigate(cb: (view: MainView) => void): () => void;
   widgetContextMenu(): void;
   widgetDrag(phase: 'start' | 'move' | 'end', screenX: number, screenY: number): void;
+  /** Main switches the widget in/out of move mode (frame + «Готово» button). */
+  onMoveMode(cb: (on: boolean) => void): () => void;
+  /** The widget's «Готово» button: save the position and pin the widget again. */
+  endMoveMode(): void;
 }
 
 declare global { interface Window { api: RendererApi } }

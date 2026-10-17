@@ -25,6 +25,8 @@ const api: RendererApi = {
   openMainWindow: view => ipcRenderer.send(IPC.openMainWindow, view),
   widgetContextMenu: () => ipcRenderer.send(IPC.widgetContextMenu),
   widgetDrag: (phase, x, y) => ipcRenderer.send(IPC.widgetDrag, phase, x, y),
+  onMoveMode: cb => subscribe(IPC.widgetMoveMode, cb),
+  endMoveMode: () => ipcRenderer.send(IPC.widgetMoveDone),
 };
 
 contextBridge.exposeInMainWorld('api', api);

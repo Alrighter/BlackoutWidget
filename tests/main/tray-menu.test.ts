@@ -1,5 +1,5 @@
 import type { MenuItemConstructorOptions } from 'electron';
-import { buildTrayMenu, trayIconName, trayTooltip } from '../../src/main/tray-menu';
+import { buildTrayMenu, buildWidgetMenu, trayIconName, trayTooltip } from '../../src/main/tray-menu';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
 import { computeWidgetView } from '../../src/shared/widget-state';
 import type { AppState } from '../../src/shared/types';
@@ -25,4 +25,13 @@ test('tooltip and icon', () => {
   expect(trayTooltip(v)).toBe('Світло є · Вимкнення о 15:00 · через 3 год 10 хв');
   expect(trayIconName(v)).toBe('on'); expect(trayIconName(null)).toBe('unknown');
   expect(trayIconName({ ...v, state: 'maybe-off' })).toBe('off'); expect(trayIconName({ ...v, state: 'emergency' })).toBe('emergency');
+});
+test('widget context menu: style, refresh, settings, quit', () => {
+  const setStyle = vi.fn();
+  const m = buildWidgetMenu('timeline', { ...actions, setStyle });
+  expect(m.filter(i => i.type !== 'separator').map(i => i.label)).toEqual(['Стиль', 'Оновити зараз', 'Налаштування', 'Вийти']);
+  const style = m[0].submenu as MenuItemConstructorOptions[];
+  expect(style.map(i => [i.label, i.checked])).toEqual([['Компакт', false], ['Циферблат', false], ['Таймлайн', true]]);
+  (style[1].click as () => void)();
+  expect(setStyle).toHaveBeenCalledWith('ring');
 });

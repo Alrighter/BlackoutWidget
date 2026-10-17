@@ -9,6 +9,9 @@ export interface TrayActions {
 
 const STYLES: [WidgetStyle, string][] = [['compact', 'Компакт'], ['ring', 'Циферблат'], ['timeline', 'Таймлайн']];
 
+const styleItems = (current: WidgetStyle, setStyle: (s: WidgetStyle) => void): MenuItemConstructorOptions[] =>
+  STYLES.map(([style, label]) => ({ label, type: 'radio', checked: current === style, click: () => setStyle(style) }));
+
 export function buildTrayMenu(state: AppState, a: TrayActions): MenuItemConstructorOptions[] {
   const menu: MenuItemConstructorOptions[] = [];
   if (state.phase === 'captcha') {
@@ -18,12 +21,7 @@ export function buildTrayMenu(state: AppState, a: TrayActions): MenuItemConstruc
     { label: 'Показати графік', click: a.showSchedule },
     { label: 'Оновити зараз', click: a.refreshNow },
     { type: 'separator' },
-    {
-      label: 'Стиль віджета',
-      submenu: STYLES.map(([style, label]): MenuItemConstructorOptions => ({
-        label, type: 'radio', checked: state.settings.widgetStyle === style, click: () => a.setStyle(style),
-      })),
-    },
+    { label: 'Стиль віджета', submenu: styleItems(state.settings.widgetStyle, a.setStyle) },
     { label: 'Перемістити віджет', click: a.moveWidget },
     { type: 'separator' },
     { label: 'Налаштування', click: a.openSettings },
@@ -32,6 +30,19 @@ export function buildTrayMenu(state: AppState, a: TrayActions): MenuItemConstruc
     { label: 'Вийти', click: a.quit },
   );
   return menu;
+}
+
+/** Right-click menu of the widget itself. */
+export function buildWidgetMenu(
+  style: WidgetStyle, a: Pick<TrayActions, 'setStyle' | 'refreshNow' | 'openSettings' | 'quit'>,
+): MenuItemConstructorOptions[] {
+  return [
+    { label: 'Стиль', submenu: styleItems(style, a.setStyle) },
+    { label: 'Оновити зараз', click: a.refreshNow },
+    { label: 'Налаштування', click: a.openSettings },
+    { type: 'separator' },
+    { label: 'Вийти', click: a.quit },
+  ];
 }
 
 export function trayTooltip(view: WidgetView | null): string {

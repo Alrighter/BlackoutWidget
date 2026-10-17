@@ -32,6 +32,10 @@ export class MainWindow {
     w.focus();
   }
 
+  send(channel: string, payload: unknown): void {
+    if (this.win && !this.win.isDestroyed()) this.win.webContents.send(channel, payload);
+  }
+
   private create(): BrowserWindow {
     const win = new BrowserWindow({
       width: 900, height: 640, title: 'Графік відключень',

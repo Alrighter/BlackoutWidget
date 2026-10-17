@@ -1,6 +1,6 @@
 import { app, net, powerMonitor } from 'electron';
 import { join } from 'node:path';
-import type { Settings } from '../shared/types';
+import type { AppState, Settings } from '../shared/types';
 import { broadcastState, registerIpc } from './ipc';
 import { MainWindow } from './main-window';
 import { BrowserSession } from './providers/browser-session';
@@ -9,6 +9,9 @@ import { RefreshService } from './refresh';
 import { RefreshScheduler } from './scheduler';
 import { AppStore } from './store';
 import { AppTray } from './tray';
+import { buildWidgetMenu, type TrayActions } from './tray-menu';
+import { createDesktopPinner } from './widget/desktop-pin';
+import { WidgetWindow } from './widget/widget-window';
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -26,7 +29,10 @@ async function bootstrap(): Promise<void> {
   const providers = createProviders(o => new BrowserSession(o));
   const service = new RefreshService({ store, getProvider: id => findProvider(providers, id) });
   const scheduler = new RefreshScheduler(() => service.refresh());
-  const mainWindow = new MainWindow(join(__dirname, '../preload/index.js'));
+  const preload = join(__dirname, '../preload/index.js');
+  const mainWindow = new MainWindow(preload);
+  const pinner = createDesktopPinner();
+  const widget = new WidgetWindow({ store, pinner, preload });
 
   app.on('second-instance', () => mainWindow.open());
 
@@ -34,13 +40,14 @@ async function bootstrap(): Promise<void> {
     // Dev runs must never write a bare electron.exe into HKCU Run.
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: store.getSettings().autostart });
   };
-  const publish = () => {
-    const state = service.getState();
+  const publishState = (state: AppState) => {
     tray.update(state);
-    broadcastState(state);
+    broadcastState(state, [mainWindow, widget]);
   };
+  const publish = () => publishState(service.getState());
   const updateSettings = (patch: Partial<Settings>) => {
     store.updateSettings(patch);
+    if (patch.widgetStyle) widget.setStyle(patch.widgetStyle);
     applyAutostart();
     publish();
   };
@@ -52,26 +59,35 @@ async function bootstrap(): Promise<void> {
     scheduler.trigger('manual');
   };
 
-  const tray = new AppTray({
+  const actions: TrayActions = {
     showWindow: () => mainWindow.open(),
     showSchedule: () => mainWindow.open('schedule'),
     refreshNow: () => scheduler.trigger('manual'),
     setStyle: widgetStyle => updateSettings({ widgetStyle }),
-    moveWidget: () => {}, // wired in Task 10 (widget window)
+    moveWidget: () => widget.beginMoveMode(),
     openSettings: () => mainWindow.open('settings'),
     toggleAutostart: () => updateSettings({ autostart: !store.getSettings().autostart }),
     solveCaptcha: () => { solveCaptcha().catch(err => console.error('showVerification failed', err)); },
     quit: () => app.quit(),
+  };
+  const tray = new AppTray(actions);
+
+  registerIpc({
+    providers, service, scheduler, updateSettings, solveCaptcha,
+    openMainWindow: view => mainWindow.open(view),
+    widgetDrag: (phase, x, y) => widget.drag(phase, x, y),
+    widgetContextMenu: () => widget.popupMenu(buildWidgetMenu(store.getSettings().widgetStyle, actions)),
+    endMoveMode: () => widget.endMoveMode(),
   });
 
-  registerIpc({ providers, service, scheduler, updateSettings, solveCaptcha, openMainWindow: view => mainWindow.open(view) });
-
-  service.onState(state => { tray.update(state); broadcastState(state); });
+  service.onState(publishState);
   setInterval(publish, 60_000); // keeps tray icon/tooltip in step with the clock
 
   applyAutostart();
   publish();
   scheduler.start();
+  widget.show();
+  app.on('will-quit', () => pinner.dispose());
 
   powerMonitor.on('resume', () => scheduler.trigger('resume'));
   let online = net.isOnline();
