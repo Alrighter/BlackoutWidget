@@ -1,4 +1,4 @@
-import { BrowserWindow, session as electronSession } from 'electron';
+import { BrowserWindow, net, session as electronSession } from 'electron';
 import { CaptchaRequiredError, ProviderError, type PageSession } from './types';
 
 export interface SessionOptions {
@@ -16,6 +16,10 @@ const ERR_ABORTED = -3; // Imperva reloads the page, which aborts the first navi
 const POLL_MS = 500;
 const EVAL_GUARD_MS = 5000;
 const OFFLINE_MESSAGE = 'Немає з’єднання з сайтом ДТЕК';
+
+// Evidence the loaded document is the real DTEK / Imperva page, not a browser error page.
+const REAL_PAGE_CHECK =
+  "(() => { const h = document.documentElement ? document.documentElement.outerHTML : ''; return h.includes('_Incapsula_Resource') || /ДТЕК|dtek-krem/i.test(document.title + h); })()";
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -95,8 +99,11 @@ export class BrowserSession implements PageSession {
       await sleep(POLL_MS);
     }
     if (this.netError) throw new ProviderError(OFFLINE_MESSAGE);
-    if (this.onSourceHost(win)) throw new CaptchaRequiredError('Сайт просить пройти перевірку');
-    throw new ProviderError('Не вдалося завантажити сторінку ДТЕК');
+    // Captcha only when we are online AND the real page is what loaded.
+    if (net.isOnline() && this.onSourceHost(win) && (await this.check(win, REAL_PAGE_CHECK))) {
+      throw new CaptchaRequiredError('Сайт просить пройти перевірку');
+    }
+    throw new ProviderError(OFFLINE_MESSAGE);
   }
 
   /** Runs a boolean-ish script; a rejection (e.g. mid-reload) means "not yet". */
