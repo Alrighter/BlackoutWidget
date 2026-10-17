@@ -29,20 +29,27 @@ export class RefreshService {
   /** true = success or nothing to do (no address). Never runs two requests in parallel. */
   refresh(): Promise<boolean> {
     if (this.inFlight) return this.inFlight;
-    const p = this.doRefresh().finally(() => { this.inFlight = null; });
+    const p = this.runLoop().finally(() => { this.inFlight = null; });
     this.inFlight = p;
     return p;
   }
 
   async setAddress(a: Address): Promise<void> {
-    if (this.inFlight) await this.inFlight.catch(() => undefined);
     this.deps.store.updateSettings({ address: a });
     this.deps.store.setSnapshot(null);
     this.lastError = undefined;
+    // Joins an in-flight run if any; that run notices the address changed and refetches.
     await this.refresh();
   }
 
-  private async doRefresh(): Promise<boolean> {
+  private async runLoop(): Promise<boolean> {
+    for (;;) {
+      const r = await this.doRefresh();
+      if (r !== 'stale') return r;
+    }
+  }
+
+  private async doRefresh(): Promise<boolean | 'stale'> {
     const address = this.deps.store.getSettings().address;
     if (!address) {
       this.phase = 'idle';
@@ -52,23 +59,36 @@ export class RefreshService {
     }
     this.phase = 'refreshing';
     this.emit();
+    let snapshot: ScheduleSnapshot | undefined;
+    let error: unknown;
     try {
-      const snapshot: ScheduleSnapshot = await this.deps.getProvider(address.providerId).fetchSnapshot(address);
+      snapshot = await this.deps.getProvider(address.providerId).fetchSnapshot(address);
+    } catch (err) {
+      error = err;
+    }
+    if (!sameAddress(this.deps.store.getSettings().address, address)) return 'stale';
+    if (snapshot) {
       this.deps.store.setSnapshot(snapshot);
       this.phase = 'ok';
       this.lastError = undefined;
       this.emit();
       return true;
-    } catch (err) {
-      this.phase = err instanceof CaptchaRequiredError ? 'captcha' : 'error';
-      this.lastError = err instanceof Error ? err.message : String(err);
-      this.emit();
-      return false;
     }
+    this.phase = error instanceof CaptchaRequiredError ? 'captcha' : 'error';
+    this.lastError = error instanceof Error ? error.message : String(error);
+    this.emit();
+    return false;
   }
 
   private emit(): void {
     const s = this.getState();
-    for (const cb of this.listeners) cb(s);
+    for (const cb of [...this.listeners]) {
+      try { cb(s); } catch (err) { console.error('RefreshService listener failed', err); }
+    }
   }
+}
+
+function sameAddress(a: Address | null, b: Address): boolean {
+  return !!a && a.providerId === b.providerId && a.city === b.city && a.street === b.street
+    && a.house === b.house && a.lineIndex === b.lineIndex && a.groupId === b.groupId;
 }

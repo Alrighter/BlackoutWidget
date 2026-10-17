@@ -52,3 +52,53 @@ test('no address → no provider call, returns true, phase idle', async () => {
   expect(await svc.refresh()).toBe(true); expect(provider.fetchSnapshot).not.toHaveBeenCalled();
   expect(svc.getState().phase).toBe('idle');
 });
+
+test('throwing listener does not change outcome or block other listeners', async () => {
+  const { svc } = setup(async () => fixtureSnapshot());
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const seen: string[] = [];
+  svc.onState(() => { throw new Error('boom'); });
+  svc.onState(s => seen.push(s.phase));
+  expect(await svc.refresh()).toBe(true);
+  expect(svc.getState().phase).toBe('ok');
+  expect(seen).toEqual(['refreshing', 'ok']);
+  err.mockRestore();
+});
+
+function addrFor(house: string) { return { ...addr, house }; }
+function snapFor(a: typeof addr) { return { ...fixtureSnapshot(), address: a }; }
+function controlled() {
+  const store = new AppStore(mkdtempSync(join(tmpdir(), 'bw-')));
+  const pending: { house: string; resolve(): void }[] = [];
+  const provider = {
+    fetchSnapshot: vi.fn((a: typeof addr) => new Promise<ScheduleSnapshot>(res => {
+      pending.push({ house: a.house, resolve: () => res(snapFor(a)) });
+    })),
+  } as unknown as ScheduleProvider;
+  const svc = new RefreshService({ store, getProvider: () => provider });
+  const flush = () => new Promise(r => setTimeout(r, 0));
+  return { store, svc, pending, flush };
+}
+
+test('setAddress during in-flight refresh for old address → final snapshot is for new address', async () => {
+  const { store, svc, pending, flush } = controlled();
+  store.updateSettings({ address: addrFor('1') });
+  const first = svc.refresh(); await flush();
+  const set = svc.setAddress(addrFor('2')); await flush();
+  pending[0].resolve(); await flush();
+  expect(pending.map(p => p.house)).toEqual(['1', '2']);
+  pending[1].resolve(); await set; await first;
+  expect(store.getSnapshot()?.address.house).toBe('2');
+  expect(svc.getState().phase).toBe('ok');
+});
+
+test('two rapid setAddress calls → final snapshot matches last address', async () => {
+  const { store, svc, pending, flush } = controlled();
+  store.updateSettings({ address: addrFor('1') });
+  const first = svc.refresh(); await flush();
+  const a = svc.setAddress(addrFor('2')); const b = svc.setAddress(addrFor('3')); await flush();
+  pending[0].resolve(); await flush();
+  expect(pending.map(p => p.house)).toEqual(['1', '3']);
+  pending[1].resolve(); await Promise.all([a, b, first]);
+  expect(store.getSnapshot()?.address.house).toBe('3');
+});
