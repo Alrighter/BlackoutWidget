@@ -12,6 +12,7 @@ const ms = (min: number) => base + Math.round(min * MIN);
 const t = (min: number) => new Date(ms(min)).toISOString();
 const d = (days: number) => t(days * 1440);
 const STALE = 'дані станції не оновлюються';
+const CHECKING = 'перевіряю зміну стану';
 const LABEL = 'EcoFlow · River 2';
 /** Two ways the clock can jump: timers fire on the way (the check timer sees the gap) or not (the next reading sees it). */
 const jumps: [string, (byMs: number) => void, ActualPower][] = [
@@ -50,7 +51,9 @@ test('starts unknown; confirms on after 60 s of readings, at the first reading t
   expect(svc.getStatus()).toEqual({ sourceLabel: LABEL, power: 'unknown', history: [] });
   at(0, 'on', { detail: 'на вході 229 В' });
   at(0.5, 'on', { detail: 'на вході 229 В' });
-  expect(svc.getStatus()).toEqual({ sourceLabel: LABEL, power: 'unknown', observedAt: t(0.5), detail: 'на вході 229 В', history: [] });
+  expect(svc.getStatus()).toEqual({
+    sourceLabel: LABEL, power: 'unknown', reason: CHECKING, observedAt: t(0.5), detail: 'на вході 229 В', history: [],
+  });
   at(1, 'on', { detail: 'на вході 229 В' });
   expect(svc.getStatus()).toEqual({
     sourceLabel: LABEL, power: 'on', since: t(0), sinceApprox: false, observedAt: t(1), detail: 'на вході 229 В',
@@ -59,6 +62,55 @@ test('starts unknown; confirms on after 60 s of readings, at the first reading t
   // The first state ever known has nothing to be approximate against (ruling R4).
   expect(journal().transitions).toStrictEqual([{ at: t(0), power: 'on', approx: false }]);
   expect(log.info).toHaveBeenCalledWith(`actual: on since ${t(0)}`);
+});
+
+test('while a change from unknown is being confirmed the reason says so (ruling R15)', () => {
+  const { svc, begin, at } = setup();
+  begin();
+  const cb = vi.fn();
+  svc.onChange(cb);
+  at(0, 'unknown', { reason: 'чекаю на дані від станції' });
+  expect(svc.getStatus()).toMatchObject({ power: 'unknown', reason: 'чекаю на дані від станції' });
+  at(1, 'off');
+  expect(svc.getStatus()).toMatchObject({ power: 'unknown', reason: CHECKING });
+  expect(cb).toHaveBeenCalledTimes(2);
+  at(1.5, 'off');
+  expect(cb).toHaveBeenCalledTimes(2);
+  // Another reason outranks it, and the candidate is gone with it.
+  at(1.75, 'unknown', { reason: 'станція не в мережі' });
+  expect(svc.getStatus()).toMatchObject({ power: 'unknown', reason: 'станція не в мережі' });
+  at(2, 'on');
+  expect(svc.getStatus()).toMatchObject({ power: 'unknown', reason: CHECKING });
+  at(3, 'on');
+  expect(svc.getStatus()?.reason).toBeUndefined();
+  // A change pending from a confirmed state shows that state, with no reason.
+  at(4, 'off');
+  expect(svc.getStatus()).toMatchObject({ power: 'on' });
+  expect(svc.getStatus()?.reason).toBeUndefined();
+});
+
+test('a pending check is announced even when nothing else changed', () => {
+  const { svc, begin, at } = setup();
+  begin();
+  const cb = vi.fn();
+  svc.onChange(cb);
+  at(0, 'on');
+  expect(cb).toHaveBeenCalledTimes(1);
+  expect(svc.getStatus()).toMatchObject({ power: 'unknown', reason: CHECKING });
+});
+
+test('a detail change alone is stored but not announced', () => {
+  const { svc, begin, at } = setup();
+  begin();
+  at(0, 'on', { detail: 'на вході 229 В' });
+  at(1, 'on', { detail: 'на вході 229 В' });
+  const cb = vi.fn();
+  svc.onChange(cb);
+  at(1.5, 'on', { detail: 'на вході 230 В' });
+  at(2, 'on', { detail: 'на вході 229 В' });
+  at(2.5, 'on', { detail: 'на вході 231 В' });
+  expect(cb).not.toHaveBeenCalled();
+  expect(svc.getStatus()).toMatchObject({ power: 'on', detail: 'на вході 231 В', observedAt: t(2.5) });
 });
 
 test('blip shorter than 60 s is ignored', () => {

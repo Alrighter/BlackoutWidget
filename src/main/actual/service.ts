@@ -5,7 +5,7 @@ import type { ActualReading, ActualStateSource } from './types';
 
 export const CONFIRM_MS = 60_000, STALE_MS = 10 * 60_000, APPROX_GAP_MS = 3 * 60_000,
   KEEP_MS = 30 * 86_400_000, SHOWN_MS = 7 * 86_400_000, OBSERVED_SAVE_MS = 60_000, CHECK_MS = 30_000;
-const STALE_REASON = 'дані станції не оновлюються';
+const STALE_REASON = 'дані станції не оновлюються', CHECKING_REASON = 'перевіряю зміну стану';
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -93,7 +93,9 @@ export class ActualStateService {
         status.since = segs[i].start;
         status.sinceApprox = !!segs[i].startApprox;
       }
-    } else if (this.reason !== undefined) status.reason = this.reason;
+    }
+    const reason = this.shownReason();
+    if (reason !== undefined) status.reason = reason;
     if (this.lastObservedAt !== undefined) status.observedAt = iso(this.lastObservedAt);
     if (this.detail !== undefined) status.detail = this.detail;
     return status;
@@ -195,13 +197,22 @@ export class ActualStateService {
     }
   }
 
-  /** Runs a state change; listeners hear of transitions and of reason/detail changes only. */
+  /** Why the state is unknown, as shown: a pending change counts when nothing else explains it (ruling R15). */
+  private shownReason(): string | undefined {
+    if (this.confirmed !== 'unknown') return undefined;
+    return this.reason ?? (this.candidate ? CHECKING_REASON : undefined);
+  }
+
+  /**
+   * Runs a state change; listeners hear of transitions and of shown-reason changes only. `detail` changes with every
+   * rounding of the voltage and nothing displays it at once: the 60 s publish carries it.
+   */
   private update(change: () => void): void {
-    const { reason, detail } = this;
+    const { reason } = this, shown = this.shownReason();
     this.transitioned = false;
     change();
     if (this.reason !== reason && this.reason !== undefined) this.deps.log.info(`actual: unknown — ${this.reason}`);
-    if (this.transitioned || this.reason !== reason || this.detail !== detail) this.emit();
+    if (this.transitioned || this.reason !== reason || this.shownReason() !== shown) this.emit();
   }
 
   private emit(): void {
