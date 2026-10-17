@@ -3,7 +3,7 @@ import type { AppState, WidgetStyle } from '../shared/types';
 import type { WidgetView } from '../shared/widget-state';
 
 export interface TrayActions {
-  showSchedule(): void; refreshNow(): void; setStyle(s: WidgetStyle): void; moveWidget(): void;
+  showWindow(): void; showSchedule(): void; refreshNow(): void; setStyle(s: WidgetStyle): void; moveWidget(): void;
   openSettings(): void; toggleAutostart(): void; solveCaptcha(): void; quit(): void;
 }
 

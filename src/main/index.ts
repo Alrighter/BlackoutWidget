@@ -45,24 +45,26 @@ async function bootstrap(): Promise<void> {
     publish();
   };
 
+  const solveCaptcha = async () => {
+    const address = store.getSettings().address;
+    const provider = address ? findProvider(providers, address.providerId) : providers[0];
+    await provider.showVerification();
+    scheduler.trigger('manual');
+  };
+
   const tray = new AppTray({
+    showWindow: () => mainWindow.open(),
     showSchedule: () => mainWindow.open('schedule'),
     refreshNow: () => scheduler.trigger('manual'),
     setStyle: widgetStyle => updateSettings({ widgetStyle }),
     moveWidget: () => {}, // wired in Task 10 (widget window)
     openSettings: () => mainWindow.open('settings'),
     toggleAutostart: () => updateSettings({ autostart: !store.getSettings().autostart }),
-    solveCaptcha: () => {
-      const a = store.getSettings().address;
-      if (!a) return;
-      void findProvider(providers, a.providerId).showVerification()
-        .then(() => scheduler.trigger('manual'))
-        .catch(err => console.error('showVerification failed', err));
-    },
+    solveCaptcha: () => { solveCaptcha().catch(err => console.error('showVerification failed', err)); },
     quit: () => app.quit(),
   });
 
-  registerIpc({ providers, service, scheduler, updateSettings, openMainWindow: view => mainWindow.open(view) });
+  registerIpc({ providers, service, scheduler, updateSettings, solveCaptcha, openMainWindow: view => mainWindow.open(view) });
 
   service.onState(state => { tray.update(state); broadcastState(state); });
   setInterval(publish, 60_000); // keeps tray icon/tooltip in step with the clock

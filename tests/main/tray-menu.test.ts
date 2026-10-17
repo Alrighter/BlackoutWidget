@@ -6,7 +6,7 @@ import type { AppState } from '../../src/shared/types';
 import { fixtureSnapshot } from '../helpers/snapshot';
 
 const noop = () => {};
-const actions = { showSchedule: noop, refreshNow: noop, setStyle: noop, moveWidget: noop, openSettings: noop, toggleAutostart: noop, solveCaptcha: noop, quit: noop };
+const actions = { showWindow: noop, showSchedule: noop, refreshNow: noop, setStyle: noop, moveWidget: noop, openSettings: noop, toggleAutostart: noop, solveCaptcha: noop, quit: noop };
 const state = (p: Partial<AppState> = {}): AppState => ({ settings: { ...DEFAULT_SETTINGS, widgetStyle: 'ring' }, snapshot: null, phase: 'ok', lineChanged: false, ...p });
 
 test('menu order and checked items', () => {

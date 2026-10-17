@@ -8,6 +8,9 @@ export const IPC = {
   openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag',
 } as const;
 
+/** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
+export const CAPTCHA_MARKER = 'CAPTCHA_REQUIRED';
+
 export type MainView = 'schedule' | 'settings' | 'setup';
 
 export interface RendererApi {

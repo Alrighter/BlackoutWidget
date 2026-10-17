@@ -4,22 +4,31 @@ import type { MainView } from '../shared/ipc';
 
 export class MainWindow {
   private win: BrowserWindow | null = null;
+  private currentView: MainView | null = null;
   private quitting = false;
 
   constructor(private readonly preload: string) {
     app.on('before-quit', () => { this.quitting = true; });
   }
 
-  open(view: MainView = 'schedule'): void {
-    if (!this.win || this.win.isDestroyed()) this.win = this.create(view);
-    else void this.load(this.win, view);
+  /**
+   * No view (tray click, second instance): only show/focus, loading the window once if it never was.
+   * An explicit view different from the current one reloads the window with it.
+   */
+  open(view?: MainView): void {
+    if (!this.win || this.win.isDestroyed()) {
+      this.win = this.create();
+      this.currentView = null;
+    }
     const w = this.win;
+    const target = view ?? this.currentView ?? 'schedule';
+    if (target !== this.currentView) this.load(w, target);
     if (w.isMinimized()) w.restore();
     w.show();
     w.focus();
   }
 
-  private create(view: MainView): BrowserWindow {
+  private create(): BrowserWindow {
     const win = new BrowserWindow({
       width: 900, height: 640, title: 'Графік відключень',
       ...(process.platform === 'win32' ? { backgroundMaterial: 'mica' as const } : {}),
@@ -33,13 +42,15 @@ export class MainWindow {
       e.preventDefault();
       win.hide();
     });
-    void this.load(win, view);
     return win;
   }
 
-  private load(win: BrowserWindow, view: MainView): Promise<void> {
+  private load(win: BrowserWindow, view: MainView): void {
+    this.currentView = view;
     const url = process.env.ELECTRON_RENDERER_URL;
-    if (url) return win.loadURL(`${url}/app.html?view=${view}`);
-    return win.loadFile(join(__dirname, '../renderer/app.html'), { query: { view } });
+    const loading = url
+      ? win.loadURL(`${url}/app.html?view=${view}`)
+      : win.loadFile(join(__dirname, '../renderer/app.html'), { query: { view } });
+    loading.catch(err => console.error('main window load failed', err));
   }
 }

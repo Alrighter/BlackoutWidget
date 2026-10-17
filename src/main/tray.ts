@@ -16,7 +16,7 @@ export class AppTray {
 
   constructor(private readonly actions: TrayActions) {
     this.tray = new Tray(nativeImage.createFromPath(trayIconPath('unknown')));
-    this.tray.on('click', actions.showSchedule);
+    this.tray.on('click', actions.showWindow);
   }
 
   update(state: AppState, now = new Date()): void {
