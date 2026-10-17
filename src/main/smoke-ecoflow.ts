@@ -121,14 +121,19 @@ async function main(): Promise<number> {
         else resolve();
       };
       const timer = setTimeout(() => finish(), MQTT_WINDOW_MS);
-      client.on('connect', () => client.subscribe([...topics.keys()], { qos: 1 }, (err, granted = []) => {
-        if (err) { finish(err); return; }
-        // Labelled by station and kind: the topic itself holds the certificate account.
-        say(`SUBACK, QoS: ${granted.map(g => { const t = topics.get(g.topic); return `${t ? `${t.sn} ${t.kind}` : '?'}=${g.qos}`; }).join(', ')}`);
-        if (granted.some(g => g.qos >= 128)) {
-          finish(new Error('брокер відмовив у підписці (128)'));
+      // Labelled by station and kind: the topic itself holds the certificate account.
+      const label = (topic: string): string => { const t = topics.get(topic); return t ? `${t.sn} ${t.kind}` : '?'; };
+      const order = [...topics.keys()];
+      client.on('connect', () => client.subscribe(order, { qos: 1 }, (err, granted = []) => {
+        if (err) {
+          // mqtt.js rejects a SUBACK with any refused topic (code bit 0x80); its codes, in topic order, ride on the error.
+          const codes = (err as Error & { packet?: { granted?: unknown[] } }).packet?.granted;
+          finish(codes
+            ? new Error(`брокер не прийняв підписку, коди SUBACK: ${codes.map((c, i) => `${label(order[i])}=${JSON.stringify(c)}`).join(', ')}`)
+            : err);
           return;
         }
+        say(`SUBACK, QoS: ${granted.map(g => `${label(g.topic)}=${g.qos}`).join(', ')}`);
         subscribedAt = Date.now();
       }));
       client.on('error', finish);
@@ -139,7 +144,7 @@ async function main(): Promise<number> {
         counts[t.kind]++;
         if (t.kind === 'quota' && !firstQuotaSeen.has(t.sn)) {
           firstQuotaSeen.add(t.sn);
-          say(`  перше /quota від ${t.sn}: retain ${packet?.retain ? 'так' : 'ні'}`);
+          say(`  перше /quota від ${t.sn}: retain ${packet?.retain ? 'так (такі повідомлення застосунок ігнорує)' : 'ні'}`);
         }
         let msg: unknown;
         try { msg = JSON.parse(payload.toString()); } catch { return; }

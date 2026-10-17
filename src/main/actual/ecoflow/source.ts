@@ -188,16 +188,6 @@ export class EcoflowSource implements ActualStateSource {
     this.logUnsupported();
   }
 
-  /**
-   * Ruling R14: the broker replays its last message on subscribe — merged, as it may carry a change made while MQTT was
-   * down, but it is no freshness, online evidence or session proof.
-   */
-  private applyRetainedQuota(q: Record<string, unknown>): void {
-    for (const [k, v] of Object.entries(q)) this.map[k] = v;
-    this.logUnsupported();
-    this.evaluate();
-  }
-
   private applyMqttQuota(q: Record<string, unknown>): void {
     const now = this.now();
     if (!this.mqttFresh(now)) this.mqttKeys.clear(); // a new fresh period: keys from an earlier one no longer hold
@@ -306,13 +296,13 @@ export class EcoflowSource implements ActualStateSource {
       client.subscribe([quotaTopic, statusTopic], { qos: 1 });
     });
     client.on('message', (topic, payload, packet) => {
-      if (this.client !== client) return;
+      // Ruling R18: a retained message is the broker's replay of an old one — no news of the station, ignored entirely.
+      if (this.client !== client || packet?.retain) return;
       let msg: unknown;
       try { msg = JSON.parse(payload.toString()); } catch { return; }
       if (topic === quotaTopic) {
         const q = normalizeQuotaMessage(msg);
-        if (q && packet?.retain) this.applyRetainedQuota(q);
-        else if (q) this.applyMqttQuota(q);
+        if (q) this.applyMqttQuota(q);
       } else if (topic === statusTopic) {
         const s = parseStatusMessage(msg);
         if (s !== null) this.applyStatus(s);
