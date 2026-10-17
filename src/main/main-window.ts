@@ -1,10 +1,11 @@
 import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import type { MainView } from '../shared/ipc';
+import { IPC, type MainView } from '../shared/ipc';
 
 export class MainWindow {
   private win: BrowserWindow | null = null;
-  private currentView: MainView | null = null;
+  private ready = false;
+  private pendingView: MainView | null = null;
   private quitting = false;
 
   constructor(private readonly preload: string) {
@@ -12,17 +13,20 @@ export class MainWindow {
   }
 
   /**
-   * No view (tray click, second instance): only show/focus, loading the window once if it never was.
-   * An explicit view different from the current one reloads the window with it.
+   * The window is loaded once and never reloaded. The initial view goes in the query string; later views are
+   * pushed to the renderer (after did-finish-load if it is still loading). No view: only show/focus.
    */
   open(view?: MainView): void {
     if (!this.win || this.win.isDestroyed()) {
       this.win = this.create();
-      this.currentView = null;
+      this.ready = false;
+      this.pendingView = null;
+      this.load(this.win, view ?? 'schedule');
+    } else if (view) {
+      if (this.ready) this.win.webContents.send(IPC.navigate, view);
+      else this.pendingView = view;
     }
     const w = this.win;
-    const target = view ?? this.currentView ?? 'schedule';
-    if (target !== this.currentView) this.load(w, target);
     if (w.isMinimized()) w.restore();
     w.show();
     w.focus();
@@ -42,11 +46,15 @@ export class MainWindow {
       e.preventDefault();
       win.hide();
     });
+    win.webContents.on('did-finish-load', () => {
+      this.ready = true;
+      if (this.pendingView) win.webContents.send(IPC.navigate, this.pendingView);
+      this.pendingView = null;
+    });
     return win;
   }
 
   private load(win: BrowserWindow, view: MainView): void {
-    this.currentView = view;
     const url = process.env.ELECTRON_RENDERER_URL;
     const loading = url
       ? win.loadURL(`${url}/app.html?view=${view}`)

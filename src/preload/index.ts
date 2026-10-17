@@ -21,6 +21,7 @@ const api: RendererApi = {
   setAutostart: on => ipcRenderer.invoke(IPC.setAutostart, on),
   refreshNow: () => ipcRenderer.invoke(IPC.refreshNow),
   solveCaptcha: () => ipcRenderer.invoke(IPC.solveCaptcha),
+  onNavigate: cb => subscribe(IPC.navigate, cb),
   openMainWindow: view => ipcRenderer.send(IPC.openMainWindow, view),
   widgetContextMenu: () => ipcRenderer.send(IPC.widgetContextMenu),
   widgetDrag: (phase, x, y) => ipcRenderer.send(IPC.widgetDrag, phase, x, y),

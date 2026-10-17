@@ -5,7 +5,7 @@ export const IPC = {
   listProviders: 'providers:list', listCities: 'addr:cities', listStreets: 'addr:streets', listHouses: 'addr:houses',
   previewLines: 'addr:preview-lines', saveAddress: 'settings:address', setWidgetStyle: 'settings:style',
   setAutostart: 'settings:autostart', refreshNow: 'refresh:now', solveCaptcha: 'captcha:solve',
-  openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag',
+  openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag', navigate: 'window:navigate',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
@@ -28,6 +28,8 @@ export interface RendererApi {
   refreshNow(): Promise<void>;
   solveCaptcha(): Promise<void>;
   openMainWindow(view?: MainView): void;
+  /** Main process asks the open main window to switch its in-app view. */
+  onNavigate(cb: (view: MainView) => void): () => void;
   widgetContextMenu(): void;
   widgetDrag(phase: 'start' | 'move' | 'end', screenX: number, screenY: number): void;
 }

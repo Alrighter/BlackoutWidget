@@ -15,8 +15,12 @@ export function App({ api, view }: { api: RendererApi; view: MainView }) {
     let alive = true;
     void api.getState().then(s => { if (alive) setState(s); });
     const off = api.onState(setState);
+    const offNav = api.onNavigate(v => {
+      if (v === 'setup') setWizard(true);
+      else { setWizard(false); setTab(v); }
+    });
     const timer = setInterval(() => setNow(new Date()), 30_000);
-    return () => { alive = false; off(); clearInterval(timer); };
+    return () => { alive = false; off(); offNav(); clearInterval(timer); };
   }, [api]);
 
   if (!state) return null;
