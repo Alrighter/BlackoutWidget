@@ -19,3 +19,4 @@ export interface Settings { address: Address | null; widgetStyle: WidgetStyle; a
 export type RefreshPhase = 'idle' | 'refreshing' | 'ok' | 'error' | 'captcha';
 export interface AppState { settings: Settings; snapshot: ScheduleSnapshot | null; phase: RefreshPhase; lastError?: string; lineChanged: boolean }
 export type WidgetBackground = { kind: 'image'; dataUrl: string } | { kind: 'tint' };
+export type EcoflowRegion = 'eu' | 'us';
