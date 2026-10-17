@@ -1,0 +1,21 @@
+appId: ua.blackoutwidget.app
+productName: Blackout Widget
+directories:
+  output: dist
+files:
+  - out/**
+  - resources/**
+  - package.json
+asarUnpack:
+  - '**/node_modules/koffi/**'
+extraResources:
+  - from: resources/tray
+    to: tray
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: true
+  perMachine: false
