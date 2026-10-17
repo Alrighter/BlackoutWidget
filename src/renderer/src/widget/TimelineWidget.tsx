@@ -36,7 +36,7 @@ export function TimelineWidget({ view, lineChanged }: { view: WidgetView; lineCh
         <div className="w-row-label" />
         <DayTicks />
       </div>
-      <Caption view={view} lineChanged={lineChanged} text={updated} />
+      <Caption view={view} lineChanged={lineChanged} updated={updated} />
     </>
   );
 }

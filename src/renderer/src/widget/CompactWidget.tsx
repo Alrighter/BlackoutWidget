@@ -7,11 +7,11 @@ export function CompactWidget({ view, lineChanged }: { view: WidgetView; lineCha
     <>
       <Status view={view} />
       <div className="w-next w-ellipsis" title={view.nextText}>{view.nextText}</div>
-      <div className="w-compact-bar">
+      <div className={lineChanged ? 'w-compact-bar w-tight' : 'w-compact-bar'}>
         <DayBar day={view.today} nowFraction={view.nowFraction} />
         <DayTicks />
       </div>
-      <Caption view={view} lineChanged={lineChanged} />
+      <Caption view={view} lineChanged={lineChanged} label={view.lineLabel} updated={view.updatedText} />
     </>
   );
 }

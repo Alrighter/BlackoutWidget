@@ -60,7 +60,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 
 .w-compact-bar { margin-top: 14px; }
 .w-compact-bar > .w-ticks { flex: none; }
-.w-compact .w-content > .w-muted { margin-top: 8px; }
+.w-compact .w-content > .w-foot { margin-top: 8px; }
 
 .w-tl-head { display: flex; justify-content: space-between; align-items: flex-start; }
 .w-tl-head > div:first-child { flex-shrink: 0; }
@@ -69,7 +69,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-tl-row { display: flex; align-items: center; gap: 8px; }
 .w-tl-row > .w-ticks { margin-top: 4px; }
 .w-row-label { font-size: 11px; color: var(--muted); width: 74px; flex-shrink: 0; }
-.w-timeline .w-content > .w-muted { margin-top: 6px; }
+.w-timeline .w-content > .w-foot { margin-top: 6px; }
 
 .w-svg-label, .w-svg-main { font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
 .w-svg-label { fill: var(--tick); }
@@ -77,13 +77,23 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-svg-sub { fill: var(--muted); }
 .w-ring-caption { text-align: center; margin-top: 2px; }
 
-/* Everything must fit the fixed window: single lines ellipsize, the stale mark never shrinks. */
+/* Everything must fit the fixed window: single lines ellipsize; «оновлено HH:MM» and the stale mark never shrink. */
 .w-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .w-cap { display: flex; }
-.w-stale { flex-shrink: 0; white-space: pre; }
+.w-fixed, .w-stale { flex-shrink: 0; white-space: nowrap; }
+.w-sep { flex-shrink: 0; white-space: pre; }
 .w-cap-warn { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.w-ring .w-cap-warn { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.w-foot-changed .w-cap { margin-top: 1px; }
+/* Line changed in compact: warning and caption share the caption's room (smaller type, tighter gaps). */
+.w-compact .w-compact-bar.w-tight { margin-top: 7px; }
+.w-compact .w-content > .w-foot-changed { margin-top: 4px; }
+.w-compact .w-foot-changed .w-muted { font-size: 11px; line-height: 1.25; }
+.w-ring .w-cap-warn { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center; }
+.w-ring .w-foot-changed .w-muted { font-size: 11px; line-height: 1.25; }
+/* Below the warning the caption is one short line («оновлено HH:MM · дані застаріли»): no clamp that could clip it. */
+.w-ring .w-foot-changed .w-cap { display: block; overflow: visible; }
 .w-status.w-long { font-size: 19px; }
 .w-ring .w-cap { display: block; text-align: center; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .w-ring .w-cap .w-ellipsis { display: inline; white-space: normal; overflow: visible; }
+.w-ring .w-cap .w-sep { white-space: normal; }
 .w-tl-text.w-ellipsis { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

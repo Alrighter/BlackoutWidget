@@ -33,7 +33,8 @@ export function WidgetRoot({ api }: { api: RendererApi }) {
       );
     };
     load();
-    const offState = api.onState(setState);
+    // A push is fresh data: re-read the clock with it, rather than keep a `now` up to a minute old.
+    const offState = api.onState(s => { setState(s); setNow(new Date()); });
     const offBg = api.onBackground(setBackground);
     return () => { alive = false; clearTimeout(retry); offState(); offBg(); };
   }, [api]);

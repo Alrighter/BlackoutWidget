@@ -14,17 +14,24 @@ export function Status({ view }: { view: WidgetView }) {
 const WARNING = 'Схема підключення змінилась — перевірте лінію';
 
 /**
- * Footer line, always kept inside the fixed window: the main text ellipsizes, the stale mark never shrinks.
- * The line-changed warning replaces the caption.
+ * Footer, always kept inside the fixed window: «оновлено HH:MM» and the stale mark never shrink, only the optional label
+ * before them ellipsizes. The line-changed warning takes a line of its own above — it never hides the updated time.
  */
-export function Caption({ view, lineChanged, text }: { view: WidgetView; lineChanged: boolean; text?: string }) {
-  if (lineChanged) return <div className="w-muted w-warn w-cap-warn" title={WARNING}>{WARNING}</div>;
-  const main = text ?? (view.updatedText ? `${view.lineLabel} · ${view.updatedText}` : '');
-  if (!main) return null;
+export function Caption({ view, lineChanged, label, updated }: {
+  view: WidgetView; lineChanged: boolean; label?: string; updated: string;
+}) {
+  if (!updated && !lineChanged) return null;
+  const title = [label, updated, view.stale ? 'дані застаріли' : ''].filter(Boolean).join(' · ');
   return (
-    <div className="w-muted w-cap" title={view.stale ? `${main} · дані застаріли` : main}>
-      <span className="w-ellipsis">{main}</span>
-      {view.stale && <span className="w-warn w-stale"> · дані застаріли</span>}
+    <div className={lineChanged ? 'w-foot w-foot-changed' : 'w-foot'}>
+      {lineChanged && <div className="w-muted w-warn w-cap-warn" title={WARNING}>{WARNING}</div>}
+      {updated && (
+        <div className="w-muted w-cap" title={title}>
+          {label && <><span className="w-ellipsis">{label}</span><span className="w-sep"> · </span></>}
+          <span className="w-fixed">{updated}</span>
+          {view.stale && <><span className="w-sep"> · </span><span className="w-warn w-stale">дані застаріли</span></>}
+        </div>
+      )}
     </div>
   );
 }

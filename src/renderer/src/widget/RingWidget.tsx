@@ -34,7 +34,8 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
   const badgeW = view.outageBadge ? view.outageBadge.length * 6.2 + 16 : 0;
   return (
     <>
-      <svg viewBox="0 0 200 200" width="204" height="204" style={{ display: 'block' }}>
+      {/* With the line-changed warning below, the empty margins above/below the ring are trimmed to make room. */}
+      <svg viewBox={lineChanged ? '0 6 200 188' : '0 0 200 200'} width="204" height={lineChanged ? 192 : 204} style={{ display: 'block' }}>
         <defs>
           <linearGradient id="w-og" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#ffc23d" /><stop offset="1" stopColor="#ff7a1a" />
@@ -66,7 +67,8 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
         )}
       </svg>
       <div className="w-ring-caption">
-        <Caption view={view} lineChanged={lineChanged} text={view.updatedText ? `${view.lineLabel.split(" · ")[0]} · ${view.updatedText}` : undefined} />
+        <Caption view={view} lineChanged={lineChanged} updated={view.updatedText}
+          label={lineChanged ? undefined : view.lineLabel.split(' · ')[0]} />
       </div>
     </>
   );

@@ -15,8 +15,22 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s shows status and countdo
   expect(screen.getByText(style === 'compact' ? 'Вимкнення о 15:00 · через 3 год 10 хв' : '3:10')).toBeInTheDocument();
 });
 test('compact caption', () => {
-  render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
-  expect(screen.getByText('Лінія 1 · черга 1.2 · оновлено 11:48')).toBeInTheDocument();
+  const { container } = render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('.w-cap')).toHaveTextContent('Лінія 1 · черга 1.2 · оновлено 11:48');
+  expect(container.querySelector('.w-cap')).toHaveAttribute('title', 'Лінія 1 · черга 1.2 · оновлено 11:48');
+});
+test.each(['compact', 'ring', 'timeline'] as const)('%s: line changed + stale keeps the updated time and the stale mark next to the warning', style => {
+  const { container } = render(<Widget state={st({ lineChanged: true }, style)} now={new Date('2026-10-17T09:40:00Z')} background={{ kind: 'tint' }} />);
+  expect(screen.getByText('Схема підключення змінилась — перевірте лінію')).toBeInTheDocument();
+  expect(screen.getByText(/оновлено 11:48/i)).toHaveClass('w-fixed');
+  expect(screen.getByText('дані застаріли')).toHaveClass('w-stale');
+  expect(container.querySelector('.w-foot')).toHaveClass('w-foot-changed');
+});
+test.each(['compact', 'ring', 'timeline'] as const)('%s: the updated time never sits in the shrinking part', style => {
+  const { container } = render(<Widget state={st({}, style)} now={new Date('2026-10-17T09:40:00Z')} background={{ kind: 'tint' }} />);
+  const cap = container.querySelector('.w-cap')!;
+  expect(cap.querySelector('.w-fixed')).toHaveTextContent(/^оновлено 11:48$/i);
+  expect(cap.querySelector('.w-ellipsis')?.textContent ?? '').not.toMatch(/оновлено/i);
 });
 test('timeline: tomorrow not published', () => {
   render(<Widget state={st({}, 'timeline')} now={now} background={{ kind: 'tint' }} />);
@@ -46,7 +60,7 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s: overflow protection on 
   const { container, rerender } = render(<Widget state={st({}, style)} now={stale} background={{ kind: 'tint' }} />);
   const cap = container.querySelector('.w-cap')!;
   expect(cap).toHaveAttribute('title', expect.stringContaining('дані застаріли'));
-  expect(cap.querySelector('.w-ellipsis')).not.toBeNull();
+  if (style !== 'timeline') expect(cap.querySelector('.w-ellipsis')).not.toBeNull(); // timeline has no label here
   expect(cap.querySelector('.w-stale')).toHaveTextContent('дані застаріли');
   rerender(<Widget state={st({ lineChanged: true }, style)} now={now} background={{ kind: 'tint' }} />);
   expect(container.querySelector('.w-cap-warn')).toHaveAttribute('title', 'Схема підключення змінилась — перевірте лінію');
