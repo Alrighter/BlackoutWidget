@@ -196,7 +196,7 @@ interface ActualStatus {
   observedAt?: string;        // останні свіжі дані
   reason?: string;            // чому 'unknown'
   detail?: string;            // «на вході 229 В»
-  history: ActualSegment[];   // відрізки за останні 48 год — для смужок
+  history: ActualSegment[];   // відрізки за останні 7 днів — для смужок і списку відключень
 }
 interface ActualSegment { power: ActualPower; start: string; end?: string; startApprox?: boolean }
 // AppState.actual: ActualStatus | null   (null — джерело не налаштоване)
