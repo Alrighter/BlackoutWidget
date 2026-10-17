@@ -2,11 +2,12 @@ import { app, BrowserWindow, Menu, screen, type MenuItemConstructorOptions, type
 import { join } from 'node:path';
 import { IPC } from '../../shared/ipc';
 import type { WidgetBackground, WidgetPosition, WidgetStyle } from '../../shared/types';
+import { silentLogger, type Logger } from '../log';
 import type { AppStore } from '../store';
 import type { DesktopPinner } from './desktop-pin';
 import { placeWidget, WIDGET_SIZES } from './position';
 
-export interface WidgetWindowDeps { store: AppStore; pinner: DesktopPinner; preload: string }
+export interface WidgetWindowDeps { store: AppStore; pinner: DesktopPinner; preload: string; log?: Logger }
 
 /**
  * The desktop widget: a transparent frameless window pinned to the desktop. It owns its DIP bounds (a pinned
@@ -127,7 +128,12 @@ export class WidgetWindow {
   private commit(rect: Rectangle): void {
     const { pos, rect: placed } = this.layout({ x: rect.x, y: rect.y, displayId: screen.getDisplayMatching(rect).id });
     this.setBounds(placed);
-    this.deps.store.updateSettings({ widgetPosition: pos });
+    try {
+      this.deps.store.updateSettings({ widgetPosition: pos });
+    } catch (err) {
+      // Runs from IPC / tray events: a settings file that can't be read right now must not become an uncaught error.
+      (this.deps.log ?? silentLogger).error('saving the widget position failed', err);
+    }
   }
 
   private setBounds(rect: Rectangle): void {
@@ -145,7 +151,8 @@ export class WidgetWindow {
     const win = new BrowserWindow({
       ...this.bounds, show: false,
       frame: false, transparent: true, resizable: false, skipTaskbar: true, focusable: true, hasShadow: false,
-      webPreferences: { preload: this.deps.preload, contextIsolation: true, nodeIntegration: false, sandbox: true },
+      // No background throttling: a pinned, occluded widget must keep its minute clock running.
+      webPreferences: { preload: this.deps.preload, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
     win.once('ready-to-show', () => {
       // While still top-level: Electron may create the window a few px off the asked size at fractional scaling,

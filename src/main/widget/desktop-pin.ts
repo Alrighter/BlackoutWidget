@@ -1,4 +1,5 @@
 import type { BrowserWindow, Rectangle } from 'electron';
+import { silentLogger, type Logger } from '../log';
 import { Win32DesktopPinner } from './pin-win32';
 
 /** Keeps the widget window on the desktop layer: under normal windows, visible after "show desktop". */
@@ -22,14 +23,16 @@ class NoopPinner implements DesktopPinner {
   dispose(): void {}
 }
 
-export function createDesktopPinner(): DesktopPinner {
+export function createDesktopPinner(log: Logger = silentLogger): DesktopPinner {
   if (process.platform === 'win32') {
     try {
       return new Win32DesktopPinner();
     } catch (err) {
       // A missing native FFI binary must not take the app down; the widget then just isn't pinned.
-      console.error('desktop pinning unavailable', err);
+      log.error('desktop pinning unavailable, falling back to NoopPinner (widget not pinned)', err);
+      return new NoopPinner();
     }
   }
+  log.warn(`no desktop pinner for platform ${process.platform}, using NoopPinner (widget not pinned)`);
   return new NoopPinner();
 }

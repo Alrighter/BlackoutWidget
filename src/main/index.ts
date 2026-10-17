@@ -1,7 +1,9 @@
-import { app, net, powerMonitor } from 'electron';
+import { app, dialog, net, powerMonitor } from 'electron';
 import { join } from 'node:path';
 import type { AppState, Settings } from '../shared/types';
+import { FileLogger } from './file-logger';
 import { broadcastState, registerIpc } from './ipc';
+import { consoleLogger, type Logger } from './log';
 import { MainWindow } from './main-window';
 import { BrowserSession } from './providers/browser-session';
 import { createProviders, findProvider } from './providers/registry';
@@ -17,23 +19,43 @@ import { WidgetWindow } from './widget/widget-window';
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  void bootstrap();
+  const { log, logPath } = createLog();
+  bootstrap(log).catch((err: unknown) => {
+    log.error('bootstrap failed', err);
+    const reason = err instanceof Error ? err.message : String(err);
+    const details = logPath ? `\n\nПодробиці — у журналі:\n${logPath}` : '';
+    try {
+      dialog.showErrorBox('Blackout Widget', `Не вдалося запустити Blackout Widget.\n\n${reason}${details}`);
+    } catch { /* nothing more to do */ }
+    app.exit(1);
+  });
 }
 
-async function bootstrap(): Promise<void> {
+/** `<userData>/logs/app.log` (rotated at ~1 MB, one previous file kept). */
+function createLog(): { log: Logger; logPath?: string } {
+  try {
+    const log = new FileLogger(join(app.getPath('userData'), 'logs'));
+    return { log, logPath: log.path };
+  } catch {
+    return { log: consoleLogger };
+  }
+}
+
+async function bootstrap(log: Logger): Promise<void> {
   app.setAppUserModelId('ua.blackoutwidget.app');
   // The app lives in the tray; closing every window must not quit it.
   app.on('window-all-closed', () => {});
   await app.whenReady();
+  log.info(`Blackout Widget ${app.getVersion()} starting`);
 
   const store = new AppStore(app.getPath('userData'));
-  const providers = createProviders(o => new BrowserSession(o));
+  const providers = createProviders(o => new BrowserSession(o, log), log);
   const service = new RefreshService({ store, getProvider: id => findProvider(providers, id) });
   const scheduler = new RefreshScheduler(() => service.refresh());
   const preload = join(__dirname, '../preload/index.js');
   const mainWindow = new MainWindow(preload);
-  const pinner = createDesktopPinner();
-  const widget = new WidgetWindow({ store, pinner, preload });
+  const pinner = createDesktopPinner(log);
+  const widget = new WidgetWindow({ store, pinner, preload, log });
 
   app.on('second-instance', () => mainWindow.open());
 
@@ -47,7 +69,14 @@ async function bootstrap(): Promise<void> {
   };
   const publish = () => publishState(service.getState());
   const updateSettings = (patch: Partial<Settings>) => {
-    store.updateSettings(patch);
+    try {
+      store.updateSettings(patch);
+    } catch (err) {
+      // Called from tray clicks too: an unreadable settings file must not become an uncaught main-process error.
+      log.error('saving settings failed', err);
+      publish();
+      return;
+    }
     if (patch.widgetStyle) widget.setStyle(patch.widgetStyle);
     applyAutostart();
     publish();
@@ -68,7 +97,7 @@ async function bootstrap(): Promise<void> {
     moveWidget: () => widget.beginMoveMode(),
     openSettings: () => mainWindow.open('settings'),
     toggleAutostart: () => updateSettings({ autostart: !store.getSettings().autostart }),
-    solveCaptcha: () => { solveCaptcha().catch(err => console.error('showVerification failed', err)); },
+    solveCaptcha: () => { solveCaptcha().catch(err => log.error('showVerification failed', err)); },
     quit: () => app.quit(),
   };
   const tray = new AppTray(actions);
