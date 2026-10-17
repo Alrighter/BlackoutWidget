@@ -14,9 +14,9 @@ const d = (days: number) => t(days * 1440);
 const STALE = 'дані станції не оновлюються';
 const LABEL = 'EcoFlow · River 2';
 /** Two ways the clock can jump: timers fire on the way (the check timer sees the gap) or not (the next reading sees it). */
-const jumps: [string, (byMs: number) => void][] = [
-  ['the check timer', byMs => { vi.advanceTimersByTime(byMs); }],
-  ['the next reading', byMs => { vi.setSystemTime(Date.now() + byMs); }],
+const jumps: [string, (byMs: number) => void, ActualPower][] = [
+  ['the check timer', byMs => { vi.advanceTimersByTime(byMs); }, 'unknown'],
+  ['the next reading', byMs => { vi.setSystemTime(Date.now() + byMs); }, 'on'],
 ];
 
 let running: ActualStateService[] = [];
@@ -130,11 +130,12 @@ test('a fresh-looking reading with old observedAt counts as stale', () => {
   expect(journal().transitions.at(-1)).toStrictEqual({ at: t(2), power: 'unknown' });
 });
 
-test.each(jumps)('sleep jump inserts gap before new state; different state gets approx (gap seen by %s)', (_, jump) => {
+test.each(jumps)('sleep jump inserts gap before new state; different state gets approx (gap seen by %s)', (_, jump, afterJump) => {
   const { svc, begin, at, journal } = setup();
   begin();
   at(0, 'on'); at(1, 'on'); at(2, 'on');
   jump(120 * MIN);
+  expect(svc.getStatus()?.power).toBe(afterJump);
   at(122, 'off');
   at(123, 'off');
   expect(journal().transitions).toStrictEqual([
@@ -145,12 +146,13 @@ test.each(jumps)('sleep jump inserts gap before new state; different state gets 
   expect(svc.getStatus()).toMatchObject({ power: 'off', since: t(122), sinceApprox: true });
 });
 
-test.each(jumps)('a pending change does not survive a gap (gap seen by %s)', (_, jump) => {
+test.each(jumps)('a pending change does not survive a gap (gap seen by %s)', (_, jump, afterJump) => {
   const { svc, begin, at, journal } = setup();
   begin();
   for (let m = 0; m <= 4.5; m += 0.5) at(m, 'on');
   at(5, 'off');
   jump(55 * MIN);
+  expect(svc.getStatus()?.power).toBe(afterJump);
   at(60, 'off');
   expect(svc.getStatus()?.power).toBe('unknown'); // the 5:00 reading does not count towards the 60 s
   at(61, 'off');
