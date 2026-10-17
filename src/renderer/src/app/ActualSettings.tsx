@@ -28,8 +28,8 @@ function currentText(actual: AppState['actual']): string | null {
 type Preview = { sn: string; text: string } | { sn: string; pending: true };
 
 /** The keys live only in this component's state; the form is unmounted after save or cancel. */
-function EcoflowForm({ api, onClose }: { api: RendererApi; onClose(): void }) {
-  const [region, setRegion] = useState<EcoflowRegion>('eu');
+function EcoflowForm({ api, initialRegion, onClose }: { api: RendererApi; initialRegion: EcoflowRegion; onClose(): void }) {
+  const [region, setRegion] = useState<EcoflowRegion>(initialRegion);
   const [accessKey, setAccessKey] = useState('');
   const [secretKey, setSecretKey] = useState('');
   const [checking, setChecking] = useState(false);
@@ -121,7 +121,7 @@ function EcoflowPanel({ state, api }: PanelProps) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (editing) return <EcoflowForm api={api} onClose={() => setEditing(false)} />;
+  if (editing) return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} onClose={() => setEditing(false)} />;
   if (!source) {
     return (
       <>

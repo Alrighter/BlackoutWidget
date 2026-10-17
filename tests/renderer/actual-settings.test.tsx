@@ -149,12 +149,17 @@ test('configured view: off, unknown, and disconnect failure', async () => {
   expect(await screen.findByText('Не вдалося зберегти налаштування. Спробуйте ще раз.')).toBeInTheDocument();
 });
 
-test('«Змінити» opens an empty form', async () => {
-  const user = userEvent.setup();
-  render(<ActualSettings state={stateOf(CONFIG)} api={mockApi()} />);
+test('«Змінити» opens a form with empty keys and the configured region', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf({ ...CONFIG, region: 'us' })} api={api} />);
   await user.click(screen.getByRole('button', { name: 'Змінити' }));
+  expect(screen.getByLabelText('Регіон')).toHaveValue('us');
   expect(screen.getByLabelText('Access Key')).toHaveValue('');
   expect(screen.getByLabelText('Secret Key')).toHaveValue('');
+  await user.type(screen.getByLabelText('Access Key'), 'AK-123');
+  await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
 });
 
 test('help link calls openEcoflowHelp', async () => {
