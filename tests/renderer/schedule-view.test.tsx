@@ -41,6 +41,9 @@ test('actual row on the today tab only', async () => {
   expect(screen.getByText('Фактично')).toBeInTheDocument();
   expect(container.querySelector('[data-actual-part="off"]')).not.toBeNull();
   expect(container.querySelector('[data-actual-part="unknown"]')).not.toBeNull();
+  const off = container.querySelector<HTMLElement>('[data-actual-part="off"]')!;
+  expect(parseFloat(off.style.left)).toBeCloseTo((730 / 1440) * 100, 3);
+  expect(parseFloat(off.style.width)).toBeCloseTo((50 / 1440) * 100, 3);
   await userEvent.click(screen.getByRole('tab', { name: 'Завтра 18.10' }));
   expect(screen.queryByText('Фактично')).toBeNull();
   expect(container.querySelector('[data-actual-part]')).toBeNull();
