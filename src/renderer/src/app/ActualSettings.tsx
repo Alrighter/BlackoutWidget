@@ -42,7 +42,7 @@ function EcoflowForm({ api, onClose }: { api: RendererApi; onClose(): void }) {
   const seq = useRef(0);
 
   const keys = (): EcoflowKeysInput => ({ region, accessKey: accessKey.trim(), secretKey: secretKey.trim() });
-  const resetResult = () => { seq.current++; setDevices(null); setTestError(null); setSn(null); setPreview(null); setSaveError(null); };
+  const resetResult = () => { seq.current++; setChecking(false); setDevices(null); setTestError(null); setSn(null); setPreview(null); setSaveError(null); };
 
   async function choose(next: string, k: EcoflowKeysInput) {
     const mine = ++seq.current;

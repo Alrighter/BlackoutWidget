@@ -164,3 +164,15 @@ test('help link calls openEcoflowHelp', async () => {
   await user.click(screen.getByRole('button', { name: 'Як отримати ключі' }));
   expect(api.openEcoflowHelp).toHaveBeenCalled();
 });
+
+test('editing a key while the check is pending does not leave the button stuck', async () => {
+  const user = userEvent.setup(); let resolve!: (v: unknown) => void;
+  const api = mockApi({ ecoflowTest: vi.fn(() => new Promise(r => { resolve = r; })) });
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openAndCheck(user);
+  expect(screen.getByRole('button', { name: 'Перевіряю…' })).toBeDisabled();
+  await user.type(screen.getByLabelText('Access Key'), 'x');
+  resolve({ ok: true, devices: [stations[0]] });
+  expect(await screen.findByRole('button', { name: 'Перевірити' })).toBeEnabled();
+  expect(screen.queryByText('Станції в акаунті')).toBeNull();
+});
