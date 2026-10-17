@@ -1,4 +1,4 @@
-import { BrowserWindow, net, session as electronSession } from 'electron';
+import { app, BrowserWindow, net, session as electronSession } from 'electron';
 import { CaptchaRequiredError, ProviderError, type PageSession } from './types';
 
 export interface SessionOptions {
@@ -14,6 +14,7 @@ export interface SessionOptions {
 
 const ERR_ABORTED = -3; // Imperva reloads the page, which aborts the first navigation
 const POLL_MS = 500;
+const EVALUATE_TIMEOUT_MS = 30000;
 const EVAL_GUARD_MS = 5000;
 const OFFLINE_MESSAGE = 'Немає з’єднання з сайтом ДТЕК';
 
@@ -33,9 +34,13 @@ export class BrowserSession implements PageSession {
   private netError = false;
   private showing = false;
   private disposed = false;
+  private quitting = false;
+  private closedByUser: (() => void) | null = null;
   private pending: Promise<void> | null = null;
 
-  constructor(private readonly opts: SessionOptions) {}
+  constructor(private readonly opts: SessionOptions) {
+    app.on('before-quit', () => { this.quitting = true; });
+  }
 
   ensureReady(): Promise<void> {
     if (!this.pending) {
@@ -46,10 +51,20 @@ export class BrowserSession implements PageSession {
 
   async evaluate<T>(js: string): Promise<T> {
     if (!this.win || this.win.isDestroyed()) throw new ProviderError('Сторінка ДТЕК не завантажена');
-    return (await this.win.webContents.executeJavaScript(js)) as T;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new ProviderError('Сайт ДТЕК не відповідає')), EVALUATE_TIMEOUT_MS);
+    });
+    try {
+      return (await Promise.race([this.win.webContents.executeJavaScript(js), timeout])) as T;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
-  reload(): Promise<void> {
+  async reload(): Promise<void> {
+    // Never join another caller's quick-path check: wait it out, then force a fresh navigation.
+    if (this.pending) await this.pending.catch(() => {});
     this.loaded = false;
     return this.ensureReady();
   }
@@ -58,9 +73,12 @@ export class BrowserSession implements PageSession {
     const win = this.window();
     this.showing = true;
     win.show();
+    const closed = new Promise<void>(resolve => { this.closedByUser = resolve; });
     try {
-      await this.ensureReady();
+      // If the user closes the window, verification simply ends; the next call starts a fresh load.
+      await Promise.race([this.ensureReady(), closed]);
     } finally {
+      this.closedByUser = null;
       this.showing = false;
       if (!win.isDestroyed()) win.hide();
     }
@@ -133,7 +151,8 @@ export class BrowserSession implements PageSession {
     if (allowed) {
       ses.webRequest.onBeforeRequest((details, cb) => {
         let cancel = false;
-        try {
+        // While the user is solving a verification, the site's own widgets must load.
+        if (!this.showing) try {
           const u = new URL(details.url);
           if (/^(https?|wss?):$/.test(u.protocol)) cancel = !hostAllowed(u.hostname, allowed);
         } catch { /* leave non-parsable URLs alone */ }
@@ -149,7 +168,14 @@ export class BrowserSession implements PageSession {
       if (isMainFrame && code !== ERR_ABORTED) this.netError = true;
     });
     // The user closing the verification window must only hide it.
-    win.on('close', e => { if (!this.disposed) { e.preventDefault(); win.hide(); } });
+    win.on('close', e => {
+      if (this.disposed || this.quitting) return;
+      e.preventDefault();
+      win.hide();
+      this.showing = false;
+      this.loaded = false;
+      this.closedByUser?.();
+    });
     this.win = win;
     this.loaded = false;
     return win;

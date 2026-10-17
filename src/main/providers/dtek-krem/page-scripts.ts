@@ -25,6 +25,7 @@ export function getHomeNumScript(city: string, street: string, updateFact: strin
     params.append('data[' + i + '][value]', value);
   });
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+  try {
   const res = await fetch('/ua/ajax', {
     method: 'POST',
     headers: {
@@ -34,7 +35,11 @@ export function getHomeNumScript(city: string, street: string, updateFact: strin
     },
     body: params.toString(),
     credentials: 'include',
+    signal: AbortSignal.timeout(20000),
   });
   return { status: res.status, body: await res.text() };
+  } catch (e) {
+    return { status: 0, body: '' };
+  }
 })()`;
 }

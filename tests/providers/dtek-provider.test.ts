@@ -34,6 +34,7 @@ test('non-200 → reload and retry once, then ProviderError', async () => {
     [getHomeNumScript(C, S, '17.10.2026 11:55')]: [bad, bad] });
   await expect(new DtekKremProvider(s as any).fetchSnapshot(addr)).rejects.toThrow(ProviderError);
   expect(s.reload).toHaveBeenCalledTimes(1);
+  expect(s.evaluate.mock.calls.filter(c => c[0] === READ_FACT)).toHaveLength(2);
 });
 test('house missing → ProviderError', async () => {
   const s = fakeSession({ [READ_FACT]: [{ fact: stale.fact, schNames: stale.preset.sch_names }],
@@ -51,8 +52,34 @@ test('listHouses parses lines', async () => {
   expect(houses.find(h => h.house === '40')!.lines).toHaveLength(2);
 });
 test('unexpected parse exception is wrapped in ProviderError', async () => {
-  const broken = { result: true, data: { '40': null } };
+  const broken = { result: true, data: { '40': { sub_type_reason: 5 } } };
   const s = fakeSession({ [READ_FACT]: [{ fact: stale.fact, schNames: stale.preset.sch_names }],
     [getHomeNumScript(C, S, '17.10.2026 11:55')]: [{ status: 200, body: JSON.stringify(broken) }] });
   await expect(new DtekKremProvider(s as any).fetchSnapshot(addr)).rejects.toBeInstanceOf(ProviderError);
+});
+test('concurrent fetches never overlap evaluate calls', async () => {
+  const script = getHomeNumScript(C, S, '17.10.2026 11:55');
+  let active = 0, maxActive = 0, homeNumCalls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  const s = fakeSession({});
+  s.evaluate.mockImplementation((async (js: string) => {
+    active++; maxActive = Math.max(maxActive, active);
+    try {
+      if (js === READ_FACT) return { fact: stale.fact, schNames: stale.preset.sch_names };
+      if (js === script) { homeNumCalls++; if (homeNumCalls === 1) await gate; return { status: 200, body: JSON.stringify(stale) }; }
+      throw new Error('unexpected');
+    } finally { active--; }
+  }) as any);
+  const p = new DtekKremProvider(s as any);
+  const a = p.fetchSnapshot(addr), b = p.fetchSnapshot(addr);
+  await new Promise(r => setTimeout(r, 20));
+  expect(homeNumCalls).toBe(1); // second waits for the first
+  release();
+  await Promise.all([a, b]);
+  expect(homeNumCalls).toBe(2);
+  expect(maxActive).toBe(1);
+});
+test('page script reports in-page failures as status 0', () => {
+  expect(getHomeNumScript(C, S, 'x')).toContain("status: 0");
 });

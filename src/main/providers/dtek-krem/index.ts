@@ -16,21 +16,21 @@ export class DtekKremProvider implements ScheduleProvider {
   constructor(private readonly session: PageSession) {}
 
   listCities(): Promise<string[]> {
-    return this.guard(async () => {
+    return this.serial(async () => {
       await this.ready();
       return this.session.evaluate<string[]>(READ_CITIES);
     });
   }
 
   listStreets(city: string): Promise<string[]> {
-    return this.guard(async () => {
+    return this.serial(async () => {
       await this.ready();
       return this.session.evaluate<string[]>(readStreetsScript(city));
     });
   }
 
   listHouses(city: string, street: string): Promise<HouseInfo[]> {
-    return this.guard(async () => {
+    return this.serial(async () => {
       const resp = await this.homeNum(city, street);
       const { fact, schNames } = this.state!;
       return parseHouses(resp, fact, schNames);
@@ -38,7 +38,7 @@ export class DtekKremProvider implements ScheduleProvider {
   }
 
   fetchSnapshot(address: Address): Promise<ScheduleSnapshot> {
-    return this.guard(async () => {
+    return this.serial(async () => {
       const resp = await this.homeNum(address.city, address.street);
       const { fact, schNames } = this.state!;
       const entry = resp.data[address.house];
@@ -67,13 +67,21 @@ export class DtekKremProvider implements ScheduleProvider {
     this.session.dispose();
   }
 
+  // One operation at a time: no parallel requests to the source; a failure doesn't break the chain.
+  private tail: Promise<unknown> = Promise.resolve();
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(() => this.guard(fn));
+    this.tail = run.catch(() => {});
+    return run;
+  }
+
   // Callers only ever see ProviderError / CaptchaRequiredError.
   private async guard<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
     } catch (e) {
       if (e instanceof ProviderError || e instanceof CaptchaRequiredError) throw e;
-      throw new ProviderError(e instanceof Error ? e.message : String(e));
+      throw new ProviderError('Не вдалося отримати дані з сайту ДТЕК', { cause: e });
     }
   }
 
