@@ -1,7 +1,10 @@
 import type { Logger } from '../../log';
 import { NetworkError } from '../../providers/types';
+import { scrubKeys } from '../secrets';
 import type { ActualReading, ActualStateSource } from '../types';
-import { describeEcoflowError, EcoflowApiError, type EcoflowApiLike, type EcoflowDevice, type MqttCertificate } from './api';
+import {
+  describeEcoflowError, EcoflowApiError, type EcoflowApiLike, type EcoflowDevice, type EcoflowKeys, type MqttCertificate,
+} from './api';
 import { detectGrid } from './grid';
 import { normalizeQuotaMessage, parseStatusMessage } from './mqtt-message';
 
@@ -80,7 +83,8 @@ export class EcoflowSource implements ActualStateSource {
   private retryTimer: Timer | undefined;
 
   constructor(
-    private readonly cfg: { sn: string; clientId: string },
+    /** `keys` only scrub server text; the requests themselves are signed by `api`. */
+    private readonly cfg: { sn: string; clientId: string; keys: EcoflowKeys },
     private readonly api: EcoflowApiLike,
     private readonly deps: { connect: MqttConnect; log: Logger; now?: () => number },
   ) {
@@ -139,7 +143,9 @@ export class EcoflowSource implements ActualStateSource {
     } catch (err) {
       p.busy = false;
       if (this.stopped) return;
-      if (p.error === undefined || errorCode(p.error) !== errorCode(err)) this.deps.log.warn(`ecoflow: ${p.label} failed`, errorCode(err));
+      if (p.error === undefined || errorCode(p.error) !== errorCode(err)) {
+        this.deps.log.warn(`ecoflow: ${p.label} failed`, this.safe(errorCode(err)));
+      }
       p.error = err;
       this.setSlow(kind, isKeyProblem(err));
       this.evaluate();
@@ -219,6 +225,11 @@ export class EcoflowSource implements ActualStateSource {
     return listed?.online;
   }
 
+  /** Server text (an error code or message) can echo the request: the keys never reach a reading or a log line. */
+  private safe(text: string): string {
+    return scrubKeys(text, this.cfg.keys);
+  }
+
   private evaluate(): void {
     if (this.stopped || !this.onReading) return;
     // A failing consumer must not break the polls (fire-and-forget promises) or mqtt.js's message dispatch.
@@ -230,7 +241,7 @@ export class EcoflowSource implements ActualStateSource {
     const err = this.polls.quota.error ?? this.polls.devices.error;
     // Ruling R7: fresh MQTT quotas outrank a failing HTTP side (some models answer 1006 over REST yet push over MQTT);
     // a pure function of the current state, so no unknown/on flip-flop while the error lasts.
-    if (err !== undefined && !this.mqttFresh(now)) return unknown(errorReason(err));
+    if (err !== undefined && !this.mqttFresh(now)) return unknown(this.safe(errorReason(err)));
     if (this.found === false) return unknown('станцію не знайдено в акаунті');
     if (this.online() === false) return unknown('станція не в мережі');
     if (this.freshAt === undefined || now - this.freshAt > FRESH_MS) return unknown('дані станції не оновлюються');
@@ -248,7 +259,7 @@ export class EcoflowSource implements ActualStateSource {
         this.cert = cert;
       } catch (err) {
         if (this.stopped) return;
-        this.deps.log.warn('ecoflow: certification failed', errorCode(err));
+        this.deps.log.warn('ecoflow: certification failed', this.safe(errorCode(err)));
         // The certificate is HTTP too: with bad keys it waits like the polls do.
         if (isKeyProblem(err)) this.retryTimer = setTimeout(() => void this.connectMqtt(), KEY_ERROR_POLL_MS);
         else this.backoff();

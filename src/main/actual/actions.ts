@@ -5,7 +5,7 @@ import { NetworkError } from '../providers/types';
 import { ecoflowPreview, ecoflowTest } from './ecoflow';
 import { deviceLabel, EcoflowApiError, type EcoflowApiLike, type EcoflowKeys } from './ecoflow/api';
 import { findActualSource } from './registry';
-import { maskKey, SecretsUnavailableError, type SecretStore } from './secrets';
+import { maskKey, scrubKeys, SecretsUnavailableError, type SecretStore } from './secrets';
 import type { ActualStateService } from './service';
 import type { ActualSourceFactory, ActualStateSource } from './types';
 
@@ -69,15 +69,12 @@ function readDevice(v: unknown): { sn: string; label: string } | null {
   return sn !== null && typeof v.label === 'string' && v.label.length <= 120 ? { sn, label: v.label } : null;
 }
 
-/** A server message can echo what it was sent: keys never leave in a result or a log line. */
-function scrub(s: string, keys: EcoflowKeys): string {
-  return s.split(keys.secretKey).join('…').split(keys.accessKey).join(maskKey(keys.accessKey));
-}
-
 export function createActualActions(deps: ActualActionsDeps): ActualActions {
   const fail = (err: unknown, keys: EcoflowKeys) => {
-    if (err instanceof EcoflowApiError || err instanceof NetworkError) return { ok: false as const, error: scrub(err.message, keys) };
-    deps.log.error(`actual: EcoFlow request failed — ${scrub(describeError(err), keys)}`);
+    if (err instanceof EcoflowApiError || err instanceof NetworkError) {
+      return { ok: false as const, error: scrubKeys(err.message, keys) };
+    }
+    deps.log.error(`actual: EcoFlow request failed — ${scrubKeys(describeError(err), keys)}`);
     return { ok: false as const, error: CONNECT_FAILED };
   };
 
@@ -114,7 +111,7 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
       } catch (err) {
         // Whatever the cause, the keys are not stored; the cause goes to the log only.
         if (!(err instanceof SecretsUnavailableError)) {
-          deps.log.error(`actual: could not save the EcoFlow keys — ${scrub(describeError(err), input.keys)}`);
+          deps.log.error(`actual: could not save the EcoFlow keys — ${scrubKeys(describeError(err), input.keys)}`);
         }
         return { ok: false, error: new SecretsUnavailableError().message };
       }
@@ -127,7 +124,7 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
         });
       } catch (err) {
         // The keys just stored are not rolled back (ruling R10): a retry overwrites them.
-        deps.log.error(`actual: could not save the EcoFlow settings — ${scrub(describeError(err), input.keys)}`);
+        deps.log.error(`actual: could not save the EcoFlow settings — ${scrubKeys(describeError(err), input.keys)}`);
         return { ok: false, error: SETTINGS_FAILED };
       }
       deps.restartActual();

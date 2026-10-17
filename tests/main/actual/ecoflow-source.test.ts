@@ -14,6 +14,7 @@ const SEC = 1000, MIN = 60_000;
 const t = (ms: number) => new Date(base + ms).toISOString();
 const CERT: MqttCertificate = { account: 'open-1', password: 'pw-secret-42', host: 'mqtt-e.ecoflow.com', port: 8883 };
 const CLIENT_ID = 'BlackoutWidget-abc12345';
+const KEYS = { accessKey: 'AKEY1234567', secretKey: 'SECRET-xyz' };
 const QUOTA_TOPIC = '/open/open-1/SN1/quota', STATUS_TOPIC = '/open/open-1/SN1/status';
 const ONLINE: EcoflowDevice[] = [{ sn: 'SN1', online: true, productName: 'RIVER 2' }];
 const OFFLINE: EcoflowDevice[] = [{ sn: 'SN1', online: false, productName: 'RIVER 2' }];
@@ -65,7 +66,7 @@ function setup(o: { devices?: Step<EcoflowDevice[]>[]; quota?: Step<Record<strin
   const mqtt = fakeMqtt(order);
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   const readings: ActualReading[] = [];
-  const src = new EcoflowSource({ sn: 'SN1', clientId: CLIENT_ID }, api, { connect: mqtt.connect, log });
+  const src = new EcoflowSource({ sn: 'SN1', clientId: CLIENT_ID, keys: KEYS }, api, { connect: mqtt.connect, log });
   running.push(src);
   const begin = async () => { src.start(r => readings.push(r)); await flush(); };
   return { api, order, mqtt, log, readings, src, begin, last: () => readings.at(-1) };
@@ -422,6 +423,20 @@ test('MQTT reconnect backoff 10,20,40 s; auth failure refreshes certification on
   expect(logged(log)).not.toContain('pw-secret-42');
 });
 
+test('a server echo of the keys never reaches a reading or a log line', async () => {
+  const echo = `accessKey=${KEYS.accessKey} secretKey=${KEYS.secretKey}`;
+  const odd = () => new EcoflowApiError(`E-${KEYS.accessKey}`, echo); // even a server "code" is server text
+  const { log, begin, last, readings } = setup({ devices: [odd()], quota: [new EcoflowApiError('9999', echo)], cert: [odd()] });
+  await begin();
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: 'Помилка EcoFlow 9999: accessKey=AKEY… secretKey=…' });
+  expect(log.warn).toHaveBeenCalledWith('ecoflow: device list failed', 'E-AKEY…');
+  expect(log.warn).toHaveBeenCalledWith('ecoflow: certification failed', 'E-AKEY…');
+  for (const text of [JSON.stringify(readings), logged(log)]) {
+    expect(text).not.toContain(KEYS.accessKey);
+    expect(text).not.toContain(KEYS.secretKey);
+  }
+});
+
 test('stop() clears timers and ends the client; no readings afterwards', async () => {
   const { api, mqtt, src, begin, readings } = setup({ quota: [vol(229000), vol(229100)] });
   await begin();
@@ -530,4 +545,20 @@ test('registry: the EcoFlow factory wires region, keys and the stable clientId',
   ]);
   expect(fetch.mock.calls[0][1].headers.accessKey).toBe('AKEY1234567');
   expect(mqtt.connect).toHaveBeenCalledWith('mqtts://mqtt-e.ecoflow.com:8883', expect.objectContaining({ clientId: CLIENT_ID, username: 'open-1' }));
+});
+
+test('registry: the created source knows its keys and scrubs a server echo of them', async () => {
+  const fetch = vi.fn<FetchLike>(async () => ({
+    ok: true, status: 200, text: async () => JSON.stringify({ code: '9999', message: 'accessKey=AKEY1234567 secretKey=SECRET-xyz' }),
+  }));
+  const src = findActualSource(createActualSources({ fetch, connect: fakeMqtt().connect }), 'ecoflow').create(
+    { id: 'ecoflow', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accessKeyHint: 'AKEY…' },
+    { accessKey: 'AKEY1234567', secretKey: 'SECRET-xyz' },
+    { clientId: CLIENT_ID, log: silentLogger },
+  );
+  running.push(src as EcoflowSource);
+  const readings: ActualReading[] = [];
+  src.start(r => readings.push(r));
+  await flush();
+  expect(readings.at(-1)).toEqual({ power: 'unknown', observedAt: t(0), reason: 'Помилка EcoFlow 9999: accessKey=AKEY… secretKey=…' });
 });

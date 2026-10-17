@@ -9,11 +9,14 @@ export function createEcoflowFactory(deps: { fetch: FetchLike; connect: MqttConn
   return {
     id: 'ecoflow',
     displayName: 'EcoFlow',
-    create: (config, secrets, ctx) => new EcoflowSource(
-      { sn: config.deviceSn, clientId: ctx.clientId },
-      new EcoflowApi(config.region, { accessKey: secrets.accessKey, secretKey: secrets.secretKey }, { fetch: deps.fetch }),
-      { connect: deps.connect, log: ctx.log },
-    ),
+    create: (config, secrets, ctx) => {
+      const keys = { accessKey: secrets.accessKey, secretKey: secrets.secretKey };
+      return new EcoflowSource(
+        { sn: config.deviceSn, clientId: ctx.clientId, keys },
+        new EcoflowApi(config.region, keys, { fetch: deps.fetch }),
+        { connect: deps.connect, log: ctx.log },
+      );
+    },
   };
 }
 

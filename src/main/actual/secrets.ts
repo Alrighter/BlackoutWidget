@@ -5,6 +5,14 @@ export function maskKey(key: string): string {
   return key.length < 5 ? '…' : `${key.slice(0, 4)}…`;
 }
 
+/** A server message can echo the request: the Secret Key becomes `…`, the Access Key its mask. */
+export function scrubKeys(text: string, keys: { accessKey: string; secretKey: string }): string {
+  let out = text;
+  if (keys.secretKey) out = out.split(keys.secretKey).join('…');
+  if (keys.accessKey) out = out.split(keys.accessKey).join(maskKey(keys.accessKey));
+  return out;
+}
+
 export interface Encryptor { isEncryptionAvailable(): boolean; encryptString(s: string): Buffer; decryptString(b: Buffer): string }
 
 export class SecretsUnavailableError extends Error {
