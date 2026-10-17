@@ -11,6 +11,7 @@ import { AppStore } from './store';
 import { AppTray } from './tray';
 import { buildWidgetMenu, type TrayActions } from './tray-menu';
 import { createDesktopPinner } from './widget/desktop-pin';
+import { startGlassUpdater } from './widget/glass-updater';
 import { WidgetWindow } from './widget/widget-window';
 
 if (!app.requestSingleInstanceLock()) {
@@ -87,7 +88,8 @@ async function bootstrap(): Promise<void> {
   publish();
   scheduler.start();
   widget.show();
-  app.on('will-quit', () => pinner.dispose());
+  const stopGlass = process.platform === 'win32' ? startGlassUpdater(widget) : () => {};
+  app.on('will-quit', () => { stopGlass(); pinner.dispose(); });
 
   powerMonitor.on('resume', () => scheduler.trigger('resume'));
   let online = net.isOnline();
