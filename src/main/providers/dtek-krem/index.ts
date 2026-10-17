@@ -4,8 +4,8 @@ import {
   CaptchaRequiredError, NetworkError, OFFLINE_MESSAGE, ProviderError, type PageSession, type ScheduleProvider,
 } from '../types';
 import {
-  deriveLines, factToDays, hasOutageFields, parseCurrentOutage, parseHomeNumResponse, parseHouses,
-  type DtekFact, type DtekHomeNumResponse,
+  deriveLines, factToDays, hasActiveOutage, hasOutageFields, parseCurrentOutage, parseHomeNumResponse, parseHouses,
+  queueLabelFromId, type DtekFact, type DtekHomeNumResponse,
 } from './parse';
 import { READ_CITIES, READ_FACT, getHomeNumScript, readStreetsScript } from './page-scripts';
 
@@ -49,7 +49,8 @@ export class DtekKremProvider implements ScheduleProvider {
       // These fields have never been seen filled (spec §4.3): keep the raw values for later parsing work.
       if (hasOutageFields(entry)) this.log.info('dtek-krem: outage fields for house', { house: address.house, entry });
       const lines = deriveLines(entry.sub_type_reason ?? [], fact, schNames);
-      const groupId = lines[address.lineIndex - 1]?.groupId ?? address.groupId;
+      // Always the saved queue: during an outage `lines` lists only the outage's queues (see hasActiveOutage).
+      const groupId = address.groupId;
       const unknownStatuses = new Set<string>();
       const days = factToDays(fact, groupId, s => unknownStatuses.add(s));
       for (const s of unknownStatuses) this.log.warn('dtek-krem: unknown hour status', { groupId, status: s });
@@ -57,11 +58,12 @@ export class DtekKremProvider implements ScheduleProvider {
         providerId: this.id,
         address,
         groupId,
-        groupLabel: schNames[groupId] ?? groupId,
+        groupLabel: schNames[groupId] ?? queueLabelFromId(groupId),
         days,
         sourceUpdatedAt: fact.update,
         fetchedAt: new Date().toISOString(),
         lines,
+        outageActive: hasActiveOutage(entry),
         currentOutage: parseCurrentOutage(entry),
       };
     });

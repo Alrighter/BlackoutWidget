@@ -1,5 +1,5 @@
 import stale from '../fixtures/dtek-krem/getHomeNum-stale-updateFact.json';
-import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage, hasOutageFields } from '../../src/main/providers/dtek-krem/parse';
+import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage, hasOutageFields, hasActiveOutage, queueLabelFromId } from '../../src/main/providers/dtek-krem/parse';
 import { ProviderError } from '../../src/main/providers/types';
 const resp = parseHomeNumResponse(stale);
 const fact = resp.fact!; const names = resp.preset!.sch_names;
@@ -49,7 +49,7 @@ test('parseHouses keeps response order and odd keys', () => {
 test('parseCurrentOutage: empty → undefined; filled → emergency', () => {
   expect(parseCurrentOutage(resp.data['40'])).toBeUndefined();
   expect(parseCurrentOutage({ ...resp.data['40'], type: 'Аварійне відключення', start_date: '10:05 17.10.2026', end_date: '17:00 17.10.2026' }))
-    .toEqual({ kind: 'emergency', text: 'Аварійне відключення', start: '10:05 17.10.2026', end: '17:00 17.10.2026' });
+    .toEqual({ kind: 'emergency', text: 'Аварійне відключення', start: '10:05 17.10.2026', end: '17:00 17.10.2026', groups: ['GPV1.2', 'GPV4.2'] });
   expect(parseCurrentOutage({ ...resp.data['40'], sub_type: 'Екстрене відключення' })?.kind).toBe('emergency');
   expect(parseCurrentOutage({ ...resp.data['40'], type: 'Планові ремонтні роботи' })?.kind).toBe('other');
 });
@@ -77,4 +77,28 @@ test('hasOutageFields: only when type/sub_type/dates are non-empty or voluntaril
   expect(hasOutageFields({ ...e, end_date: '17:00 17.10.2026' })).toBe(true);
   expect(hasOutageFields({ ...e, voluntarily: false })).toBe(true);
   expect(hasOutageFields({ ...e, cek: 0 })).toBe(true);
+});
+
+// Shape seen live on 2026-10-17 during a stabilization outage of house 40.
+const SUB = 'Стабілізаційне відключення (Згідно графіку погодинних відключень)';
+const liveEntry = { ...resp.data['40'], type: '2', sub_type: SUB, start_date: '15:11 17.10.2026', end_date: '19:00 17.10.2026', sub_type_reason: ['GPV1.2'] };
+test('parseCurrentOutage drops a numeric type and carries the outage queues', () => {
+  expect(parseCurrentOutage(liveEntry)).toEqual({ kind: 'other', text: SUB, start: '15:11 17.10.2026', end: '19:00 17.10.2026', groups: ['GPV1.2'] });
+  expect(parseCurrentOutage({ ...resp.data['40'], type: ' 2 ' })).toBeUndefined();
+  expect(parseCurrentOutage({ ...resp.data['40'], type: '1', sub_type: 'Аварійне відключення' })?.text).toBe('Аварійне відключення');
+  expect(parseCurrentOutage({ ...resp.data['40'], type: 'Екстрене', sub_type: 'відключення' })?.text).toBe('Екстрене · відключення');
+});
+test('hasActiveOutage: type or sub_type filled; parseHouses reports it per house', () => {
+  expect(hasActiveOutage(resp.data['40'])).toBe(false);
+  expect(hasActiveOutage(liveEntry)).toBe(true);
+  expect(hasActiveOutage({ ...resp.data['40'], type: '2' })).toBe(true);
+  expect(hasActiveOutage({ ...resp.data['40'], end_date: '19:00 17.10.2026' })).toBe(false);
+  const houses = parseHouses({ ...resp, data: { ...resp.data, '40': liveEntry } }, fact, names);
+  expect(houses.find(h => h.house === '40')).toMatchObject({ outageActive: true, lines: [{ index: 1, groupId: 'GPV1.2' }] });
+  expect(houses.find(h => h.house === '13')?.outageActive).toBe(false);
+});
+test('queueLabelFromId', () => {
+  expect(queueLabelFromId('GPV4.2')).toBe('Черга 4.2');
+  expect(queueLabelFromId('GPV12')).toBe('Черга 12');
+  expect(queueLabelFromId('weird')).toBe('weird');
 });

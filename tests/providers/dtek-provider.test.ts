@@ -3,6 +3,12 @@ import fresh from '../fixtures/dtek-krem/getHomeNum-fresh.json';
 import { DtekKremProvider } from '../../src/main/providers/dtek-krem';
 import { READ_FACT, getHomeNumScript, isPagePollRequest } from '../../src/main/providers/dtek-krem/page-scripts';
 import { CaptchaRequiredError, NetworkError, ProviderError } from '../../src/main/providers/types';
+import { factToDays } from '../../src/main/providers/dtek-krem/parse';
+import { AppStore } from '../../src/main/store';
+import { RefreshService } from '../../src/main/refresh';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const C = 'м. Біла Церква', S = 'бул. Грушевського Михайла';
 const addr = { providerId: 'dtek-krem', city: C, street: S, house: '40', lineIndex: 1, groupId: 'GPV1.2' };
 const oldFact = { ...stale.fact, update: '17.10.2026 09:40' };
@@ -153,4 +159,50 @@ test('page-poll filter blocks the page\'s own polling but never our getHomeNum',
   expect(isPagePollRequest({ method: 'GET', url, body: null })).toBe(false);
   expect(isPagePollRequest({ method: 'POST', url: 'https://www.dtek-krem.com.ua/ua/other', body: 'method=checkDisconUpdate' })).toBe(false);
   expect(isPagePollRequest({ method: 'POST', url, body: null })).toBe(false);
+});
+
+// Synthetic copies of the captured response, shaped like the live sample of 2026-10-17 (stabilization outage, house 40).
+const SUB = 'Стабілізаційне відключення (Згідно графіку погодинних відключень)';
+function withHouse40(patch: Record<string, unknown>) {
+  const body = structuredClone(stale) as any;
+  body.data['40'] = { ...body.data['40'], ...patch };
+  return body;
+}
+const line2 = { ...addr, lineIndex: 2, groupId: 'GPV4.2' };
+async function viaService(body: unknown, address: typeof addr) {
+  const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
+  const provider = new DtekKremProvider(s as any);
+  const store = new AppStore(mkdtempSync(join(tmpdir(), 'bw-')));
+  store.updateSettings({ address });
+  const svc = new RefreshService({ store, getProvider: () => provider });
+  expect(await svc.refresh()).toBe('ok');
+  return svc.getState();
+}
+test('active outage listing only GPV1.2: a Лінія 2 / GPV4.2 address keeps the GPV4.2 schedule and gets no line warning', async () => {
+  const body = withHouse40({ type: '2', sub_type: SUB, start_date: '15:11 17.10.2026', end_date: '19:00 17.10.2026', sub_type_reason: ['GPV1.2'] });
+  const state = await viaService(body, line2);
+  const snap = state.snapshot!;
+  expect(snap).toMatchObject({ groupId: 'GPV4.2', groupLabel: 'Черга 4.2', outageActive: true, lines: [{ index: 1, groupId: 'GPV1.2' }] });
+  expect(snap.days).toEqual(factToDays(stale.fact as any, 'GPV4.2'));
+  expect(snap.currentOutage).toEqual({ kind: 'other', text: SUB, start: '15:11 17.10.2026', end: '19:00 17.10.2026', groups: ['GPV1.2'] });
+  expect(state.lineChanged).toBe(false);
+});
+test('no outage reported and GPV4.2 no longer listed: line warning, schedule still from the saved GPV4.2', async () => {
+  const state = await viaService(withHouse40({ sub_type_reason: ['GPV1.2'] }), line2);
+  expect(state.snapshot).toMatchObject({ groupId: 'GPV4.2', outageActive: false });
+  expect(state.snapshot!.days).toEqual(factToDays(stale.fact as any, 'GPV4.2'));
+  expect(state.lineChanged).toBe(true);
+});
+test('a Лінія 1 address keeps its own queue even when the outage lists another one first', async () => {
+  const body = withHouse40({ type: '2', sub_type: SUB, sub_type_reason: ['GPV4.2'] });
+  const state = await viaService(body, addr);
+  expect(state.snapshot).toMatchObject({ groupId: 'GPV1.2', groupLabel: 'Черга 1.2' });
+  expect(state.snapshot!.days[0].slots[12]).toBe('off');
+  expect(state.lineChanged).toBe(false);
+});
+test('queue label falls back to «Черга X.Y» when the source has no name for it', async () => {
+  const body = withHouse40({}) as any;
+  delete body.preset.sch_names['GPV4.2'];
+  const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
+  expect((await new DtekKremProvider(s as any).fetchSnapshot(line2)).groupLabel).toBe('Черга 4.2');
 });

@@ -18,7 +18,8 @@ export class RefreshService {
     // A snapshot cached for another address must never be shown as this one's schedule.
     const stored = this.deps.store.getSnapshot();
     const snapshot = stored && sameAddress(a, stored.address) ? stored : null;
-    const lineChanged = !!a && !!snapshot && snapshot.lines[a.lineIndex - 1]?.groupId !== a.groupId;
+    // During a reported outage the source lists only the outage's queues, so a missing queue proves nothing then.
+    const lineChanged = !!a && !!snapshot && !snapshot.outageActive && !snapshot.lines.some(l => l.groupId === a.groupId);
     const state: AppState = { settings, snapshot, phase: this.phase, lineChanged };
     if (this.lastError !== undefined) state.lastError = this.lastError;
     return state;

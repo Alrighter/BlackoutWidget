@@ -119,3 +119,12 @@ test('two rapid setAddress calls → final snapshot matches last address', async
   pending[1].resolve(); await Promise.all([a, b, first]);
   expect(store.getSnapshot()?.address.house).toBe('3');
 });
+
+test('a queue missing from lines is not a line change while the source reports an outage', () => {
+  const during = { ...fixtureSnapshot(), outageActive: true, lines: [{ index: 1, groupId: 'GPV4.2', label: 'Черга 4.2' }] };
+  expect(setup(async () => during, { cached: during }).svc.getState().lineChanged).toBe(false);
+  const after = { ...during, outageActive: false };
+  expect(setup(async () => after, { cached: after }).svc.getState().lineChanged).toBe(true);
+  const moved = { ...fixtureSnapshot(), lines: [{ index: 1, groupId: 'GPV4.2', label: 'Черга 4.2' }, { index: 2, groupId: 'GPV1.2', label: 'Черга 1.2' }] };
+  expect(setup(async () => moved, { cached: moved }).svc.getState().lineChanged).toBe(false); // still listed, other position
+});

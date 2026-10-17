@@ -58,23 +58,41 @@ export function parseHouses(resp: DtekHomeNumResponse, fact: DtekFact, schNames:
   return Object.entries(resp.data).map(([house, entry]) => ({
     house,
     lines: deriveLines(entry.sub_type_reason ?? [], fact, schNames),
+    outageActive: hasActiveOutage(entry),
   }));
+}
+
+/** 'Черга 1.2' for 'GPV1.2' when the source's own name for the queue is missing. */
+export function queueLabelFromId(groupId: string): string {
+  const m = /(\d+(?:\.\d+)*)$/.exec(groupId);
+  return m ? `Черга ${m[1]}` : groupId;
+}
+
+const blank = (v: unknown): boolean => v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+
+/**
+ * The source reports a current outage for the house (type or sub_type filled). While it does, `sub_type_reason`
+ * lists the queues of that outage, not the house's queues (seen live on 2026-10-17).
+ */
+export function hasActiveOutage(entry: DtekHouseEntry): boolean {
+  return !blank(entry.type) || !blank(entry.sub_type);
 }
 
 const OUTAGE_FIELDS = ['type', 'sub_type', 'start_date', 'end_date', 'voluntarily', 'cek'] as const;
 
 /** True when any field that may describe a current outage is filled (non-empty string / non-null value): worth logging raw. */
 export function hasOutageFields(entry: DtekHouseEntry): boolean {
-  return OUTAGE_FIELDS.some(k => {
-    const v: unknown = entry[k];
-    return v !== null && v !== undefined && !(typeof v === 'string' && v.trim() === '');
-  });
+  return OUTAGE_FIELDS.some(k => !blank(entry[k]));
 }
 
 export function parseCurrentOutage(entry: DtekHouseEntry): CurrentOutage | undefined {
-  const text = [entry.type, entry.sub_type].filter(Boolean).join(' · ');
+  // `type` has been seen as a bare numeric code ("2"); only a real text type belongs in the message.
+  const type = typeof entry.type === 'string' && !/^\s*\d+\s*$/.test(entry.type) ? entry.type.trim() : '';
+  const sub = typeof entry.sub_type === 'string' ? entry.sub_type.trim() : '';
+  const text = [type, sub].filter(Boolean).join(' · ');
   if (!text) return undefined;
-  const out: CurrentOutage = { kind: /аварій|екстрен/i.test(text) ? 'emergency' : 'other', text };
+  const groups = Array.isArray(entry.sub_type_reason) ? entry.sub_type_reason.filter(g => typeof g === 'string') : [];
+  const out: CurrentOutage = { kind: /аварій|екстрен/i.test(text) ? 'emergency' : 'other', text, groups };
   if (entry.start_date) out.start = entry.start_date;
   if (entry.end_date) out.end = entry.end_date;
   return out;

@@ -13,7 +13,8 @@ function mockApi(houses: HouseInfo[]) {
     previewLines: vi.fn(async () => houses[0].lines.map(line => ({ line, today: fixtureSnapshot().days[0] }))),
     solveCaptcha: vi.fn(async () => {}), saveAddress: vi.fn(async () => {}), setWidgetStyle: vi.fn(async () => {}) } as unknown as RendererApi;
 }
-const two = [{ house: '40', lines: [{ index: 1, groupId: 'GPV1.2', label: 'Черга 1.2' }, { index: 2, groupId: 'GPV4.2', label: 'Черга 4.2' }] }];
+const two = [{ house: '40', outageActive: false, lines: [{ index: 1, groupId: 'GPV1.2', label: 'Черга 1.2' }, { index: 2, groupId: 'GPV4.2', label: 'Черга 4.2' }] }];
+const OUTAGE_NOTE = 'Зараз для цього будинку діє відключення — список ліній може бути неповним. Якщо вашої лінії немає, спробуйте пізніше.';
 async function pickAddress(user: UserEvent) {
   await user.click(await screen.findByRole('button', { name: 'Далі' }));
   await user.type(await screen.findByRole('combobox', { name: 'Населений пункт' }), 'Біла');
@@ -33,15 +34,31 @@ test('two lines: shows both previews and saves chosen line', async () => {
   expect(api.setWidgetStyle).toHaveBeenCalledWith('timeline'); expect(onDone).toHaveBeenCalled();
 });
 test('one line: skips line step', async () => {
-  const api = mockApi([{ house: '40', lines: [two[0].lines[0]] }]); const user = userEvent.setup();
+  const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const user = userEvent.setup();
   render(<SetupWizard api={api} onDone={() => {}} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Компакт')).toBeInTheDocument(); expect(api.previewLines).not.toHaveBeenCalled();
 });
 test('no lines: explains and blocks', async () => {
-  const api = mockApi([{ house: '40', lines: [] }]); const user = userEvent.setup();
+  const api = mockApi([{ house: '40', outageActive: false, lines: [] }]); const user = userEvent.setup();
   render(<SetupWizard api={api} onDone={() => {}} />); await pickAddress(user);
   expect(screen.getByText('Для цього будинку ДТЕК не публікує графік відключень')).toBeInTheDocument();
+  expect(screen.queryByText(OUTAGE_NOTE)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
+});
+test('active outage: the house and line steps warn that the line list may be incomplete', async () => {
+  const api = mockApi([{ ...two[0], outageActive: true }]); const user = userEvent.setup();
+  render(<SetupWizard api={api} onDone={() => {}} />); await pickAddress(user);
+  expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(await screen.findByText('Лінія 2 · Черга 4.2')).toBeInTheDocument();
+  expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
+});
+test('active outage and no lines: only the outage note, still blocked', async () => {
+  const api = mockApi([{ house: '40', outageActive: true, lines: [] }]); const user = userEvent.setup();
+  render(<SetupWizard api={api} onDone={() => {}} />); await pickAddress(user);
+  expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
+  expect(screen.queryByText('Для цього будинку ДТЕК не публікує графік відключень')).toBeNull();
   expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
 });
 test('captcha: shows prompt, solves, then retries the load', async () => {

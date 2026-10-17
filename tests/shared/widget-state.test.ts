@@ -99,3 +99,11 @@ test('an unreadable fetchedAt counts as stale and does not break the view', () =
   const v = computeWidgetView(fixtureSnapshot({ fetchedAt: 'not a date' }), NOW);
   expect(v.stale).toBe(true); expect(v.updatedText).toBe('оновлено --:--'); expect(v.state).toBe('on');
 });
+
+test('emergency for other queues does not override the saved queue (GPV1.2)', () => {
+  const base = { kind: 'emergency' as const, text: 'Аварійне відключення', end: '17:00 17.10.2026' };
+  expect(withOutage({ ...base, groups: ['GPV4.2'] }).state).toBe('on');
+  expect(withOutage({ ...base, groups: ['GPV4.2'] }).outageBadge).toBeUndefined();
+  expect(withOutage({ ...base, groups: ['GPV4.2', 'GPV1.2'] }).state).toBe('emergency');
+  expect(withOutage({ ...base, groups: [] }).state).toBe('emergency');
+});

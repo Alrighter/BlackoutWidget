@@ -7,6 +7,7 @@ import { unwrapIpcError } from './ipc-error';
 import { STYLES } from './widget-styles';
 
 type Step = 'provider' | 'city' | 'street' | 'house' | 'line' | 'style';
+const OUTAGE_NOTE = 'Зараз для цього будинку діє відключення — список ліній може бути неповним. Якщо вашої лінії немає, спробуйте пізніше.';
 const TITLES: Record<Step, string> = {
   provider: 'Компанія', city: 'Населений пункт', street: 'Вулиця', house: 'Будинок', line: 'Лінія', style: 'Стиль віджета',
 };
@@ -62,6 +63,7 @@ export function SetupWizard({ api, onDone }: { api: RendererApi; onDone(): void 
   const [line, setLine] = useState<LineInfo | null>(null);
   const [style, setStyle] = useState<WidgetStyle>('compact');
   const [houseLines, setHouseLines] = useState<LineInfo[]>([]);
+  const [houseOutage, setHouseOutage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -111,7 +113,7 @@ export function SetupWizard({ api, onDone }: { api: RendererApi; onDone(): void 
 
   const resetBelow = (from: 'city' | 'street') => {
     if (from === 'city') setStreet(null);
-    setHouse(null); setLine(null); setHouseLines([]);
+    setHouse(null); setLine(null); setHouseLines([]); setHouseOutage(false);
   };
 
   return (
@@ -149,8 +151,13 @@ export function SetupWizard({ api, onDone }: { api: RendererApi; onDone(): void 
         <Status res={houses} api={api}>{list => (
           <>
             <Autocomplete label="Будинок" options={list.map(h => h.house)} value={house}
-              onChange={v => { setHouse(v); setLine(null); setHouseLines(list.find(h => h.house === v)?.lines ?? []); }} />
-            {noLines && <div className="banner warn">Для цього будинку ДТЕК не публікує графік відключень</div>}
+              onChange={v => {
+                const info = list.find(h => h.house === v);
+                setHouse(v); setLine(null); setHouseLines(info?.lines ?? []); setHouseOutage(!!info?.outageActive);
+              }} />
+            {house !== null && houseOutage && <div className="banner warn">{OUTAGE_NOTE}</div>}
+            {/* During an outage an empty list is expected to be temporary; the note above says what to do. */}
+            {noLines && !houseOutage && <div className="banner warn">Для цього будинку ДТЕК не публікує графік відключень</div>}
           </>
         )}</Status>
       )}
@@ -166,6 +173,7 @@ export function SetupWizard({ api, onDone }: { api: RendererApi; onDone(): void 
                 </button>
               ))}
             </div>
+            {houseOutage && <div className="banner warn">{OUTAGE_NOTE}</div>}
             <p className="muted">Звірте з сайтом ДТЕК, якщо не впевнені</p>
           </>
         )}</Status>
