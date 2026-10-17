@@ -20,6 +20,7 @@ const ONLINE: EcoflowDevice[] = [{ sn: 'SN1', online: true, productName: 'RIVER 
 const OFFLINE: EcoflowDevice[] = [{ sn: 'SN1', online: false, productName: 'RIVER 2' }];
 const vol = (mv: number) => ({ 'inv.acInVol': mv });
 const STALE = 'дані станції не оновлюються';
+const WAITING = 'чекаю на дані від станції';
 const NO_LINK = 'немає з’єднання з EcoFlow';
 const KEY_8521 = 'EcoFlow не прийняв підпис запиту (8521). Перевірте Secret Key і час на комп’ютері.';
 
@@ -74,7 +75,9 @@ function setup(o: { devices?: Step<EcoflowDevice[]>[]; quota?: Step<Record<strin
 
 const flush = () => vi.advanceTimersByTimeAsync(0);
 const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms);
-const send = (c: FakeClient, topic: string, body: unknown) => c.emit('message', topic, Buffer.from(JSON.stringify(body)));
+/** mqtt.js passes the PUBLISH packet as the third argument. */
+const send = (c: FakeClient, topic: string, body: unknown, packet = { retain: false }) =>
+  c.emit('message', topic, Buffer.from(JSON.stringify(body)), packet);
 const inv = (acInVol: number) => ({ typeCode: 'invStatus', params: { acInVol } });
 const status = (s: 0 | 1) => ({ params: { status: s } });
 const authError = () => Object.assign(new Error('Connection refused: Not authorized'), { code: 5 });
@@ -110,7 +113,7 @@ test('MQTT quota message makes data fresh → on with detail', async () => {
   const { mqtt, begin, last, readings } = setup({ quota: [vol(0)] });
   await begin();
   // The cached quota/all says 0 V, but one answer alone is not fresh.
-  expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: STALE });
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: WAITING });
   const c = mqtt.last();
   c.emit('connect');
   await advance(10 * SEC);
@@ -127,7 +130,8 @@ test('MQTT quota message makes data fresh → on with detail', async () => {
 test('identical quota/all without MQTT goes stale after 10 min', async () => {
   const { begin, last, readings } = setup({ quota: [vol(229000), vol(229100), vol(229200), vol(229300)] });
   await begin();
-  expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: STALE });
+  // Before any sign of fresh data the source is waiting (ruling R15); "stale" is for data that was fresh.
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: WAITING });
   await advance(MIN);
   expect(last()).toEqual({ power: 'on', observedAt: t(MIN), detail: 'на вході 229 В' });
   await advance(2 * MIN);
@@ -148,7 +152,7 @@ test('first quota/all alone is not fresh', async () => {
   mqtt.last().emit('connect');
   await advance(2 * MIN);
   expect(readings.length).toBeGreaterThanOrEqual(3);
-  expect(readings.every(r => r.power === 'unknown' && r.reason === STALE)).toBe(true);
+  expect(readings.every(r => r.power === 'unknown' && r.reason === WAITING)).toBe(true);
 });
 
 test('device offline → unknown, never off', async () => {
@@ -263,7 +267,7 @@ test('network error → unknown «немає з’єднання з EcoFlow»; p
   expect(last()).toEqual({ power: 'unknown', observedAt: t(MIN), reason: NO_LINK });
   await advance(MIN);
   expect(api.getQuotaAll).toHaveBeenCalledTimes(3);
-  expect(last()).toEqual({ power: 'unknown', observedAt: t(2 * MIN), reason: STALE });
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(2 * MIN), reason: WAITING });
   await advance(MIN);
   expect(last()).toEqual({ power: 'on', observedAt: t(3 * MIN), detail: 'на вході 229 В' });
   // Fresh only through quota/all (no MQTT): a new failure decides at once.
@@ -368,7 +372,7 @@ test('key error slows HTTP polling to 15 min', async () => {
   expect(mqtt.connect).toHaveBeenCalledTimes(1);
   await advance(MIN);
   expect(api.getQuotaAll).toHaveBeenCalledTimes(4);
-  expect(last()).toEqual({ power: 'unknown', observedAt: t(31 * MIN), reason: STALE });
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(31 * MIN), reason: WAITING });
   expect(log.warn).toHaveBeenCalledWith('ecoflow: device list failed', '8521');
   expect(log.warn).toHaveBeenCalledWith('ecoflow: quota/all failed', '8521');
   expect(log.warn).toHaveBeenCalledWith('ecoflow: certification failed', '8521');
@@ -389,13 +393,15 @@ test('MQTT reconnect backoff 10,20,40 s; auth failure refreshes certification on
   expect(api.getCertification).toHaveBeenCalledTimes(1);
   expect(log.warn).not.toHaveBeenCalledWith('ecoflow: mqtt closed');
 
-  // A successful connect resets the ladder.
+  // A CONNACK alone does not reset the ladder (ruling R12): the session has not proved itself.
   const c4 = mqtt.last();
   c4.emit('connect');
   c4.emit('close');
   expect(c4.end).toHaveBeenCalledWith(true);
   expect(log.warn).toHaveBeenCalledWith('ecoflow: mqtt closed');
-  await advance(10 * SEC);
+  await advance(80 * SEC - 1);
+  expect(mqtt.connect).toHaveBeenCalledTimes(4);
+  await advance(1);
   expect(mqtt.connect).toHaveBeenCalledTimes(5);
 
   // Not authorized: one new certificate and an immediate try (mqtt.js emits error, then close).
@@ -421,6 +427,155 @@ test('MQTT reconnect backoff 10,20,40 s; auth failure refreshes certification on
   expect(mqtt.connect).toHaveBeenCalledTimes(7);
 
   expect(logged(log)).not.toContain('pw-secret-42');
+});
+
+/** Drops the current client before it connects `times` times, so the backoff ladder is past its first step. */
+async function climb(mqtt: ReturnType<typeof setup>['mqtt'], times: number) {
+  for (const s of [10, 20, 40].slice(0, times)) {
+    mqtt.last().emit('close');
+    await advance(s * SEC);
+  }
+}
+/** Drops the current client and returns the delay before the next connect, in seconds. */
+async function nextDelay(mqtt: ReturnType<typeof setup>['mqtt'], drop: (c: FakeClient) => void = c => c.emit('close')) {
+  const n = mqtt.connect.mock.calls.length;
+  drop(mqtt.last());
+  for (let s = 1; s <= 300; s++) {
+    await advance(SEC);
+    if (mqtt.connect.mock.calls.length > n) return s;
+  }
+  return Infinity;
+}
+
+test('a session that connects and drops without proving itself climbs the backoff to its cap (R12)', async () => {
+  const { mqtt, begin } = setup();
+  await begin();
+  const delays: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    const c = mqtt.last();
+    c.emit('connect');
+    // None of these prove the session: /status, garbage on /quota, a retained /quota replay.
+    send(c, STATUS_TOPIC, status(1));
+    c.emit('message', QUOTA_TOPIC, Buffer.from('not json'), { retain: false });
+    send(c, QUOTA_TOPIC, inv(229345), { retain: true });
+    delays.push(await nextDelay(mqtt));
+  }
+  expect(delays).toEqual([10, 20, 40, 80, 160, 300, 300]);
+});
+
+test('a live /quota message proves the session: the next drop waits 10 s again (R12)', async () => {
+  const { mqtt, begin } = setup();
+  await begin();
+  await climb(mqtt, 2);
+  const c = mqtt.last();
+  c.emit('connect');
+  send(c, QUOTA_TOPIC, inv(229345));
+  expect(await nextDelay(mqtt)).toBe(10);
+  expect(await nextDelay(mqtt)).toBe(20);
+});
+
+test('60 s of being connected proves the session; 1 ms less does not (R12)', async () => {
+  const { mqtt, begin } = setup();
+  await begin();
+  await climb(mqtt, 2);
+  mqtt.last().emit('connect');
+  await advance(60 * SEC - 1);
+  expect(await nextDelay(mqtt)).toBe(40);
+  mqtt.last().emit('connect');
+  await advance(60 * SEC);
+  expect(await nextDelay(mqtt)).toBe(10);
+});
+
+test('the fresh-certificate retry is earned back by a proven session, not by a CONNACK (R12)', async () => {
+  const { api, mqtt, begin } = setup();
+  await begin();
+  const calls = () => [api.getCertification.mock.calls.length, mqtt.connect.mock.calls.length];
+  mqtt.last().emit('error', authError()); // refused: one new certificate, tried at once
+  await flush();
+  expect(calls()).toEqual([2, 2]);
+  mqtt.last().emit('connect'); // accepted, then dropped before proving itself
+  expect(await nextDelay(mqtt)).toBe(10);
+  mqtt.last().emit('error', authError()); // refused again: no second new certificate, the 30 min pause
+  await flush();
+  expect(calls()).toEqual([2, 3]);
+  await advance(MQTT_AUTH_PAUSE_MS);
+  expect(calls()).toEqual([3, 4]);
+  const c4 = mqtt.last();
+  c4.emit('connect');
+  send(c4, QUOTA_TOPIC, inv(229345));
+  expect(await nextDelay(mqtt)).toBe(10);
+  mqtt.last().emit('error', authError()); // after a proven session a refusal earns a new certificate again
+  await flush();
+  expect(calls()).toEqual([4, 6]);
+});
+
+test.each([4, 134, 135])('CONNACK %i is an auth refusal too: one new certificate, then a 30 min pause', async code => {
+  const { api, mqtt, begin } = setup();
+  await begin();
+  const refused = () => Object.assign(new Error('Connection refused'), { code });
+  mqtt.last().emit('error', refused());
+  mqtt.last().emit('close');
+  await flush();
+  expect(api.getCertification).toHaveBeenCalledTimes(2);
+  expect(mqtt.connect).toHaveBeenCalledTimes(2);
+  mqtt.last().emit('error', refused());
+  await advance(MQTT_AUTH_PAUSE_MS - 1);
+  expect(mqtt.connect).toHaveBeenCalledTimes(2);
+  await advance(1);
+  expect(api.getCertification).toHaveBeenCalledTimes(3);
+  expect(mqtt.connect).toHaveBeenCalledTimes(3);
+});
+
+test('a retained /quota message is merged but is no sign of fresh data (R14)', async () => {
+  const { mqtt, begin, last } = setup({ quota: [vol(0)] });
+  await begin();
+  const c = mqtt.last();
+  c.emit('connect');
+  await advance(10 * SEC);
+  send(c, QUOTA_TOPIC, inv(229345), { retain: true });
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(10 * SEC), reason: WAITING });
+  // A live message of another key makes the data fresh; the retained voltage is part of the map.
+  await advance(10 * SEC);
+  send(c, QUOTA_TOPIC, { typeCode: 'pdStatus', params: { soc: 80 } });
+  expect(last()).toEqual({ power: 'on', observedAt: t(20 * SEC), detail: 'на вході 229 В' });
+  // The retained key is not one MQTT sent while fresh (R8): the next quota/all writes over it.
+  await advance(40 * SEC);
+  expect(last()).toEqual({ power: 'off', observedAt: t(20 * SEC), detail: 'на вході 0 В' });
+});
+
+test('a retained /quota message is not online evidence and not fresh MQTT data against an HTTP error (R14)', async () => {
+  const a = setup();
+  await a.begin();
+  const c = a.mqtt.last();
+  c.emit('connect');
+  send(c, STATUS_TOPIC, status(0));
+  send(c, QUOTA_TOPIC, inv(229345), { retain: true });
+  expect(a.last()).toEqual({ power: 'unknown', observedAt: t(0), reason: 'станція не в мережі' });
+  await advance(10 * SEC);
+  send(c, QUOTA_TOPIC, inv(229345));
+  expect(a.last()).toEqual({ power: 'on', observedAt: t(10 * SEC), detail: 'на вході 229 В' });
+
+  const b = setup({ quota: [new EcoflowApiError('1006', 'current device is not allowed to get device info')] });
+  await b.begin();
+  const d = b.mqtt.last();
+  d.emit('connect');
+  send(d, QUOTA_TOPIC, inv(229345), { retain: true });
+  expect(b.last()).toEqual({ power: 'unknown', observedAt: t(10 * SEC), reason: new EcoflowApiError('1006').message });
+});
+
+test('a retained replay does not overwrite a key live MQTT sent while its data is fresh (R8, R14)', async () => {
+  const { mqtt, begin, last } = setup({ quota: [vol(229345)] });
+  await begin();
+  const c1 = mqtt.last();
+  c1.emit('connect');
+  send(c1, QUOTA_TOPIC, inv(0));
+  expect(last()).toEqual({ power: 'off', observedAt: t(0), detail: 'на вході 0 В' });
+  c1.emit('close');
+  await advance(10 * SEC);
+  const c2 = mqtt.last();
+  c2.emit('connect');
+  send(c2, QUOTA_TOPIC, inv(229345), { retain: true }); // the broker's older value, replayed on subscribe
+  expect(last()).toEqual({ power: 'off', observedAt: t(0), detail: 'на вході 0 В' });
 });
 
 test('a server echo of the keys never reaches a reading or a log line', async () => {
@@ -483,6 +638,12 @@ test('stop() during a request drops the late result; pending certificate or retr
   c.src.stop();
   await advance(MIN);
   expect(c.mqtt.connect).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+
+  const d = setup();
+  await d.begin();
+  d.mqtt.last().emit('connect'); // the 60 s session-proof timer is running
+  d.src.stop();
   expect(vi.getTimerCount()).toBe(0);
 });
 

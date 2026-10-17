@@ -9,15 +9,16 @@ import { detectGrid } from './grid';
 import { normalizeQuotaMessage, parseStatusMessage } from './mqtt-message';
 
 export const QUOTA_POLL_MS = 60_000, DEVICES_POLL_MS = 5 * 60_000, KEY_ERROR_POLL_MS = 15 * 60_000,
-  FRESH_MS = 10 * 60_000, MQTT_AUTH_PAUSE_MS = 30 * 60_000;
+  FRESH_MS = 10 * 60_000, MQTT_AUTH_PAUSE_MS = 30 * 60_000, SESSION_PROOF_MS = 60_000;
 export const MQTT_BACKOFF_MS = [10_000, 20_000, 40_000, 80_000, 160_000, 300_000];
 
 export interface MqttClientLike {
   on(event: 'connect', cb: () => void): void;
-  on(event: 'message', cb: (topic: string, payload: Buffer) => void): void;
+  /** mqtt.js passes the PUBLISH packet as the third argument. */
+  on(event: 'message', cb: (topic: string, payload: Buffer, packet?: { retain?: boolean }) => void): void;
   on(event: 'close', cb: () => void): void;
   on(event: 'error', cb: (err: Error & { code?: number }) => void): void;
-  subscribe(topics: string[], opts: { qos: 1 }): void;
+  subscribe(topics: string[], opts: { qos: 1 }, cb?: (err: Error | null, granted?: { topic: string; qos: number }[]) => void): void;
   end(force?: boolean): void;
 }
 export type MqttConnect = (url: string, opts: {
@@ -30,7 +31,8 @@ interface Poll { every: number; label: string; timer?: Timer; busy: boolean; slo
 /** A station-online flag and when it last changed (a repeat of the same value is no news). */
 interface Seen { online: boolean; changedAt: number }
 
-const NOT_AUTHORIZED = 5;
+/** CONNACK refusals a new certificate may cure: 4/5 bad credentials / not authorized (MQTT 3.1.1), 134/135 (MQTT 5). */
+const AUTH_REFUSED = new Set([4, 5, 134, 135]);
 
 /** Log-safe: the code only, never the message (it can carry the server's own text). */
 function errorCode(err: unknown): string {
@@ -81,6 +83,7 @@ export class EcoflowSource implements ActualStateSource {
   private attempts = 0;
   private authRetried = false;
   private retryTimer: Timer | undefined;
+  private proofTimer: Timer | undefined;
 
   constructor(
     /** `keys` only scrub server text; the requests themselves are signed by `api`. */
@@ -104,6 +107,7 @@ export class EcoflowSource implements ActualStateSource {
     clearInterval(this.polls.devices.timer);
     clearInterval(this.polls.quota.timer);
     clearTimeout(this.retryTimer);
+    clearTimeout(this.proofTimer);
     const client = this.client;
     this.client = undefined;
     this.connected = false;
@@ -177,11 +181,24 @@ export class EcoflowSource implements ActualStateSource {
     // The cloud serves its cache even for an offline station: only a change in content is a sign of life.
     if (this.lastQuota !== undefined && content !== this.lastQuota) this.freshAt = now;
     this.lastQuota = content;
-    // Ruling R8: the cache can lag MQTT, and MQTT pushes a key only when it changes, so while MQTT is fresh its keys hold;
-    // once it is stale, quota/all wins every key again.
+    this.mergeLagging(q, now);
+    this.logUnsupported();
+  }
+
+  /**
+   * Ruling R8: quota/all and retained replays can lag MQTT, and MQTT pushes a key only when it changes, so while MQTT is
+   * fresh its keys hold; once it is stale, these values win every key again.
+   */
+  private mergeLagging(q: Record<string, unknown>, now: number): void {
     if (!this.mqttFresh(now)) this.mqttKeys.clear();
     for (const [k, v] of Object.entries(q)) if (!this.mqttKeys.has(k)) this.map[k] = v;
+  }
+
+  /** Ruling R14: the broker's replay of an older message, merged like quota/all — no freshness, online evidence or proof. */
+  private applyRetainedQuota(q: Record<string, unknown>): void {
+    this.mergeLagging(q, this.now());
     this.logUnsupported();
+    this.evaluate();
   }
 
   private applyMqttQuota(q: Record<string, unknown>): void {
@@ -194,6 +211,7 @@ export class EcoflowSource implements ActualStateSource {
     this.freshAt = this.mqttFreshAt = now;
     // A station that pushes quotas is online, whatever an older /status said.
     this.status = { online: true, changedAt: now };
+    this.sessionProven();
     this.logUnsupported();
     this.evaluate();
   }
@@ -244,7 +262,8 @@ export class EcoflowSource implements ActualStateSource {
     if (err !== undefined && !this.mqttFresh(now)) return unknown(this.safe(errorReason(err)));
     if (this.found === false) return unknown('станцію не знайдено в акаунті');
     if (this.online() === false) return unknown('станція не в мережі');
-    if (this.freshAt === undefined || now - this.freshAt > FRESH_MS) return unknown('дані станції не оновлюються');
+    if (this.freshAt === undefined) return unknown('чекаю на дані від станції');
+    if (now - this.freshAt > FRESH_MS) return unknown('дані станції не оновлюються');
     const v = detectGrid(this.map);
     if (v.power === 'unknown') return unknown(v.reason);
     return { power: v.power, observedAt: new Date(this.freshAt).toISOString(), detail: v.detail };
@@ -283,18 +302,20 @@ export class EcoflowSource implements ActualStateSource {
       if (this.client !== client) return;
       this.connected = true;
       this.statusThisSession = false;
-      this.attempts = 0;
-      this.authRetried = false;
+      // Ruling R12: a CONNACK alone resets nothing — a broker that accepts and then drops would loop every 10 s.
+      clearTimeout(this.proofTimer);
+      this.proofTimer = setTimeout(() => this.sessionProven(), SESSION_PROOF_MS);
       this.deps.log.info('ecoflow: mqtt connected');
       client.subscribe([quotaTopic, statusTopic], { qos: 1 });
     });
-    client.on('message', (topic, payload) => {
+    client.on('message', (topic, payload, packet) => {
       if (this.client !== client) return;
       let msg: unknown;
       try { msg = JSON.parse(payload.toString()); } catch { return; }
       if (topic === quotaTopic) {
         const q = normalizeQuotaMessage(msg);
-        if (q) this.applyMqttQuota(q);
+        if (q && packet?.retain) this.applyRetainedQuota(q);
+        else if (q) this.applyMqttQuota(q);
       } else if (topic === statusTopic) {
         const s = parseStatusMessage(msg);
         if (s !== null) this.applyStatus(s);
@@ -310,10 +331,11 @@ export class EcoflowSource implements ActualStateSource {
     this.client = undefined;
     const wasConnected = this.connected;
     this.connected = false;
+    clearTimeout(this.proofTimer);
     client.end(true);
     if (err) this.deps.log.warn('ecoflow: mqtt error', err.code ?? err.name);
     if (wasConnected) this.deps.log.warn('ecoflow: mqtt closed');
-    if (err?.code === NOT_AUTHORIZED) {
+    if (err?.code !== undefined && AUTH_REFUSED.has(err.code)) {
       this.cert = undefined;
       if (!this.authRetried) {
         this.authRetried = true;
@@ -326,6 +348,13 @@ export class EcoflowSource implements ActualStateSource {
     } else this.backoff();
     // Without MQTT the device list counts for "online" again.
     if (wasConnected) this.evaluate();
+  }
+
+  /** The session delivered (a live /quota message, or SESSION_PROOF_MS connected): reconnects start over. */
+  private sessionProven(): void {
+    clearTimeout(this.proofTimer);
+    this.attempts = 0;
+    this.authRetried = false;
   }
 
   private backoff(): void {
