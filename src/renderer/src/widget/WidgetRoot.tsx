@@ -11,10 +11,18 @@ export function WidgetRoot({ api }: { api: RendererApi }) {
 
   useEffect(() => {
     let alive = true;
-    void api.getState().then(s => { if (alive) setState(s); });
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const load = () => {
+      api.getState().then(
+        // A pushed state is always newer than the initial fetch, so never overwrite it.
+        s => { if (alive) setState(prev => prev ?? s); },
+        (e: unknown) => { console.error('widget getState failed', e); if (alive) retry = setTimeout(load, 2000); },
+      );
+    };
+    load();
     const offState = api.onState(setState);
     const offBg = api.onBackground(setBackground);
-    return () => { alive = false; offState(); offBg(); };
+    return () => { alive = false; clearTimeout(retry); offState(); offBg(); };
   }, [api]);
 
   useEffect(() => {

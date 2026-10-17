@@ -40,3 +40,23 @@ test('stale, line changed, no address', () => {
   rerender(<Widget state={{ ...st(), settings: DEFAULT_SETTINGS, snapshot: null }} now={now} background={{ kind: 'tint' }} />);
   expect(screen.getByText('Налаштуйте адресу')).toBeInTheDocument();
 });
+
+test.each(['compact', 'ring', 'timeline'] as const)('%s: overflow protection on long text', style => {
+  const stale = new Date('2026-10-17T09:40:00Z');
+  const { container, rerender } = render(<Widget state={st({}, style)} now={stale} background={{ kind: 'tint' }} />);
+  const cap = container.querySelector('.w-cap')!;
+  expect(cap).toHaveAttribute('title', expect.stringContaining('дані застаріли'));
+  expect(cap.querySelector('.w-ellipsis')).not.toBeNull();
+  expect(cap.querySelector('.w-stale')).toHaveTextContent('дані застаріли');
+  rerender(<Widget state={st({ lineChanged: true }, style)} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('.w-cap-warn')).toHaveAttribute('title', 'Схема підключення змінилась — перевірте лінію');
+});
+test('compact next line is ellipsized with full title', () => {
+  const { container } = render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
+  const next = container.querySelector('.w-next')!;
+  expect(next).toHaveClass('w-ellipsis'); expect(next).toHaveAttribute('title', 'Вимкнення о 15:00 · через 3 год 10 хв');
+});
+test('snapshot null: no caption, no now dot', () => {
+  const { container } = render(<Widget state={st({ snapshot: null }, 'ring')} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('.w-cap')).toBeNull(); expect(container.querySelector('circle[r="6"]')).toBeNull();
+});

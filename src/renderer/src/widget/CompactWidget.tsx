@@ -6,7 +6,7 @@ export function CompactWidget({ view, lineChanged }: { view: WidgetView; lineCha
   return (
     <>
       <Status view={view} />
-      <div className="w-next">{view.nextText}</div>
+      <div className="w-next w-ellipsis" title={view.nextText}>{view.nextText}</div>
       <div className="w-compact-bar">
         <DayBar day={view.today} nowFraction={view.nowFraction} />
         <DayTicks />

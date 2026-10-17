@@ -23,7 +23,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-bg-tint .w-tint { background: var(--tint-flat); }
 .w-content { position: relative; z-index: 1; height: 100%; box-sizing: border-box; }
 .w-compact .w-content { padding: 16px 18px 14px; }
-.w-ring .w-content { padding: 14px 14px 10px; }
+.w-ring .w-content { padding: 12px 14px 8px; }
 .w-timeline .w-content { padding: 16px 18px 14px; }
 
 .w-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; background: #9aa0b4; }
@@ -54,8 +54,9 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-compact .w-content > .w-muted { margin-top: 8px; }
 
 .w-tl-head { display: flex; justify-content: space-between; align-items: flex-start; }
-.w-tl-count { text-align: right; }
-.w-tl-text { max-width: 170px; }
+.w-tl-head > div:first-child { flex-shrink: 0; }
+.w-tl-count { text-align: right; min-width: 0; margin-left: 10px; }
+.w-tl-text { max-width: 200px; }
 .w-tl-row { display: flex; align-items: center; gap: 8px; }
 .w-tl-row > .w-ticks { margin-top: 4px; }
 .w-row-label { font-size: 11px; color: var(--muted); width: 74px; flex-shrink: 0; }
@@ -65,5 +66,15 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-svg-label { fill: var(--tick); }
 .w-svg-main { fill: var(--fg); }
 .w-svg-sub { fill: var(--muted); }
-.w-ring-badge { text-align: center; margin-top: 2px; }
 .w-ring-caption { text-align: center; margin-top: 2px; }
+
+/* Everything must fit the fixed window: single lines ellipsize, the stale mark never shrinks. */
+.w-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.w-cap { display: flex; }
+.w-stale { flex-shrink: 0; white-space: pre; }
+.w-cap-warn { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-ring .w-cap-warn { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.w-status.w-long { font-size: 19px; }
+.w-ring .w-cap { display: block; text-align: center; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.w-ring .w-cap .w-ellipsis { display: inline; white-space: normal; overflow: visible; }
+.w-tl-text.w-ellipsis { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

@@ -17,10 +17,10 @@ export function TimelineWidget({ view, lineChanged }: { view: WidgetView; lineCh
           {view.countdownShort ? (
             <>
               <div className="w-big">{view.countdownShort}</div>
-              <div className="w-muted">{view.countdownCaption}</div>
+              <div className="w-muted w-ellipsis" title={view.countdownCaption}>{view.countdownCaption}</div>
             </>
           ) : (
-            <div className="w-muted w-tl-text">{view.nextText}</div>
+            <div className="w-muted w-tl-text w-ellipsis" title={view.nextText}>{view.nextText}</div>
           )}
         </div>
       </div>
