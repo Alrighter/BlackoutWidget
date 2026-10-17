@@ -1,0 +1,69 @@
+:root { --fg: #fff; --fg-soft: rgba(255,255,255,0.92); --muted: rgba(255,255,255,0.68); --tick: rgba(255,255,255,0.55);
+  --cell: rgba(255,255,255,0.2); --hatch-a: rgba(255,255,255,0.12); --hatch-b: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.28); --hl: rgba(255,255,255,0.35);
+  --tint-image: rgba(20,22,40,0.28); --tint-flat: rgba(30,30,60,0.45); --warn: #ffc23d; }
+@media (prefers-color-scheme: light) {
+  :root { --fg: #1a1c2e; --fg-soft: rgba(26,28,46,0.92); --muted: rgba(26,28,46,0.68); --tick: rgba(26,28,46,0.55);
+    --cell: rgba(26,28,46,0.16); --hatch-a: rgba(26,28,46,0.14); --hatch-b: rgba(26,28,46,0.04);
+    --border: rgba(255,255,255,0.5); --hl: rgba(255,255,255,0.6);
+    --tint-image: rgba(255,255,255,0.16); --tint-flat: rgba(245,245,250,0.55); --warn: #b45f00; }
+}
+html, body, #root { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+body { user-select: none; -webkit-user-select: none; cursor: default; }
+.w-root { width: 100%; height: 100%; }
+
+.w-card {
+  position: relative; box-sizing: border-box; width: 100%; height: 100%; overflow: hidden;
+  font-family: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: var(--fg); border: 1px solid var(--border); border-radius: 22px;
+  box-shadow: inset 0 1px 0 var(--hl);
+}
+.w-bg { position: absolute; inset: -30px; background-size: cover; background-position: center; filter: blur(18px) saturate(160%); }
+.w-tint { position: absolute; inset: 0; background: var(--tint-image); }
+.w-bg-tint .w-tint { background: var(--tint-flat); }
+.w-content { position: relative; z-index: 1; height: 100%; box-sizing: border-box; }
+.w-compact .w-content { padding: 16px 18px 14px; }
+.w-ring .w-content { padding: 14px 14px 10px; }
+.w-timeline .w-content { padding: 16px 18px 14px; }
+
+.w-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; background: #9aa0b4; }
+.w-dot.on { background: #5dffa8; box-shadow: 0 0 10px #5dffa8; }
+.w-dot.off, .w-dot.emergency { background: #ff5b5b; box-shadow: 0 0 10px #ff5b5b; }
+.w-dot.maybe-off { background: #ffc23d; box-shadow: 0 0 10px #ffc23d; }
+.w-status { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; line-height: 1.25; }
+.w-muted { color: var(--muted); font-size: 12px; line-height: 1.25; }
+.w-muted.w-warn { color: var(--warn); }
+.w-warn { color: var(--warn); }
+.w-next { font-size: 14px; margin-top: 4px; color: var(--fg-soft); }
+.w-big { font-size: 22px; font-weight: 650; line-height: 1.25; }
+.w-badge { font-size: 11px; font-weight: 650; letter-spacing: 0; padding: 2px 8px; border-radius: 999px; background: rgba(255,77,77,0.85); color: #fff; }
+
+.w-bar { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; position: relative; flex: 1; }
+.w-hour { display: grid; grid-template-columns: 1fr 1fr; height: 14px; border-radius: 3px; overflow: hidden; background: var(--cell); }
+.w-half.off { background: linear-gradient(180deg, #ffc23d, #ff8a1f); }
+.w-half.maybe { background: repeating-linear-gradient(45deg, #ff9f2a 0 3px, rgba(255,159,42,0.3) 3px 6px); }
+.w-half.unk { background: repeating-linear-gradient(45deg, var(--hatch-a) 0 3px, var(--hatch-b) 3px 6px); }
+.w-bar-empty { display: flex; align-items: center; justify-content: center; height: 14px; border-radius: 3px;
+  background: repeating-linear-gradient(45deg, var(--hatch-a) 0 3px, var(--hatch-b) 3px 6px);
+  font-size: 10px; color: var(--muted); }
+.w-now { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px #fff; }
+.w-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--tick); margin-top: 4px; flex: 1; }
+
+.w-compact-bar { margin-top: 14px; }
+.w-compact-bar > .w-ticks { flex: none; }
+.w-compact .w-content > .w-muted { margin-top: 8px; }
+
+.w-tl-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.w-tl-count { text-align: right; }
+.w-tl-text { max-width: 170px; }
+.w-tl-row { display: flex; align-items: center; gap: 8px; }
+.w-tl-row > .w-ticks { margin-top: 4px; }
+.w-row-label { font-size: 11px; color: var(--muted); width: 74px; flex-shrink: 0; }
+.w-timeline .w-content > .w-muted { margin-top: 6px; }
+
+.w-svg-label, .w-svg-main { font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
+.w-svg-label { fill: var(--tick); }
+.w-svg-main { fill: var(--fg); }
+.w-svg-sub { fill: var(--muted); }
+.w-ring-badge { text-align: center; margin-top: 2px; }
+.w-ring-caption { text-align: center; margin-top: 2px; }
