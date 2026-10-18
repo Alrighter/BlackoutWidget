@@ -1,9 +1,4 @@
-import type { WidgetPosition, WidgetStyle } from '../../shared/types';
-
-/** Widget window size per style, in DIP. */
-export const WIDGET_SIZES: Record<WidgetStyle, { width: number; height: number }> = {
-  compact: { width: 290, height: 150 }, ring: { width: 236, height: 260 }, timeline: { width: 400, height: 200 },
-};
+import type { WidgetPosition } from '../../shared/types';
 
 export interface DisplayLike { id: number; workArea: { x: number; y: number; width: number; height: number } }
 

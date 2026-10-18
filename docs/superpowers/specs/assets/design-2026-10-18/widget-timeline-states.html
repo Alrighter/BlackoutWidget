@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="uk"><head>
+<meta charset="utf-8">
+<title>Таймлайн — усі стани</title>
+<script src="2b858b64-0823-45d2-9f58-e8a041fbe3ce"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 2252px; min-height: 3400px; box-sizing: border-box; padding: 48px; background: #121419; color: #eef0f6; font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; display: flex; flex-direction: column; gap: 12px; -webkit-font-smoothing: antialiased">
+  <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px">
+    <h1 style="margin: 0; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.6px">Таймлайн · 400×200</h1>
+    <p style="margin: 0; font-size: 15px; line-height: 22px; color: #a7adbd">Зверху статус і великий відлік, нижче дві доби. Якщо графік на завтра ще не опубліковано — штриховка з написом. Довгий підпис обрізається, «оновлено …» видно завжди.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: 220px repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end">
+    <div></div>
+    <sc-for list="{{cols}}" as="c" hint-placeholder-count="4">
+      <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 4px"><span style="font-size: 14px; font-weight: 600">{{c.name}}</span><span style="font-size: 13px; color: #9ba1b3">{{c.sub}}</span></div>
+    </sc-for>
+  </div>
+  <sc-for list="{{rows}}" as="r" hint-placeholder-count="11">
+    <div style="display: grid; grid-template-columns: 220px repeat(4, minmax(0, 1fr)); gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 20px 8px 0 0">
+        <span style="font-size: 15px; line-height: 20px; font-weight: 650">{{r.title}}</span>
+        <span style="font-size: 13px; line-height: 18px; color: #9ba1b3; text-wrap: pretty">{{r.note}}</span>
+      </div>
+      <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="4">
+        <div style="height: 276px; box-sizing: border-box; padding-top: 48px; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: flex-start; background: {{c.wp}}">
+          <dc-import name="Timeline" scenario="{{c.key}}" theme="{{c.theme}}" hint-size="400px,200px"></dc-import>
+        </div>
+      </sc-for>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:2252,&quot;height&quot;:3400}}">
+var WP = {
+  light: 'radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)',
+  dark: 'radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)',
+  busy: 'repeating-linear-gradient(118deg, rgba(255, 255, 255, 0) 0px 16px, rgba(255, 255, 255, 0.6) 16px 19px, rgba(0, 0, 0, 0) 19px 36px, rgba(0, 0, 0, 0.38) 36px 39px), conic-gradient(from 200deg at 38% 46%, #ff4e50, #fc913a, #f9d423, #34e89e, #0f9bff, #8e54e9, #ff4e50)'
+};
+var COLS = [
+  { theme: 'light', wp: WP.light, name: 'Світла тема', sub: 'світлі шпалери' },
+  { theme: 'light', wp: WP.busy, name: 'Світла тема', sub: 'строкаті шпалери' },
+  { theme: 'dark', wp: WP.dark, name: 'Темна тема', sub: 'темні шпалери' },
+  { theme: 'dark', wp: WP.busy, name: 'Темна тема', sub: 'строкаті шпалери' }
+];
+var ROWS = [
+  ['on', 'Світло є', 'Обидві доби опубліковано'],
+  ['off', 'Світла немає', 'Завтра — «ще не опубліковано»'],
+  ['maybe', 'Можливе відключення', 'Штриховка в смужці'],
+  ['emergency', 'Аварійне', 'Червоні клітинки поверх графіка'],
+  ['nodata', 'Немає даних', 'Сьогодні невідомо, завтра не опубліковано'],
+  ['stale', 'Дані застаріли', 'Позначка поруч з «оновлено 14:50»'],
+  ['warning', 'Попередження', 'Окремий рядок під статусом'],
+  ['nochange', 'Без змін до кінця графіка', 'Відлік не показується'],
+  ['ecoMatch', 'EcoFlow · збігається', 'Тонка лінія фактичних під «Сьогодні»'],
+  ['ecoMismatch', 'EcoFlow · не за графіком', 'Видно коротке повернення світла о 14:26–14:32'],
+  ['ecoOffline', 'EcoFlow · джерело невідоме', 'З 10:20 фактичний стан невідомий — штриховка']
+];
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      cols: COLS,
+      rows: ROWS.map(function (r) {
+        return { title: r[1], note: r[2], cells: COLS.map(function (c) { return { key: r[0], theme: c.theme, wp: c.wp }; }) };
+      })
+    };
+  }
+}
+</script>
+
+
+</body></html>

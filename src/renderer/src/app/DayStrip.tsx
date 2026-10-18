@@ -1,18 +1,22 @@
+import type { CSSProperties } from 'react';
+import type { DayCell } from '../../../shared/day-cells';
 import type { Slot } from '../../../shared/types';
 
-const CLASS: Record<Slot, string> = { on: 'on', off: 'off', 'maybe-off': 'maybe', unknown: 'unknown' };
+const KIND: Record<Slot, string> = { on: 'on', off: 'off', 'maybe-off': 'maybe', unknown: 'unknown' };
+const pct = (f: number): string => `${Math.round(f * 1000) / 10}%`;
 
-/** 24 hour columns, each split into two half-hour cells. */
-export function DayStrip({ slots, labels = false }: { slots: Slot[]; labels?: boolean }) {
+/** 24 hour columns, each split into two half-hour cells (`dayCells`: past ones dimmed, emergency ones red). */
+export function DayStrip({ cells }: { cells: DayCell[] }) {
   return (
-    <div className={`strip${labels ? ' strip-labeled' : ''}`}>
+    <div className="day-strip">
       {Array.from({ length: 24 }, (_, h) => (
-        <div className="hour" key={h}>
-          <div className="halves">
-            <span className={`half ${CLASS[slots[h * 2] ?? 'unknown']}`} />
-            <span className={`half ${CLASS[slots[h * 2 + 1] ?? 'unknown']}`} />
-          </div>
-          {labels && <span className="hour-label">{String(h).padStart(2, '0')}-{String(h + 1).padStart(2, '0')}</span>}
+        <div className="day-hour" key={h}>
+          {[cells[h * 2], cells[h * 2 + 1]].map((c, i) => (
+            <span key={i} data-cell={c.emergency ? 'emergency' : c.slot}
+              className={`day-cell ${c.emergency ? 'emergency' : KIND[c.slot]}${c.past ? ' bw-cell--past' : ''}`}
+              style={c.offFrom === undefined ? undefined
+                : { '--off-from': pct(c.offFrom), '--off-to': pct(c.offTo ?? 1) } as CSSProperties} />
+          ))}
         </div>
       ))}
     </div>

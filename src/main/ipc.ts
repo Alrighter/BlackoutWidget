@@ -24,6 +24,8 @@ export interface IpcDeps {
   endMoveMode(): void;
   actualActions: ActualActions;
   openEcoflowHelp(): void;
+  /** The wizard's «Відкрити графік на сайті ДТЕК» (D11): a fixed address, nothing from the renderer. */
+  openDtekSite(): void;
 }
 
 /** One of the app's own windows; the hidden DTEK session window never gets app state. */
@@ -90,6 +92,7 @@ export function registerIpc(deps: IpcDeps): void {
   });
   ipcMain.on(IPC.widgetMoveDone, () => deps.endMoveMode());
   ipcMain.on(IPC.openEcoflowHelp, () => deps.openEcoflowHelp());
+  ipcMain.on(IPC.openDtekSite, () => deps.openDtekSite());
 }
 
 export function broadcastState(state: AppState, targets: StateTarget[]): void {

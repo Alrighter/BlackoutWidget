@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="uk"><head>
+<meta charset="utf-8">
+<title>Віджет «Циферблат»</title>
+<script src="f9217742-bda5-41f5-ae57-a3a71c90d45f"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 236px; height: 260px; box-sizing: border-box; padding: 12px 14px; border-radius: 26px; position: relative; display: flex; flex-direction: column; align-items: center; font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased; color: {{ink}}; background: {{cardBg}}; border: 1px solid {{edge}}; box-shadow: {{shadow}}; backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%)">
+  <div style="position: relative; flex: none; width: {{ringPx}}; height: {{ringPx}}">
+    <div style="position: absolute; inset: 0; border-radius: 50%; background: {{ringBg}}; -webkit-mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 12px), #000000 calc(100% - 11.5px)); mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 12px), #000000 calc(100% - 11.5px))"></div>
+    <sc-if value="{{hasActual}}" hint-placeholder-val="{{false}}">
+      <div style="position: absolute; inset: 16px; border-radius: 50%; background: {{hair}}; -webkit-mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 3px), #000000 calc(100% - 2.5px)); mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 3px), #000000 calc(100% - 2.5px))"></div>
+      <div style="position: absolute; inset: 16px; border-radius: 50%; background: {{actBg}}; -webkit-mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 3px), #000000 calc(100% - 2.5px)); mask: radial-gradient(farthest-side, rgba(0, 0, 0, 0) calc(100% - 3px), #000000 calc(100% - 2.5px))"></div>
+    </sc-if>
+    <span style="position: absolute; left: 50%; top: 17%; transform: translate(-50%, -50%); font-size: 9.5px; font-variant-numeric: tabular-nums; color: {{ink3}}">00</span>
+    <span style="position: absolute; left: 83%; top: 50%; transform: translate(-50%, -50%); font-size: 9.5px; font-variant-numeric: tabular-nums; color: {{ink3}}">06</span>
+    <span style="position: absolute; left: 50%; top: 83%; transform: translate(-50%, -50%); font-size: 9.5px; font-variant-numeric: tabular-nums; color: {{ink3}}">12</span>
+    <span style="position: absolute; left: 17%; top: 50%; transform: translate(-50%, -50%); font-size: 9.5px; font-variant-numeric: tabular-nums; color: {{ink3}}">18</span>
+    <sc-if value="{{hasNow}}" hint-placeholder-val="{{true}}">
+      <div style="position: absolute; width: 12px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%); background: #ffffff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.38), 0 0 0 5px rgba(255, 255, 255, 0.3), 0 2px 6px rgba(0, 0, 0, 0.35); left: {{dotL}}; top: {{dotT}}"></div>
+    </sc-if>
+    <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 124px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px">
+      <sc-if value="{{hasCount}}" hint-placeholder-val="{{true}}">
+        <sc-if value="{{hasBadge}}" hint-placeholder-val="{{false}}">
+          <span style="font-size: 10px; line-height: 14px; font-weight: 650; letter-spacing: 0.2px; color: #ffffff; padding: 1px 7px; border-radius: 999px; margin-bottom: 2px; background: {{badgeBg}}">{{badge}}</span>
+        </sc-if>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 5px; max-width: 124px; min-width: 0">
+          <span style="flex: none; width: 7px; height: 7px; border-radius: 50%; background: {{toneC}}; box-shadow: {{dotGlow}}"></span>
+          <span style="font-size: 12px; line-height: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0">{{status}}</span>
+          <sc-if value="{{hasEco}}" hint-placeholder-val="{{false}}">
+            <span title="{{tipText}}" style="position: relative; flex: none; display: flex; color: {{boltC}}; opacity: {{boltOp}}">
+              <svg width="11" height="11" sc-camel-view-box="0 0 24 24" role="img" aria-label="{{tipText}}" style="fill: {{boltFill}}; stroke: currentColor; stroke-width: 2; stroke-linejoin: round"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg>
+              <sc-if value="{{hasTip}}" hint-placeholder-val="{{false}}">
+                <span style="position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; line-height: 14px; font-weight: 500; padding: 5px 9px; border-radius: 8px; pointer-events: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22); background: {{tipBg}}; color: {{tipInk}}; border: 1px solid {{tipEdge}}">{{tipText}}</span>
+              </sc-if>
+            </span>
+          </sc-if>
+          <sc-if value="{{hasSince}}" hint-placeholder-val="{{false}}">
+            <span style="flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: {{ink3}}">{{since}}</span>
+          </sc-if>
+        </div>
+        <div style="font-family: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; font-size: 40px; line-height: 44px; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums">{{count}}</div>
+        <div style="max-width: 116px; font-size: 10.5px; line-height: 13px; text-wrap: balance; color: {{ink2}}">{{cl}}</div>
+      </sc-if>
+      <sc-if value="{{noCount}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px">
+          <span style="flex: none; width: 9px; height: 9px; border-radius: 50%; background: {{toneC}}; box-shadow: {{dotGlow}}"></span>
+          <sc-if value="{{hasEco}}" hint-placeholder-val="{{false}}">
+            <span title="{{tipText}}" style="flex: none; display: flex; color: {{boltC}}; opacity: {{boltOp}}">
+              <svg width="12" height="12" sc-camel-view-box="0 0 24 24" role="img" aria-label="{{tipText}}" style="fill: {{boltFill}}; stroke: currentColor; stroke-width: 2; stroke-linejoin: round"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg>
+            </span>
+          </sc-if>
+        </div>
+        <sc-if value="{{hasBadge}}" hint-placeholder-val="{{false}}">
+          <span style="font-size: 10px; line-height: 14px; font-weight: 650; color: #ffffff; padding: 1px 7px; border-radius: 999px; background: {{badgeBg}}">{{badge}}</span>
+        </sc-if>
+        <div style="font-size: 18px; line-height: 22px; font-weight: 650; letter-spacing: -0.2px; text-wrap: balance">{{status}}</div>
+        <div style="max-width: 116px; font-size: 10.5px; line-height: 13px; text-wrap: balance; color: {{ink2}}">{{cl}}</div>
+      </sc-if>
+    </div>
+  </div>
+  <div style="flex: 1 1 auto"></div>
+  <sc-if value="{{hasWarn}}" hint-placeholder-val="{{false}}">
+    <div style="display: flex; align-items: center; gap: 5px; max-width: 208px; min-width: 0; margin-bottom: 5px; font-size: 11px; line-height: 15px; font-weight: 600; color: {{warnC}}">
+      <svg width="12" height="12" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3 2 20.5h20z"></path><path d="M12 10v4.5"></path><path d="M12 17.6v.1"></path></svg>
+      <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0">{{warn}}</span>
+    </div>
+  </sc-if>
+  <div style="display: flex; align-items: center; justify-content: center; gap: 5px; max-width: 208px; min-width: 0; font-size: 11px; line-height: 14px; font-variant-numeric: tabular-nums; color: {{ink3}}">
+    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0">Лінія 1 · черга 1.2</span>
+    <span style="flex: none; white-space: nowrap">· {{upd}}</span>
+    <sc-if value="{{stale}}" hint-placeholder-val="{{false}}">
+      <span style="flex: none; white-space: nowrap; font-size: 10.5px; line-height: 14px; font-weight: 650; padding: 1px 7px; border-radius: 999px; color: {{warnC}}; background: {{warnBg}}">дані застаріли</span>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;scenario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;on&quot;,&quot;off&quot;,&quot;maybe&quot;,&quot;emergency&quot;,&quot;nodata&quot;,&quot;stale&quot;,&quot;warning&quot;,&quot;nochange&quot;,&quot;ecoMatch&quot;,&quot;ecoMismatch&quot;,&quot;ecoOffline&quot;],&quot;default&quot;:&quot;off&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;},&quot;$preview&quot;:{&quot;width&quot;:236,&quot;height&quot;:260}}">
+function hx(h) { h = String(h).replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function rgba(h, a) { var c = hx(h); return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')'; }
+function mixA(h1, h2, t, a) { var p = hx(h1), q = hx(h2); return 'rgba(' + Math.round(p[0] + (q[0] - p[0]) * t) + ', ' + Math.round(p[1] + (q[1] - p[1]) * t) + ', ' + Math.round(p[2] + (q[2] - p[2]) * t) + ', ' + a + ')'; }
+function mins(s) { var p = String(s).split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); }
+function sched(base, spans) { var a = [], i, k; for (i = 0; i < 48; i++) a.push(base); for (k = 0; k < spans.length; k++) { var s = spans[k]; for (i = Math.round(s[0] * 2); i < Math.round(s[1] * 2); i++) a[i] = s[2]; } return a.join(''); }
+function ext(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
+
+var THEMES = {
+  light: { ink: '#11131a', ink2: 'rgba(17, 19, 26, 0.74)', ink3: 'rgba(17, 19, 26, 0.62)', glass: 'rgba(248, 249, 252, 0.66)', edge: 'rgba(255, 255, 255, 0.8)', shadow: '0 0 0 0.5px rgba(17, 19, 26, 0.12), 0 14px 34px rgba(18, 22, 36, 0.22), 0 2px 6px rgba(18, 22, 36, 0.10)', hair: 'rgba(17, 19, 26, 0.10)', on: '#1fbf72', offA: '#f2a20c', offB: '#ef6a10', offDot: '#ee4b3c', maybe: '#e2a000', unk: '#8a90a6', emerg: '#e3261e', badge: '#d12b25', warn: '#8a5800', warnBg: 'rgba(226, 160, 0, 0.2)', now: '#11131a', nowRing: 'rgba(255, 255, 255, 0.9)', tipBg: 'rgba(252, 252, 254, 0.97)', tipInk: '#11131a', tipEdge: 'rgba(17, 19, 26, 0.12)', tintA: 0.14 },
+  dark: { ink: '#f5f7fc', ink2: 'rgba(245, 247, 252, 0.8)', ink3: 'rgba(245, 247, 252, 0.66)', glass: 'rgba(18, 20, 28, 0.62)', edge: 'rgba(255, 255, 255, 0.16)', shadow: '0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25)', hair: 'rgba(255, 255, 255, 0.12)', on: '#5dffa8', offA: '#ffc23d', offB: '#ff7a1a', offDot: '#ff6b5b', maybe: '#ffc23d', unk: '#9aa0b4', emerg: '#ff4d4d', badge: '#d12b25', warn: '#ffd27a', warnBg: 'rgba(255, 194, 61, 0.18)', now: '#ffffff', nowRing: 'rgba(0, 0, 0, 0.55)', tipBg: 'rgba(30, 32, 40, 0.97)', tipInk: '#f5f7fc', tipEdge: 'rgba(255, 255, 255, 0.14)', tintA: 0.18 }
+};
+
+var T_A = sched('1', [[4, 7.5, '0'], [15, 19, '0'], [22, 24, '?']]);
+var T_B = sched('1', [[4, 7.5, '0'], [15, 19, '0']]);
+var T_E = sched('1', [[4, 7.5, '0'], [13.5, 17, 'e'], [17, 19, '0']]);
+var T_U = sched('x', []);
+var T_C = sched('1', [[12, 14.5, '0'], [20, 23.5, '0']]);
+var M_A = sched('1', [[1, 4.5, '0'], [11, 14, '?'], [19, 22.5, '0']]);
+var A1 = [['00:00', '02:10', 'on'], ['02:10', '03:40', 'unk'], ['03:40', '12:04', 'on'], ['12:04', '14:32', 'off'], ['14:32', '17:20', 'on']];
+var A2 = [['00:00', '02:10', 'on'], ['02:10', '03:40', 'unk'], ['03:40', '12:04', 'on'], ['12:04', '14:26', 'off'], ['14:26', '14:32', 'on'], ['14:32', '15:40', 'off']];
+var A3 = [['00:00', '04:02', 'on'], ['04:02', '07:34', 'off'], ['07:34', '10:20', 'on'], ['10:20', '11:50', 'unk']];
+
+var S_ON = { tone: 'on', status: 'Світло є', line: 'Вимкнення о 15:00 · через 3 год 10 хв', count: '3:10', cl: 'до вимкнення о 15:00', now: '11:50', today: T_A, tomorrow: M_A, upd: 'оновлено 11:45' };
+var SCEN = {
+  on: S_ON,
+  off: { tone: 'off', status: 'Світла немає', line: 'Увімкнуть о 19:00 · через 1 год 5 хв', count: '1:05', cl: 'до увімкнення о 19:00', now: '17:55', today: T_A, tomorrow: null, upd: 'оновлено 17:50' },
+  maybe: { tone: 'maybe', status: 'Можливе відключення', line: 'Можливо без світла до 24:00 · ще 1 год 40 хв', count: '1:40', cl: 'можливо до 24:00', now: '22:20', today: T_A, tomorrow: M_A, upd: 'оновлено 22:10' },
+  emergency: { tone: 'emerg', status: 'Світла немає', badge: 'Аварійне', line: 'Аварійне · орієнтовно до 17:00', count: '≈2:40', cl: 'орієнтовно до 17:00', now: '14:20', today: T_E, tomorrow: null, upd: 'оновлено 14:15' },
+  nodata: { tone: 'unk', status: 'Немає даних', line: 'Графік на сьогодні ще не отримано', count: null, cl: 'графік на сьогодні ще не отримано', now: '06:10', today: T_U, tomorrow: null, upd: 'оновлено 06:05' },
+  stale: { tone: 'on', status: 'Світло є', line: 'Можливе вимкнення о 22:00 · через 1 год 20 хв', count: '1:20', cl: 'до можливого вимкнення о 22:00', now: '20:40', today: T_A, tomorrow: M_A, upd: 'оновлено 14:50', stale: true },
+  warning: ext(S_ON, { warn: 'Схема підключення змінилась — перевірте лінію' }),
+  nochange: { tone: 'on', status: 'Світло є', line: 'Без змін до кінця графіка', count: null, cl: 'без змін до кінця графіка', now: '19:40', today: T_B, tomorrow: M_A, upd: 'оновлено 19:30' },
+  ecoMatch: { tone: 'on', status: 'Світло є', eco: 'match', since: 'з 14:32', line: 'Вимкнення о 20:00 · через 2 год 40 хв', count: '2:40', cl: 'до вимкнення о 20:00', now: '17:20', today: T_C, tomorrow: M_A, upd: 'оновлено 17:15', actual: A1, tip: true },
+  ecoMismatch: { tone: 'off', status: 'Світла немає', eco: 'mismatch', line: 'Не за графіком · з 14:32', count: null, cl: 'не за графіком · з 14:32', now: '15:40', today: T_C, tomorrow: M_A, upd: 'оновлено 15:30', actual: A2 },
+  ecoOffline: ext(S_ON, { eco: 'offline', actual: A3, tip: true })
+};
+
+function toneColor(t, tone) { return tone === 'on' ? t.on : tone === 'off' ? t.offDot : tone === 'maybe' ? t.maybe : tone === 'emerg' ? t.emerg : t.unk; }
+
+function cellModels(str, t, nowM) {
+  var out = [];
+  for (var i = 0; i < 48; i++) {
+    var ch = str.charAt(i), past = nowM != null && (i + 1) * 30 <= nowM, al = past ? 0.4 : 1, m;
+    if (ch === '0') {
+      var s = i; while (s > 0 && str.charAt(s - 1) === '0') s--;
+      var e = i; while (e < 47 && str.charAt(e + 1) === '0') e++;
+      var n = e - s + 1;
+      m = { c0: mixA(t.offA, t.offB, (i - s) / n, al), c1: mixA(t.offA, t.offB, (i - s + 1) / n, al) };
+    } else if (ch === '1') { m = { c0: rgba(t.on, al), c1: rgba(t.on, al) }; }
+    else if (ch === '?') { m = { stripes: true, c0: rgba(t.maybe, al), c1: rgba(t.maybe, 0.28 * al) }; }
+    else if (ch === 'e') { m = { c0: rgba(t.emerg, al), c1: rgba(t.emerg, al) }; }
+    else { m = { stripes: true, c0: rgba(t.unk, 0.85 * al), c1: rgba(t.unk, 0.22 * al) }; }
+    out.push(m);
+  }
+  return out;
+}
+
+function ringConic(cells, g) {
+  var st = [];
+  for (var i = 0; i < 48; i++) {
+    var a = i * 7.5, b = a + 7.5, c = cells[i];
+    st.push('rgba(0, 0, 0, 0) ' + a.toFixed(2) + 'deg ' + (a + g).toFixed(2) + 'deg');
+    if (c.stripes) {
+      var w = (7.5 - 2 * g) / 4;
+      for (var k = 0; k < 4; k++) { var x = a + g + k * w; st.push((k % 2 ? c.c1 : c.c0) + ' ' + x.toFixed(2) + 'deg ' + (x + w).toFixed(2) + 'deg'); }
+    } else {
+      st.push(c.c0 + ' ' + (a + g).toFixed(2) + 'deg');
+      st.push(c.c1 + ' ' + (b - g).toFixed(2) + 'deg');
+    }
+    st.push('rgba(0, 0, 0, 0) ' + (b - g).toFixed(2) + 'deg ' + b.toFixed(2) + 'deg');
+  }
+  return 'conic-gradient(' + st.join(', ') + ')';
+}
+
+function actualConic(list, t) {
+  var st = [], cur = 0;
+  (list || []).forEach(function (s) {
+    var a = mins(s[0]) / 4, b = mins(s[1]) / 4;
+    if (a > cur) st.push('rgba(0, 0, 0, 0) ' + cur.toFixed(2) + 'deg ' + a.toFixed(2) + 'deg');
+    if (s[2] === 'unk') {
+      for (var x = a; x < b; x += 3) {
+        var y = Math.min(x + 1.5, b), z = Math.min(x + 3, b);
+        st.push(rgba(t.unk, 0.95) + ' ' + x.toFixed(2) + 'deg ' + y.toFixed(2) + 'deg');
+        if (z > y) st.push('rgba(0, 0, 0, 0) ' + y.toFixed(2) + 'deg ' + z.toFixed(2) + 'deg');
+      }
+    } else {
+      var c = s[2] === 'on' ? rgba(t.on, 0.75) : rgba(t.offDot, 1);
+      st.push(c + ' ' + a.toFixed(2) + 'deg ' + b.toFixed(2) + 'deg');
+    }
+    cur = b;
+  });
+  if (cur < 360) st.push('rgba(0, 0, 0, 0) ' + cur.toFixed(2) + 'deg 360deg');
+  return 'conic-gradient(' + st.join(', ') + ')';
+}
+
+function dialVals(key, themeKey) {
+  var t = THEMES[themeKey === 'light' ? 'light' : 'dark'];
+  var s = SCEN[key] || SCEN.off;
+  var tc = toneColor(t, s.tone);
+  var nowM = s.now ? mins(s.now) : null;
+  var off = s.eco === 'offline';
+  var R = s.warn ? 184 : 208;
+  var cells = cellModels(s.today, t, nowM);
+  var dotL = '0px', dotT = '0px';
+  if (nowM != null) {
+    var th = nowM / 1440 * 2 * Math.PI, r = R / 2 - 6;
+    dotL = (R / 2 + r * Math.sin(th)).toFixed(1) + 'px';
+    dotT = (R / 2 - r * Math.cos(th)).toFixed(1) + 'px';
+  }
+  return {
+    ink: t.ink, ink2: t.ink2, ink3: t.ink3, edge: t.edge, shadow: t.shadow, hair: t.hair,
+    cardBg: 'radial-gradient(120% 90% at 50% 0%, ' + rgba(tc, t.tintA) + ' 0%, rgba(0, 0, 0, 0) 60%), ' + t.glass,
+    toneC: tc, dotGlow: '0 0 0 3px ' + rgba(tc, 0.22) + ', 0 0 10px ' + rgba(tc, 0.55),
+    status: s.status,
+    hasBadge: !!s.badge, badge: s.badge || '', badgeBg: t.badge,
+    hasEco: !!s.eco, boltC: off ? t.ink3 : t.ink, boltOp: off ? 0.5 : 1, boltFill: off ? 'none' : 'currentColor',
+    tipText: off ? 'EcoFlow: станція не в мережі' : 'Фактичний стан · EcoFlow',
+    hasTip: !!s.tip, tipBg: t.tipBg, tipInk: t.tipInk, tipEdge: t.tipEdge,
+    hasSince: !!s.since, since: s.since || '',
+    hasCount: !!s.count, noCount: !s.count, count: s.count || '', cl: s.cl || '',
+    hasWarn: !!s.warn, warn: s.warn || '', warnC: t.warn, warnBg: t.warnBg,
+    stale: !!s.stale, upd: s.upd,
+    ringPx: R + 'px', ringBg: ringConic(cells, 0.7),
+    hasNow: nowM != null, dotL: dotL, dotT: dotT,
+    hasActual: !!s.actual, actBg: actualConic(s.actual, t)
+  };
+}
+
+class Component extends DCLogic {
+  renderVals() {
+    return dialVals(this.props.scenario ?? 'off', this.props.theme ?? 'dark');
+  }
+}
+</script>
+
+
+</body></html>

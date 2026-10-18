@@ -1,48 +1,52 @@
 import { addDays, formatDM } from '../../../shared/time';
-import type { WidgetView } from '../../../shared/widget-state';
-import { ActualLine, DayBar, DayTicks } from './DayBar';
-import { Caption, Status } from './parts';
+import { countdownText, type WidgetView } from '../../../shared/widget-state';
+import { DayBar, DayTicks } from './DayBar';
+import { Caption, Status, WarnLine } from './parts';
 
-export function TimelineWidget({ view, lineChanged }: { view: WidgetView; lineChanged: boolean }) {
+function DayLabel({ name, dateKey }: { name: string; dateKey: string }) {
+  return <div className="w-tl-label"><span className="w-tl-day">{name}</span> <span className="w-tl-date">{formatDM(dateKey)}</span></div>;
+}
+
+/**
+ * Timeline (widget-timeline.html): the status and the next change with the big countdown beside them, today's and
+ * tomorrow's strips, and a caption that also names the provider.
+ */
+export function TimelineWidget({ view, lineChanged, provider }: { view: WidgetView; lineChanged: boolean; provider: string }) {
   const tomorrowKey = view.tomorrow?.date ?? addDays(view.todayKey, 1);
-  const updated = view.updatedText.charAt(0).toUpperCase() + view.updatedText.slice(1);
+  // On a mismatch nextText already carries «з HH:MM».
   const since = view.actual && !view.actual.mismatch ? view.actual.sinceText : undefined;
-  const sub = since ? `${view.lineLabel} · ${since}` : view.lineLabel;
+  const count = countdownText(view);
+  // The provider name comes last in the one ellipsized label, so it gives way first.
+  const label = [view.lineLabel, provider].filter(Boolean).join(' · ');
   return (
     <>
       <div className="w-tl-head">
-        <div>
-          <Status view={view} />
-          <div className="w-muted w-tl-sub w-ellipsis" style={{ marginTop: 3 }} title={sub}>{sub}</div>
+        <div className="w-tl-main">
+          <Status view={view} since={since} />
+          <div className="w-tl-line w-ellipsis" title={view.nextText} data-capture="next">{view.nextText}</div>
         </div>
-        <div className="w-tl-count">
-          {view.countdownShort ? (
-            <>
-              <div className="w-big">{view.countdownShort}</div>
-              <div className="w-muted w-ellipsis" title={view.countdownCaption}>{view.countdownCaption}</div>
-            </>
-          ) : (
-            <div className="w-muted w-tl-text w-ellipsis" title={view.nextText}>{view.nextText}</div>
-          )}
-        </div>
+        {count && (
+          // data-cap: a hidden copy of the caption sizes the block (.w-tl-count::after in widget.css).
+          <div className="w-tl-count" data-cap={view.countdownCaption}>
+            <div className="w-tl-big" data-capture="count">{count}</div>
+            <div className="w-tl-cap">
+              <div className="w-tl-cl" title={view.countdownCaption} data-capture="countcap">{view.countdownCaption}</div>
+            </div>
+          </div>
+        )}
       </div>
-      <div className="w-tl-row" style={{ marginTop: 14 }}>
-        <div className="w-row-label">Сьогодні {formatDM(view.todayKey)}</div>
-        <div className="w-tl-bar">
-          <DayBar day={view.today} nowFraction={view.nowFraction} />
-          {view.actualStrip?.length ? <ActualLine parts={view.actualStrip} /> : null}
-        </div>
-      </div>
-      <div className="w-tl-row" style={{ marginTop: 8 }}>
-        <div className="w-row-label">Завтра {formatDM(tomorrowKey)}</div>
-        <DayBar day={view.tomorrow} />
-      </div>
+      {lineChanged && <WarnLine />}
+      <div className="w-spacer" />
       <div className="w-tl-row">
-        <div className="w-row-label" />
-        <DayTicks />
+        <DayLabel name="Сьогодні" dateKey={view.todayKey} />
+        <DayBar day={view.today} nowFraction={view.nowFraction} emergency={view.emergency} actual={view.actualStrip} />
       </div>
-      <Caption view={view} lineChanged={lineChanged} updated={updated} />
+      <div className="w-tl-row w-tl-tomorrow">
+        <DayLabel name="Завтра" dateKey={tomorrowKey} />
+        <DayBar day={view.tomorrow} emptyText="ще не опубліковано" />
+      </div>
+      <DayTicks />
+      <Caption view={view} label={label} updated={view.updatedText} />
     </>
   );
 }
-

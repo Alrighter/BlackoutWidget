@@ -60,18 +60,26 @@ export function recentOutages(history: ActualSegment[], _now?: Date): ActualOuta
 
 const approx = (a: boolean): string => (a ? '≈' : '');
 
-export function formatOutage(o: ActualOutage, now: Date): string {
+/** An outage as its date, time range and duration; `live` while it is still going on. */
+export interface OutageParts { date: string; range: string; duration: string; live: boolean }
+
+export function outageParts(o: ActualOutage, now: Date): OutageParts {
   const start = new Date(o.start);
-  const head = `${formatDM(kyivDateKey(start))} · `;
+  const date = formatDM(kyivDateKey(start));
   if (o.end !== undefined) {
     const end = new Date(o.end);
     const min = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
-    return `${head}${approx(o.startApprox)}${formatHM(start)}–${approx(o.endApprox)}${formatHM(end)} · ${formatDurationLong(min)}`;
+    return { date, range: `${approx(o.startApprox)}${formatHM(start)}–${approx(o.endApprox)}${formatHM(end)}`, duration: formatDurationLong(min), live: false };
   }
-  const from = `${head}з ${approx(o.startApprox)}${formatHM(start)}`;
-  if (!o.ongoing) return `${from} · кінець невідомий`;
+  const range = `з ${approx(o.startApprox)}${formatHM(start)}`;
+  if (!o.ongoing) return { date, range, duration: 'кінець невідомий', live: false };
   const min = Math.max(0, Math.floor((now.getTime() - start.getTime()) / 60000));
-  return `${from} · триває ${formatDurationLong(min)}`;
+  return { date, range, duration: `триває ${formatDurationLong(min)}`, live: true };
+}
+
+export function formatOutage(o: ActualOutage, now: Date): string {
+  const { date, range, duration } = outageParts(o, now);
+  return `${date} · ${range} · ${duration}`;
 }
 
 export function sinceText(since: string, isApprox: boolean, now: Date): string {

@@ -1,6 +1,6 @@
 import type { StripPart } from '../../../shared/actual-view';
 
-/** Today's actual power on the same 24-hour scale as DayStrip (% of the 1440-minute day); `on` is left empty. */
+/** Today's actual power on the same 24-hour scale as DayStrip (% of the 1440-minute day). */
 export function ActualStrip({ parts }: { parts: StripPart[] }) {
   return (
     <div className="actual-strip">

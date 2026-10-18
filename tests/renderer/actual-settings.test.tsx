@@ -34,8 +34,11 @@ test('not configured → connect button opens the form', async () => {
   render(<ActualSettings state={stateOf()} api={mockApi()} />);
   expect(screen.getByRole('heading', { name: 'Фактичний стан світла' })).toBeInTheDocument();
   expect(screen.getByText('Зарядна станція EcoFlow може показувати, чи є світло насправді.')).toBeInTheDocument();
+  expect(screen.getByText('EcoFlow')).toBeInTheDocument(); // the source chip
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
-  expect(screen.getByLabelText('Регіон')).toHaveValue('eu');
+  expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Джерело')).toHaveValue('ecoflow');
+  expect(screen.getByRole('radio', { name: 'Європа' })).toBeChecked();
   expect(screen.getByLabelText('Access Key')).toHaveAttribute('type', 'password');
   expect(screen.getByLabelText('Secret Key')).toHaveAttribute('type', 'password');
   expect(screen.getByText('Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).')).toBeInTheDocument();
@@ -76,13 +79,31 @@ test('no stations in the account', async () => {
   expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
 });
 
-test('check error is shown and save stays disabled', async () => {
+test('check error is shown and there is nothing to save', async () => {
   const user = userEvent.setup();
   const api = mockApi({ ecoflowTest: vi.fn(async () => ({ ok: false, error: 'Ключі не підійшли (8521)' })) });
   render(<ActualSettings state={stateOf()} api={api} />);
   await openAndCheck(user);
-  expect(await screen.findByText('Ключі не підійшли (8521)')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Ключі не підійшли (8521)');
+  // «Зберегти» lives in the stations step, which a failed check never reaches.
+  expect(screen.queryByRole('button', { name: 'Зберегти' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Перевірити' })).toBeEnabled();
+});
+
+test('«Назад» from the stations goes back to the form with the keys kept', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openAndCheck(user);
+  expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Access Key')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Назад' }));
+  expect(screen.queryByText('Станції в акаунті')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toHaveFocus();
+  expect(screen.getByLabelText('Access Key')).toHaveValue('AK-123');
+  expect(screen.getByLabelText('Secret Key')).toHaveValue('SK-456');
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(api.ecoflowTest).toHaveBeenCalledTimes(2);
+  expect(await screen.findByText('Станції в акаунті')).toBeInTheDocument();
 });
 
 test('save sends keys once and clears the form', async () => {
@@ -108,16 +129,28 @@ test('save error is shown under the button', async () => {
 });
 
 test.each([
-  [{ ok: true, online: true, power: 'off', detail: 'на вході 0 В' }, 'На вході 0 В — світла немає'],
-  [{ ok: true, online: false, power: 'unknown' }, 'Станція не в мережі'],
-  [{ ok: true, online: true, power: 'unknown', unsupported: true }, 'Модель поки не підтримується'],
-  [{ ok: true, online: true, power: 'unknown', reason: 'немає даних про вхід' }, 'Немає даних про вхід'],
-  [{ ok: false, error: 'Мережа недоступна' }, 'Мережа недоступна'],
-])('preview %j → %s', async (result, text) => {
+  [{ ok: true, online: true, power: 'on', detail: 'на вході 229 В' }, 'На вході 229 В — світло є', 'on'],
+  [{ ok: true, online: true, power: 'off', detail: 'на вході 0 В' }, 'На вході 0 В — світла немає', 'off'],
+  [{ ok: true, online: false, power: 'unknown' }, 'Станція не в мережі', 'neutral'],
+  [{ ok: true, online: true, power: 'unknown', unsupported: true }, 'Модель поки не підтримується', 'warn'],
+  [{ ok: true, online: true, power: 'unknown', reason: 'немає даних про вхід' }, 'Немає даних про вхід', 'neutral'],
+  [{ ok: false, error: 'Мережа недоступна' }, 'Мережа недоступна', 'neutral'],
+])('preview %j → %s, tinted %s', async (result, text, tone) => {
   const user = userEvent.setup();
   render(<ActualSettings state={stateOf()} api={mockApi({ ecoflowPreview: vi.fn(async () => result) })} />);
   await openAndCheck(user);
   expect(await screen.findByText(text)).toBeInTheDocument();
+  // The «Перевірка» box takes the tone as its class (on / off / warn / neutral).
+  const box = screen.getByText(text).closest('.st-result');
+  expect(box).toHaveClass(tone);
+  expect([...box!.classList].filter(c => ['on', 'off', 'warn', 'neutral'].includes(c))).toEqual([tone]);
+});
+
+test('reading the station is a neutral box', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi({ ecoflowPreview: vi.fn(() => new Promise(() => {})) })} />);
+  await openAndCheck(user);
+  expect((await screen.findByText('Читаю показники…')).closest('.st-result')).toHaveClass('neutral');
 });
 
 test('preview offline still allows save', async () => {
@@ -153,13 +186,45 @@ test('«Змінити» opens a form with empty keys and the configured region'
   const user = userEvent.setup(); const api = mockApi();
   render(<ActualSettings state={stateOf({ ...CONFIG, region: 'us' })} api={api} />);
   await user.click(screen.getByRole('button', { name: 'Змінити' }));
-  expect(screen.getByLabelText('Регіон')).toHaveValue('us');
+  expect(screen.getByRole('radio', { name: 'Інший регіон (api.ecoflow.com)' })).toBeChecked();
   expect(screen.getByLabelText('Access Key')).toHaveValue('');
   expect(screen.getByLabelText('Secret Key')).toHaveValue('');
   await user.type(screen.getByLabelText('Access Key'), 'AK-123');
   await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
   expect(api.ecoflowTest).toHaveBeenCalledWith({ region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
+});
+
+test('the region radios pick the API region', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.click(screen.getByRole('radio', { name: 'Інший регіон (api.ecoflow.com)' }));
+  expect(screen.getByRole('radio', { name: 'Європа' })).not.toBeChecked();
+  await user.type(screen.getByLabelText('Access Key'), 'AK-123');
+  await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
+});
+
+test('focus follows the card when its step changes (the pressed button is gone)', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi()} />);
+  expect(document.body).toHaveFocus(); // nothing is focused on first show
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toHaveFocus();
+  await user.type(screen.getByLabelText('Access Key'), 'AK-123');
+  await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(await screen.findByRole('heading', { name: 'Станції в акаунті' })).toHaveFocus();
+  await user.click(screen.getByRole('button', { name: 'Назад' }));
+  await user.click(screen.getByRole('button', { name: 'Скасувати' }));
+  expect(screen.getByRole('heading', { name: 'Фактичний стан світла' })).toHaveFocus();
+});
+
+test('the form opened up front (D10) takes the focus', () => {
+  render(<ActualSettings state={stateOf()} api={mockApi()} initiallyOpen />);
+  expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toHaveFocus();
 });
 
 test('help link calls openEcoflowHelp', async () => {

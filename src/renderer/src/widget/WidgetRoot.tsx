@@ -12,6 +12,30 @@ const logPointer = import.meta.env.MODE === 'development'
   }
   : undefined;
 
+/**
+ * Move mode (D6, tray-menu.html): the mockup's dashed double frame, move glyph and «Перетягніть…» pill. The window keeps
+ * its size, so they lie inside the card, over the content. A press on the pill drags the widget like one on the card.
+ */
+function MoveOverlay({ onDone }: { onDone(): void }) {
+  return (
+    <div className="w-move">
+      <div className="w-move-frame" aria-hidden="true" />
+      <span className="w-move-glyph" aria-hidden="true" data-capture="move-glyph">
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />
+        </svg>
+      </span>
+      <div className="w-move-pill" data-capture="move-pill">
+        <span className="w-move-hint" data-capture="move-hint">Перетягніть віджет у потрібне місце</span>
+        {/* Its press must not reach the root: with pointer capture there the click would land on the root instead. */}
+        <button type="button" className="w-done" data-capture="move-done" onPointerDown={e => e.stopPropagation()} onClick={onDone}>
+          Готово
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Subscribes to main-process state and ticks the clock on minute boundaries. The root element is where gestures attach. */
 export function WidgetRoot({ api }: { api: RendererApi }) {
   const [state, setState] = useState<AppState | null>(null);
@@ -52,13 +76,9 @@ export function WidgetRoot({ api }: { api: RendererApi }) {
   return (
     <div className={moving ? 'w-root w-moving' : 'w-root'} {...gestures}
       onPointerDownCapture={logPointer} onPointerUpCapture={logPointer} onContextMenuCapture={logPointer}>
-      <Widget state={state} now={now} background={background} />
-      {moving && (
-        // Its press must not reach the root: with pointer capture there the click would land on the root instead.
-        <button type="button" className="w-done" onPointerDown={e => e.stopPropagation()} onClick={() => api.endMoveMode()}>
-          Готово
-        </button>
-      )}
+      <Widget state={state} now={now} background={background}>
+        {moving && <MoveOverlay onDone={() => api.endMoveMode()} />}
+      </Widget>
     </div>
   );
 }

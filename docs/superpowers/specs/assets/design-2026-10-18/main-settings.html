@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="uk"><head>
+<meta charset="utf-8">
+<title>Головне вікно — Налаштування</title>
+<script src="cfa16cea-ddd6-4831-9606-4ae895a2abed"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#2a5bd7}a:hover{color:#1d44a8}
+</style>
+</helmet>
+<div style="width: 2160px; height: 1010px; box-sizing: border-box; padding: 56px 64px; background: #121419; color: #eef0f6; font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px; -webkit-font-smoothing: antialiased">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.6px">Головне вікно · вкладка «Налаштування»</h1>
+    <p style="margin: 0; font-size: 15px; line-height: 22px; color: #a7adbd">Адреса, стиль віджета з живими мініатюрами, автозапуск, ручне оновлення і розділ EcoFlow. Усі стани EcoFlow-панелі — на сусідній дошці.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px">
+    <sc-for list="{{wins}}" as="v" hint-placeholder-count="2">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <div style="font-size: 14px; color: #a7adbd"><span style="font-weight: 600; color: #eef0f6">{{v.caption}}</span> · {{v.captionSub}}</div>
+        <div style="height: 740px; border-radius: 20px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: {{v.wp}}">
+          <div style="width: 900px; height: 640px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.38), 0 8px 24px rgba(0, 0, 0, 0.22); border-radius: {{v.wRad}}; background: {{v.winBg}}; border: 1px solid {{v.frameEdge}}; color: {{v.ink}}">
+            <sc-if value="{{v.isWin}}" hint-placeholder-val="{{true}}">
+              <div style="height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between">
+                <div style="display: flex; align-items: center; gap: 10px; padding-left: 14px; font-size: 12px">
+                  <span style="width: 16px; height: 16px; border-radius: 5px; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, #2b2f3b, #11131a); color: #5dffa8"><svg width="10" height="10" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: currentColor"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg></span>
+                  <span>Blackout Widget</span>
+                </div>
+                <div style="display: flex; color: {{v.ink2}}">
+                  <button aria-label="Згорнути" style="width: 46px; height: 32px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true" style="stroke: currentColor; stroke-width: 1"><path d="M0 5h10"></path></svg></button>
+                  <button aria-label="Розгорнути" style="width: 46px; height: 32px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5"></rect></svg></button>
+                  <button aria-label="Закрити" style="width: 46px; height: 32px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true" style="stroke: currentColor; stroke-width: 1"><path d="M0 0l10 10M10 0 0 10"></path></svg></button>
+                </div>
+              </div>
+              <div style="height: 48px; flex: none; box-sizing: border-box; padding: 0 20px; display: flex; align-items: center">
+                <div style="display: flex; gap: 4px">
+                  <button style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; font: inherit; font-size: 14px; background: transparent; color: {{v.ink2}}">Графік</button>
+                  <button style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: {{v.ctlOn}}; box-shadow: {{v.ctlOnShadow}}; color: {{v.ink}}">Налаштування<span style="width: 16px; height: 3px; border-radius: 2px; background: {{v.accent}}"></span></button>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{v.isMac}}" hint-placeholder-val="{{false}}">
+              <div style="height: 52px; flex: none; box-sizing: border-box; padding: 0 16px 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid {{v.hair}}">
+                <div style="display: flex; gap: 8px; width: 120px">
+                  <span style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2)"></span>
+                  <span style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2)"></span>
+                  <span style="width: 12px; height: 12px; border-radius: 50%; background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2)"></span>
+                </div>
+                <div style="display: flex; padding: 2px; border-radius: 8px; background: {{v.ctl}}">
+                  <button style="height: 26px; padding: 0 16px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; background: transparent; color: {{v.ink2}}">Графік</button>
+                  <button style="height: 26px; padding: 0 16px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 600; background: {{v.ctlOn}}; box-shadow: {{v.ctlOnShadow}}; color: {{v.ink}}">Налаштування</button>
+                </div>
+                <div style="width: 120px"></div>
+              </div>
+            </sc-if>
+
+            <div style="flex: 1 1 auto; min-height: 0; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; padding: {{v.bodyPad}}">
+              <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+                <section style="box-sizing: border-box; padding: 16px 18px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; background: {{v.card}}; border: 1px solid {{v.cardEdge}}">
+                  <h2 style="margin: 0; font-size: 14px; line-height: 18px; font-weight: 650">Адреса</h2>
+                  <div style="display: flex; align-items: flex-start; gap: 12px; min-width: 0">
+                    <span style="flex: none; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: {{v.ctl}}; color: {{v.ink2}}"><svg width="18" height="18" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle></svg></span>
+                    <div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                      <span style="font-size: 15px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">м. Буча, вул. Вокзальна, 9-А</span>
+                      <span style="font-size: 12.5px; line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: {{v.ink2}}">ДТЕК Київські регіональні електромережі · Лінія 1 · черга 1.2</span>
+                    </div>
+                  </div>
+                  <div><button style="height: 32px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: {{v.btn}}; border: 1px solid {{v.btnEdge}}; color: {{v.ink}}">Змінити адресу</button></div>
+                </section>
+
+                <section style="box-sizing: border-box; padding: 16px 18px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; background: {{v.card}}; border: 1px solid {{v.cardEdge}}">
+                  <h2 style="margin: 0; font-size: 14px; line-height: 18px; font-weight: 650">Стиль віджета</h2>
+                  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+                    <button aria-pressed="true" style="box-sizing: border-box; padding: 8px; border-radius: 12px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px; background: {{v.optOnBg}}; border: 2px solid {{v.accent}}; color: {{v.ink}}">
+                      <span style="height: 92px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: {{v.thumbWp}}">
+                        <span style="position: relative; display: block; width: 116px; height: 60px">
+                          <span style="position: absolute; left: 0; top: 0; display: block; width: 290px; height: 150px; transform: scale(0.4); transform-origin: 0 0"><dc-import name="Compact" scenario="on" theme="{{v.themeKey}}" hint-size="290px,150px"></dc-import></span>
+                        </span>
+                      </span>
+                      <span style="display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 0 2px"><span style="display: flex; flex-direction: column"><span style="font-size: 13px; font-weight: 600">Компакт</span><span style="font-size: 11.5px; color: {{v.ink3}}">290×150</span></span><span style="width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: {{v.accent}}; color: {{v.accentInk}}"><svg width="11" height="11" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></span></span>
+                    </button>
+                    <button aria-pressed="false" style="box-sizing: border-box; padding: 8px; border-radius: 12px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px; background: transparent; border: 2px solid {{v.btnEdge}}; color: {{v.ink}}">
+                      <span style="height: 92px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: {{v.thumbWp}}">
+                        <span style="position: relative; display: block; width: 76px; height: 83px">
+                          <span style="position: absolute; left: 0; top: 0; display: block; width: 236px; height: 260px; transform: scale(0.32); transform-origin: 0 0"><dc-import name="Dial" scenario="off" theme="{{v.themeKey}}" hint-size="236px,260px"></dc-import></span>
+                        </span>
+                      </span>
+                      <span style="display: flex; flex-direction: column; padding: 0 2px"><span style="font-size: 13px; font-weight: 600">Циферблат</span><span style="font-size: 11.5px; color: {{v.ink3}}">236×260</span></span>
+                    </button>
+                    <button aria-pressed="false" style="box-sizing: border-box; padding: 8px; border-radius: 12px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px; background: transparent; border: 2px solid {{v.btnEdge}}; color: {{v.ink}}">
+                      <span style="height: 92px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: {{v.thumbWp}}">
+                        <span style="position: relative; display: block; width: 120px; height: 60px">
+                          <span style="position: absolute; left: 0; top: 0; display: block; width: 400px; height: 200px; transform: scale(0.3); transform-origin: 0 0"><dc-import name="Timeline" scenario="ecoMatch" theme="{{v.themeKey}}" hint-size="400px,200px"></dc-import></span>
+                        </span>
+                      </span>
+                      <span style="display: flex; flex-direction: column; padding: 0 2px"><span style="font-size: 13px; font-weight: 600">Таймлайн</span><span style="font-size: 11.5px; color: {{v.ink3}}">400×200</span></span>
+                    </button>
+                  </div>
+                </section>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+                <section style="box-sizing: border-box; padding: 6px 18px; border-radius: 12px; display: flex; flex-direction: column; background: {{v.card}}; border: 1px solid {{v.cardEdge}}">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px">
+                    <label for="autostart-{{v.key}}" style="display: flex; flex-direction: column; gap: 1px; min-width: 0"><span style="font-size: 14px; font-weight: 600">Запускати разом із системою</span><span style="font-size: 12.5px; color: {{v.ink2}}">Віджет з’явиться після входу</span></label>
+                    <button id="autostart-{{v.key}}" role="switch" aria-checked="true" style="flex: none; width: 42px; height: 22px; border: 0; border-radius: 999px; padding: 0 3px; display: flex; align-items: center; justify-content: flex-end; background: {{v.accent}}"><span style="width: 16px; height: 16px; border-radius: 50%; background: {{v.accentInk}}; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25)"></span></button>
+                  </div>
+                  <div style="height: 1px; background: {{v.hair}}"></div>
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px">
+                    <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0"><span style="font-size: 14px; font-weight: 600">Графік ДТЕК</span><span style="font-size: 12.5px; font-variant-numeric: tabular-nums; color: {{v.ink2}}">Оновлено о 14:50</span></div>
+                    <button style="flex: none; height: 32px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; background: {{v.btn}}; border: 1px solid {{v.btnEdge}}; color: {{v.ink}}"><svg width="14" height="14" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v5h-5"></path></svg>Оновити зараз</button>
+                  </div>
+                </section>
+
+                <section style="box-sizing: border-box; padding: 16px 18px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; background: {{v.card}}; border: 1px solid {{v.cardEdge}}">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+                    <h2 style="margin: 0; font-size: 14px; line-height: 18px; font-weight: 650">Фактичний стан світла</h2>
+                    <span style="display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; background: {{v.ctl}}; color: {{v.ink2}}"><svg width="11" height="11" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: currentColor"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg>EcoFlow</span>
+                  </div>
+                  <sc-if value="{{v.ecoOn}}" hint-placeholder-val="{{true}}">
+                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                      <span style="flex: none; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: {{v.ctl}}; color: {{v.ink2}}"><svg width="20" height="20" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round"><rect x="3" y="6" width="18" height="14" rx="3"></rect><path d="M8 6V4h8v2"></path><path d="m12.5 9-3 4.5h4l-1 3.5"></path></svg></span>
+                      <div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                        <span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">EcoFlow · RIVER 2 · ключ Fp4S…</span>
+                        <span style="display: flex; align-items: center; gap: 7px; font-size: 13px; font-variant-numeric: tabular-nums; color: {{v.ink2}}"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{v.on}}"></span>Зараз: світло є (дані о 14:50)</span>
+                      </div>
+                    </div>
+                    <div style="display: flex; gap: 8px">
+                      <button style="height: 32px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: {{v.btn}}; border: 1px solid {{v.btnEdge}}; color: {{v.ink}}">Змінити</button>
+                      <button style="height: 32px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: transparent; border: 1px solid {{v.btnEdge}}; color: {{v.ink2}}">Вимкнути</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{v.ecoOff}}" hint-placeholder-val="{{false}}">
+                    <p style="margin: 0; font-size: 13.5px; line-height: 20px; text-wrap: pretty; color: {{v.ink2}}">Зарядна станція EcoFlow може показувати, чи є світло насправді.</p>
+                    <div><button style="height: 34px; padding: 0 16px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: {{v.primary}}; color: {{v.primaryInk}}">Підключити EcoFlow</button></div>
+                  </sc-if>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:2160,&quot;height&quot;:1010}}">
+var WP = {
+  light: 'radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)',
+  dark: 'radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)',
+  busy: 'repeating-linear-gradient(118deg, rgba(255, 255, 255, 0) 0px 16px, rgba(255, 255, 255, 0.6) 16px 19px, rgba(0, 0, 0, 0) 19px 36px, rgba(0, 0, 0, 0.38) 36px 39px), conic-gradient(from 200deg at 38% 46%, #ff4e50, #fc913a, #f9d423, #34e89e, #0f9bff, #8e54e9, #ff4e50)'
+};
+var TH = {
+  light: { winBg: 'linear-gradient(160deg, #f4f2f1 0%, #eef0f5 55%, #e8ecf3 100%)', frameEdge: 'rgba(0, 0, 0, 0.14)', card: 'rgba(255, 255, 255, 0.82)', cardEdge: 'rgba(17, 19, 26, 0.07)', ink: '#11131a', ink2: '#474c59', ink3: '#686d7c', hair: 'rgba(17, 19, 26, 0.09)', ctl: 'rgba(17, 19, 26, 0.06)', ctlOn: '#ffffff', ctlOnShadow: '0 1px 2px rgba(17, 19, 26, 0.14), 0 0 0 0.5px rgba(17, 19, 26, 0.08)', btn: 'rgba(255, 255, 255, 0.9)', btnEdge: 'rgba(17, 19, 26, 0.13)', accent: '#2a5bd7', accentInk: '#ffffff', optOnBg: 'rgba(42, 91, 215, 0.06)', primary: '#1b1e27', primaryInk: '#ffffff', on: '#1fbf72' },
+  dark: { winBg: 'linear-gradient(160deg, #24252d 0%, #1e2028 60%, #1a1c23 100%)', frameEdge: 'rgba(255, 255, 255, 0.12)', card: 'rgba(255, 255, 255, 0.05)', cardEdge: 'rgba(255, 255, 255, 0.08)', ink: '#f2f4f9', ink2: '#c4c8d3', ink3: '#9ca2b3', hair: 'rgba(255, 255, 255, 0.10)', ctl: 'rgba(255, 255, 255, 0.07)', ctlOn: 'rgba(255, 255, 255, 0.15)', ctlOnShadow: '0 1px 2px rgba(0, 0, 0, 0.3)', btn: 'rgba(255, 255, 255, 0.08)', btnEdge: 'rgba(255, 255, 255, 0.14)', accent: '#8fb4ff', accentInk: '#10131c', optOnBg: 'rgba(143, 180, 255, 0.08)', primary: '#f2f4f9', primaryInk: '#15171d', on: '#5dffa8' }
+};
+var VARS = [
+  { key: 'win', plat: 'win', theme: 'light', wp: WP.busy, thumbWp: WP.light, caption: 'Windows 11 · світла', captionSub: 'EcoFlow підключено', eco: true },
+  { key: 'mac', plat: 'mac', theme: 'dark', wp: WP.dark, thumbWp: WP.dark, caption: 'macOS · темна', captionSub: 'EcoFlow не підключено', eco: false }
+];
+function winVals(d) {
+  var t = TH[d.theme], o = {}, k;
+  for (k in t) o[k] = t[k];
+  o.key = d.key; o.caption = d.caption; o.captionSub = d.captionSub; o.wp = d.wp; o.thumbWp = d.thumbWp; o.themeKey = d.theme;
+  o.isWin = d.plat === 'win'; o.isMac = d.plat === 'mac';
+  o.wRad = d.plat === 'win' ? '8px' : '12px';
+  o.bodyPad = d.plat === 'win' ? '4px 20px 20px' : '16px 20px 20px';
+  o.ecoOn = !!d.eco; o.ecoOff = !d.eco;
+  return o;
+}
+class Component extends DCLogic {
+  renderVals() {
+    return { wins: VARS.map(winVals) };
+  }
+}
+</script>
+
+
+</body></html>

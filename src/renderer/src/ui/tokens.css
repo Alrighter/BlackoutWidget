@@ -1,0 +1,187 @@
+/*
+ * Design tokens (docs/superpowers/specs/assets/design-2026-10-18: tokens.html, THEMES in widget-compact.html,
+ * main-schedule.html and main-settings.html; ecoflow-panel.html).
+ * Light theme by default, dark under prefers-color-scheme. src/shared/design-tokens.ts carries the same colours for
+ * JS/SVG (--bw-off-a = offA ...); tests/shared/design-tokens.test.ts keeps the two in step.
+ */
+:root {
+  /* states */
+  --bw-on: #1fbf72;
+  --bw-off-a: #f2a20c;
+  --bw-off-b: #ef6a10;
+  --bw-off-dot: #ee4b3c;
+  --bw-maybe: #e2a000;
+  --bw-unknown: #8a90a6;
+  --bw-emergency: #e3261e;
+  --bw-badge: #d12b25;
+  /* text */
+  --bw-ink: #11131a;
+  --bw-ink-2: rgba(17, 19, 26, 0.74);
+  --bw-ink-3: rgba(17, 19, 26, 0.62);
+  --bw-warn-ink: #8a5800;
+  --bw-warn-bg: rgba(226, 160, 0, 0.2);
+  /* glass */
+  --bw-glass: rgba(248, 249, 252, 0.66);
+  --bw-glass-edge: rgba(255, 255, 255, 0.8);
+  --bw-glass-blur: blur(30px) saturate(180%);
+  --bw-shadow: 0 0 0 0.5px rgba(17, 19, 26, 0.12), 0 14px 34px rgba(18, 22, 36, 0.22), 0 2px 6px rgba(18, 22, 36, 0.10);
+  --bw-hair: rgba(17, 19, 26, 0.10);
+  --bw-pill: rgba(248, 249, 252, 0.92);
+  --bw-tint-a: 0.14;
+  /* «now» marker */
+  --bw-now: #11131a;
+  --bw-now-ring: rgba(255, 255, 255, 0.9);
+  /* tooltip */
+  --bw-tip-bg: rgba(252, 252, 254, 0.97);
+  --bw-tip-ink: #11131a;
+  --bw-tip-edge: rgba(17, 19, 26, 0.12);
+  /* main window (main-schedule.html), over Mica */
+  --bw-app-ink: #11131a;
+  --bw-app-ink-2: #474c59;
+  --bw-app-ink-3: #686d7c;
+  --bw-app-hair: rgba(17, 19, 26, 0.09);
+  --bw-app-now-ring: rgba(255, 255, 255, 0.95);
+  --bw-now-ink: #ffffff;
+  --bw-card: rgba(255, 255, 255, 0.82);
+  --bw-card-edge: rgba(17, 19, 26, 0.07);
+  --bw-ctl: rgba(17, 19, 26, 0.06);
+  --bw-ctl-on: #ffffff;
+  --bw-ctl-on-shadow: 0 1px 2px rgba(17, 19, 26, 0.14), 0 0 0 0.5px rgba(17, 19, 26, 0.08);
+  --bw-btn: rgba(255, 255, 255, 0.9);
+  --bw-btn-edge: rgba(17, 19, 26, 0.13);
+  --bw-accent: #2a5bd7;
+  --bw-primary: #1b1e27;
+  --bw-primary-ink: #ffffff;
+  /* settings (main-settings.html, ecoflow-panel.html) */
+  --bw-accent-ink: #ffffff;
+  --bw-opt-on: rgba(42, 91, 215, 0.06);
+  --bw-primary-busy: #3a3e4a;
+  --bw-field: #ffffff;
+  --bw-field-edge: rgba(17, 19, 26, 0.18);
+  --bw-on-ink: #0f6b3d;
+  --bw-warn-text: #6b4500;
+  --bw-danger-ink: #7a1712;
+  --bw-danger-icon: #c4241d;
+  --bw-thumb-shadow: drop-shadow(0 5px 12px rgba(18, 22, 36, 0.22));
+  --bw-thumb-wp: radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%);
+  /* setup wizard (setup-wizard.html) */
+  --bw-rail: rgba(255, 255, 255, 0.35);
+  --bw-pop-shadow: 0 12px 28px rgba(20, 24, 40, 0.14);
+  --bw-disabled-ink: #9ca2b3;
+  --bw-done-ink: #0f7a45;
+
+  /* radii */
+  --bw-r-compact: 22px;
+  --bw-r-timeline: 24px;
+  --bw-r-dial: 26px;
+  --bw-r-card: 12px;
+  --bw-r-btn: 8px;
+  --bw-r-cell: 1.5px;
+  --bw-r-cell-end: 4px;
+  --bw-r-pill: 999px;
+  /* spacing */
+  --bw-s-2: 2px;
+  --bw-s-4: 4px;
+  --bw-s-6: 6px;
+  --bw-s-8: 8px;
+  --bw-s-12: 12px;
+  --bw-s-16: 16px;
+  --bw-s-20: 20px;
+  --bw-s-24: 24px;
+  --bw-s-32: 32px;
+  /* type: Text up to 20 px, Display from 20 px */
+  --bw-font: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --bw-font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bw-on: #5dffa8;
+    --bw-off-a: #ffc23d;
+    --bw-off-b: #ff7a1a;
+    --bw-off-dot: #ff6b5b;
+    --bw-maybe: #ffc23d;
+    --bw-unknown: #9aa0b4;
+    --bw-emergency: #ff4d4d;
+    --bw-badge: #d12b25;
+    --bw-ink: #f5f7fc;
+    --bw-ink-2: rgba(245, 247, 252, 0.8);
+    --bw-ink-3: rgba(245, 247, 252, 0.66);
+    --bw-warn-ink: #ffd27a;
+    --bw-warn-bg: rgba(255, 194, 61, 0.18);
+    --bw-glass: rgba(18, 20, 28, 0.62);
+    --bw-glass-edge: rgba(255, 255, 255, 0.16);
+    --bw-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+    --bw-hair: rgba(255, 255, 255, 0.12);
+    --bw-pill: rgba(22, 24, 32, 0.9);
+    --bw-tint-a: 0.18;
+    --bw-now: #ffffff;
+    --bw-now-ring: rgba(0, 0, 0, 0.55);
+    --bw-tip-bg: rgba(30, 32, 40, 0.97);
+    --bw-tip-ink: #f5f7fc;
+    --bw-tip-edge: rgba(255, 255, 255, 0.14);
+    --bw-app-ink: #f2f4f9;
+    --bw-app-ink-2: #c4c8d3;
+    --bw-app-ink-3: #9ca2b3;
+    --bw-app-hair: rgba(255, 255, 255, 0.10);
+    --bw-app-now-ring: rgba(0, 0, 0, 0.6);
+    --bw-now-ink: #11131a;
+    --bw-card: rgba(255, 255, 255, 0.05);
+    --bw-card-edge: rgba(255, 255, 255, 0.08);
+    --bw-ctl: rgba(255, 255, 255, 0.07);
+    --bw-ctl-on: rgba(255, 255, 255, 0.15);
+    --bw-ctl-on-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --bw-btn: rgba(255, 255, 255, 0.08);
+    --bw-btn-edge: rgba(255, 255, 255, 0.14);
+    --bw-accent: #8fb4ff;
+    --bw-primary: #f2f4f9;
+    --bw-primary-ink: #15171d;
+    --bw-accent-ink: #10131c;
+    --bw-opt-on: rgba(143, 180, 255, 0.08);
+    /* The EcoFlow panel mockup is light only: the next seven are derived (primary-busy = 86 % primary + primary-ink). */
+    --bw-primary-busy: #d3d5da;
+    --bw-field: rgba(255, 255, 255, 0.06);
+    --bw-field-edge: rgba(255, 255, 255, 0.18);
+    --bw-on-ink: #5dffa8;
+    --bw-warn-text: #ffd27a;
+    --bw-danger-ink: #ffb4ae;
+    --bw-danger-icon: #ff4d4d;
+    --bw-thumb-shadow: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+    --bw-thumb-wp: radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%);
+    /* The wizard mockup is light only: derived. */
+    --bw-rail: rgba(255, 255, 255, 0.03);
+    --bw-pop-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+    --bw-disabled-ink: #757b8b;
+    --bw-done-ink: #5dffa8;
+  }
+}
+
+/* The setup wizard's style thumbnails are dark in either theme (setup-wizard.html): the dark values of every token
+   StyleThumb paints with. tests/shared/design-tokens.test.ts checks them against THEMES.dark. */
+.bw-dark-thumb {
+  --bw-on: #5dffa8;
+  --bw-off-a: #ffc23d;
+  --bw-off-b: #ff7a1a;
+  --bw-off-dot: #ff6b5b;
+  --bw-maybe: #ffc23d;
+  --bw-unknown: #9aa0b4;
+  --bw-ink: #f5f7fc;
+  --bw-ink-3: rgba(245, 247, 252, 0.66);
+  --bw-glass: rgba(18, 20, 28, 0.62);
+  --bw-glass-edge: rgba(255, 255, 255, 0.16);
+  --bw-hair: rgba(255, 255, 255, 0.12);
+  --bw-pill: rgba(22, 24, 32, 0.9);
+  --bw-tint-a: 0.18;
+  --bw-now: #ffffff;
+  --bw-thumb-shadow: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+}
+
+/* Hatching of the day-strip cells: 135°, 2 px stripe / 2 px gap (alphas as the widget mockup's cells). */
+.bw-cell--maybe {
+  background: repeating-linear-gradient(135deg, var(--bw-maybe) 0 2px, rgb(from var(--bw-maybe) r g b / 0.28) 2px 4px);
+}
+.bw-cell--unknown {
+  background: repeating-linear-gradient(135deg, rgb(from var(--bw-unknown) r g b / 0.85) 0 2px, rgb(from var(--bw-unknown) r g b / 0.22) 2px 4px);
+}
+/* A half hour that has passed. */
+.bw-cell--past { opacity: 0.4; }

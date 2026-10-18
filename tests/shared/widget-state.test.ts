@@ -1,6 +1,6 @@
 import { computeWidgetView, slotRuns, formatDurationLong, formatDurationShort } from '../../src/shared/widget-state';
 import { fixtureSnapshot } from '../helpers/snapshot';
-import type { ActualStatus, CurrentOutage } from '../../src/shared/types';
+import type { ActualStatus, CurrentOutage, DaySchedule, Slot } from '../../src/shared/types';
 const at = (iso: string) => new Date(iso);
 const allOn = (date: string) => ({ date, slots: Array(48).fill('on') });
 
@@ -45,12 +45,46 @@ test('maybe-off target', () => {
   const s = { ...fixtureSnapshot(), days: [d] };
   expect(computeWidgetView(s, at('2026-10-17T08:50:00Z')).nextText).toBe('Можливе вимкнення о 15:00 · через 3 год 10 хв');
 });
+describe('maybe-off now: the mockup copy, «можливо до HH:MM»', () => {
+  // A day with the given half hours set to `slot`.
+  const day = (date: string, slot: Slot, from: number, to: number, base: DaySchedule = allOn(date)): DaySchedule => {
+    for (let i = from; i < to; i++) base.slots[i] = slot;
+    return base;
+  };
+  const view = (days: DaySchedule[], iso: string) => computeWidgetView({ ...fixtureSnapshot(), days }, at(iso));
+
+  test('the maybe slot ends at midnight: «24:00», not «завтра о 00:00»', () => {
+    const v = view([day('2026-10-17', 'maybe-off', 44, 48), allOn('2026-10-18')], '2026-10-17T19:20:00Z'); // 22:20 Kyiv
+    expect(v.state).toBe('maybe-off'); expect(v.title).toBe('Можливе відключення');
+    expect(v.nextText).toBe('Можливо без світла до 24:00 · ще 1 год 40 хв');
+    expect(v.countdownShort).toBe('1:40'); expect(v.countdownCaption).toBe('можливо до 24:00');
+  });
+  test('the maybe slot ends today', () => {
+    const v = view([day('2026-10-17', 'maybe-off', 30, 34)], '2026-10-17T12:20:00Z'); // 15:20 Kyiv
+    expect(v.nextText).toBe('Можливо без світла до 17:00 · ще 1 год 40 хв');
+    expect(v.countdownCaption).toBe('можливо до 17:00');
+  });
+  test('the maybe slot runs past midnight: the line says «завтра», the caption does not', () => {
+    const v = view([day('2026-10-17', 'maybe-off', 44, 48), day('2026-10-18', 'maybe-off', 0, 4)], '2026-10-17T19:20:00Z');
+    expect(v.nextText).toBe('Можливо без світла до завтра 02:00 · ще 3 год 40 хв');
+    expect(v.countdownShort).toBe('3:40'); expect(v.countdownCaption).toBe('можливо до 02:00');
+  });
+  test('a sure outage after the maybe slot keeps its own copy', () => {
+    const v = view([day('2026-10-17', 'off', 32, 36, day('2026-10-17', 'maybe-off', 30, 32))], '2026-10-17T12:20:00Z');
+    expect(v.state).toBe('maybe-off');
+    expect(v.nextText).toBe('Вимкнення о 16:00 · через 40 хв'); expect(v.countdownCaption).toBe('до вимкнення о 16:00');
+  });
+  test('«24:00» is for the maybe copy only', () => {
+    const v = view([allOn('2026-10-17'), day('2026-10-18', 'off', 0, 2)], '2026-10-17T19:20:00Z');
+    expect(v.nextText).toBe('Вимкнення завтра о 00:00 · через 1 год 40 хв'); expect(v.countdownCaption).toBe('до вимкнення о 00:00');
+  });
+});
 test('emergency overrides schedule', () => {
   const s = fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення', end: '17:00 17.10.2026' } });
   const v = computeWidgetView(s, at('2026-10-17T08:50:00Z'));
   expect(v.state).toBe('emergency'); expect(v.title).toBe('Світла немає'); expect(v.outageBadge).toBe('Аварійне');
   expect(v.nextText).toBe('Аварійне · орієнтовно до 17:00');
-  expect(v.countdownCaption).toBe('до орієнтовного увімкнення');
+  expect(v.countdownCaption).toBe('орієнтовно до 17:00');
   const noEnd = computeWidgetView(fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Екстрене відключення' } }), at('2026-10-17T08:50:00Z'));
   expect(noEnd.outageBadge).toBe('Екстрене'); expect(noEnd.nextText).toBe('Екстрене відключення · час відновлення невідомий');
 });
@@ -100,6 +134,24 @@ test('an unreadable fetchedAt counts as stale and does not break the view', () =
   expect(v.stale).toBe(true); expect(v.updatedText).toBe('оновлено --:--'); expect(v.state).toBe('on');
 });
 
+test('emergency window in Kyiv minutes of today, for painting the strip', () => {
+  const o = { kind: 'emergency' as const, text: 'Аварійні ремонтні роботи' };
+  // The capture rig's outage, 13:30–17:00, seen at 14:20 Kyiv.
+  const v = computeWidgetView(fixtureSnapshot({ currentOutage: { ...o, start: '13:30 17.10.2026', end: '17:00 17.10.2026' } }), at('2026-10-17T11:20:00Z'));
+  expect(v.emergency).toEqual({ startMin: 810, endMin: 1020 });
+  expect(v.state).toBe('emergency'); expect(v.nextText).toBe('Аварійне · орієнтовно до 17:00'); // unchanged
+  // Unreadable end: from the start through the now cell (11:30–12:00), so the now cell is never «on».
+  expect(withOutage({ ...o, start: '10:05 17.10.2026', end: 'невідомо' }).emergency).toEqual({ startMin: 605, endMin: 720 });
+  // Clipped to today: started yesterday, ends tomorrow.
+  expect(withOutage({ ...o, start: '22:00 16.10.2026', end: '03:00 18.10.2026' }).emergency).toEqual({ startMin: 0, endMin: 1440 });
+  // Unreadable start: only what is known, from the now cell to the end.
+  expect(withOutage({ ...o, start: 'незабаром', end: '17:00 17.10.2026' }).emergency).toEqual({ startMin: 690, endMin: 1020 });
+});
+test('no emergency window without an active emergency', () => {
+  expect(computeWidgetView(fixtureSnapshot(), NOW).emergency).toBeUndefined();
+  expect(withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: '13:00 17.10.2026', end: '17:00 17.10.2026' }).emergency).toBeUndefined();
+  expect(withOutage({ kind: 'other', text: 'Планові ремонтні роботи', start: '10:00 17.10.2026', end: '17:00 17.10.2026' }).emergency).toBeUndefined();
+});
 test('emergency for other queues does not override the saved queue (GPV1.2)', () => {
   const base = { kind: 'emergency' as const, text: 'Аварійне відключення', end: '17:00 17.10.2026' };
   expect(withOutage({ ...base, groups: ['GPV4.2'] }).state).toBe('on');
@@ -156,7 +208,7 @@ describe('with an actual reading', () => {
   test('actual off during DTEK emergency → emergency texts stay', () => {
     const v = computeWidgetView(emergency(), ON_SLOT, act('off'));
     expect(v.state).toBe('emergency'); expect(v.nextText).toBe('Аварійне · орієнтовно до 17:00');
-    expect(v.countdownCaption).toBe('до орієнтовного увімкнення'); expect(v.outageBadge).toBe('Аварійне');
+    expect(v.countdownCaption).toBe('орієнтовно до 17:00'); expect(v.outageBadge).toBe('Аварійне');
     expect(v.actual?.mismatch).toBe(false);
   });
   test('actual on during DTEK emergency → mismatch, badge kept', () => {

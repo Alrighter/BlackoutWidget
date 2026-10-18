@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="uk"><head>
+<meta charset="utf-8">
+<title>Blackout Widget — огляд</title>
+<script src="2fc4d394-598a-47cb-b334-b7011156e60b"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#9cc0ff}a:hover{color:#c7dbff}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1000px; box-sizing: border-box; padding: 60px 72px; background: #0f1116; color: #eef0f6; font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; display: flex; flex-direction: column; gap: 36px; -webkit-font-smoothing: antialiased">
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 40px">
+    <div style="display: flex; flex-direction: column; gap: 10px; max-width: 820px">
+      <div style="font-size: 13px; letter-spacing: 1.4px; text-transform: uppercase; color: #a3a9b9">Дизайн-макет · Windows 11 · macOS</div>
+      <h1 style="margin: 0; font-family: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; font-size: 64px; line-height: 72px; font-weight: 700; letter-spacing: -1.5px">Blackout Widget</h1>
+      <p style="margin: 0; font-size: 18px; line-height: 27px; color: #b4b9c7; text-wrap: pretty">Віджет на робочий стіл: графік відключень ДТЕК і фактичний стан світла від зарядної станції EcoFlow. Читається з одного погляду на будь-яких шпалерах.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; flex: none">
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #d7dae3"><span style="width: 10px; height: 10px; border-radius: 50%; background: #5dffa8; box-shadow: 0 0 10px rgba(93, 255, 168, 0.6)"></span>Світло є</div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #d7dae3"><span style="width: 10px; height: 10px; border-radius: 50%; background: #ff6b5b; box-shadow: 0 0 10px rgba(255, 107, 91, 0.6)"></span>Світла немає</div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #d7dae3"><span style="width: 10px; height: 10px; border-radius: 50%; background: repeating-linear-gradient(135deg, #ffc23d 0px 2px, rgba(255, 194, 61, 0.3) 2px 4px)"></span>Можливе відключення</div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #d7dae3"><span style="width: 10px; height: 10px; border-radius: 50%; background: #9aa0b4"></span>Немає даних</div>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #d7dae3"><span style="width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 10px rgba(255, 77, 77, 0.7)"></span>Аварійне</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px">
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <div style="height: 640px; border-radius: 22px; overflow: hidden; box-sizing: border-box; padding: 48px; display: flex; flex-direction: column; align-items: flex-end; gap: 32px; background: radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)">
+        <div style="display: flex; gap: 32px; align-items: flex-start">
+          <dc-import name="Compact" scenario="on" theme="light" hint-size="290px,150px"></dc-import>
+          <dc-import name="Dial" scenario="off" theme="light" hint-size="236px,260px"></dc-import>
+        </div>
+        <dc-import name="Timeline" scenario="ecoMatch" theme="light" hint-size="400px,200px"></dc-import>
+      </div>
+      <div style="font-size: 14px; color: #a3a9b9">Світла тема · світлі шпалери</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <div style="height: 640px; border-radius: 22px; overflow: hidden; box-sizing: border-box; padding: 48px; display: flex; flex-direction: column; align-items: flex-end; gap: 32px; background: radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)">
+        <div style="display: flex; gap: 32px; align-items: flex-start">
+          <dc-import name="Compact" scenario="emergency" theme="dark" hint-size="290px,150px"></dc-import>
+          <dc-import name="Dial" scenario="ecoMismatch" theme="dark" hint-size="236px,260px"></dc-import>
+        </div>
+        <dc-import name="Timeline" scenario="off" theme="dark" hint-size="400px,200px"></dc-import>
+      </div>
+      <div style="font-size: 14px; color: #a3a9b9">Темна тема · темні шпалери</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+
+
+</body></html>

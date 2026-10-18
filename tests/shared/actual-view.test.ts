@@ -1,4 +1,4 @@
-import { dayStrip, recentOutages, formatOutage, sinceText, type ActualOutage } from '../../src/shared/actual-view';
+import { dayStrip, recentOutages, formatOutage, outageParts, sinceText, type ActualOutage } from '../../src/shared/actual-view';
 import type { ActualPower, ActualSegment } from '../../src/shared/types';
 // Kyiv time on 2026-10-17 is UTC+3.
 const seg = (power: ActualPower, start: string, end?: string, startApprox?: boolean): ActualSegment =>
@@ -74,6 +74,16 @@ test('formatOutage variants', () => {
     .toBe('17.10 · з 14:32 · триває 2 год 5 хв');
   expect(formatOutage({ start: base.start, startApprox: false, endApprox: false, ongoing: false }, now))
     .toBe('17.10 · з 14:32 · кінець невідомий');
+});
+
+test('outageParts: date, range and duration apart; ongoing marks a live outage', () => {
+  const now = at('2026-10-17T14:00:00Z');
+  const base: ActualOutage = { start: '2026-10-17T11:32:00Z', end: '2026-10-17T13:05:00Z', startApprox: false, endApprox: true, ongoing: false };
+  expect(outageParts(base, now)).toEqual({ date: '17.10', range: '14:32–≈16:05', duration: '1 год 33 хв', live: false });
+  expect(outageParts({ start: base.start, startApprox: true, endApprox: false, ongoing: true }, at('2026-10-17T13:37:00Z')))
+    .toEqual({ date: '17.10', range: 'з ≈14:32', duration: 'триває 2 год 5 хв', live: true });
+  expect(outageParts({ start: base.start, startApprox: false, endApprox: false, ongoing: false }, now))
+    .toEqual({ date: '17.10', range: 'з 14:32', duration: 'кінець невідомий', live: false });
 });
 
 test('sinceText same day / other day / approx', () => {

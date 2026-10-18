@@ -10,7 +10,7 @@ export const IPC = {
   openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag', navigate: 'window:navigate',
   widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
   ecoflowTest: 'actual:ecoflow-test', ecoflowPreview: 'actual:ecoflow-preview', ecoflowSave: 'actual:ecoflow-save',
-  actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help',
+  actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openDtekSite: 'addr:dtek-site',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
@@ -58,6 +58,8 @@ export interface RendererApi {
   actualDisconnect(): Promise<void>;
   /** Opens the EcoFlow developer site (a fixed address) in the browser. */
   openEcoflowHelp(): void;
+  /** Opens the DTEK outage schedule page (a fixed address) in the browser (D11). */
+  openDtekSite(): void;
 }
 
 declare global { interface Window { api: RendererApi } }

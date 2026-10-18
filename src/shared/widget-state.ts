@@ -12,6 +12,8 @@ export interface WidgetView {
   lineLabel: string;
   updatedText: string;
   stale: boolean; outageBadge?: OutageBadgeText;
+  /** The active emergency outage within today, in Kyiv minutes (0..1440), for painting the day strip. */
+  emergency?: { startMin: number; endMin: number };
   actual?: WidgetActual; actualUnknownReason?: string; actualStrip?: StripPart[];
 }
 export interface WidgetActual { power: 'on' | 'off'; sinceText?: string; mismatch: boolean }
@@ -27,6 +29,12 @@ export function formatDurationLong(min: number): string {
 
 export function formatDurationShort(min: number): string {
   return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+}
+
+/** The big countdown; «≈» marks the estimated end of an emergency outage. */
+export function countdownText(view: WidgetView): string | undefined {
+  if (!view.countdownShort) return undefined;
+  return view.state === 'emergency' ? `≈${view.countdownShort}` : view.countdownShort;
 }
 
 export function slotRuns(slots: Slot[]): { start: number; end: number; slot: Slot }[] {
@@ -59,14 +67,29 @@ function badgeFor(o: CurrentOutage): OutageBadgeText {
  */
 function activeEmergency(
   o: CurrentOutage | undefined, groupId: string, now: Date, stale: boolean,
-): { outage: CurrentOutage; end?: Date } | null {
+): { outage: CurrentOutage; start?: Date; end?: Date } | null {
   if (!o || o.kind !== 'emergency') return null;
   if (o.groups?.length && !o.groups.includes(groupId)) return null;
   const start = o.start ? parseDtekDateTime(o.start) : undefined;
   if (start && start.getTime() > now.getTime()) return null;
   const end = o.end ? parseDtekDateTime(o.end) : undefined;
-  if (end) return end.getTime() > now.getTime() ? { outage: o, end } : null;
-  return stale ? null : { outage: o };
+  if (end) return end.getTime() > now.getTime() ? { outage: o, start, end } : null;
+  return stale ? null : { outage: o, start };
+}
+
+/**
+ * The emergency's stretch of today in Kyiv minutes. Only what is known is claimed: an unreadable start counts from the
+ * current half hour, an unreadable end runs through it — so the current half hour is always inside.
+ */
+function emergencyWindow(
+  start: Date | undefined, end: Date | undefined, todayKey: string, now: Date,
+): { startMin: number; endMin: number } {
+  const dayStart = kyivWallTimeToInstant(todayKey, 0).getTime();
+  const dayEnd = kyivWallTimeToInstant(addDays(todayKey, 1), 0).getTime();
+  const minuteOf = (t: Date): number =>
+    t.getTime() <= dayStart ? 0 : t.getTime() >= dayEnd ? 1440 : kyivMinutesOfDay(t);
+  const cellStart = Math.floor(kyivMinutesOfDay(now) / 30) * 30;
+  return { startMin: start ? minuteOf(start) : cellStart, endMin: end ? minuteOf(end) : cellStart + 30 };
 }
 
 function minutesUntil(at: Date, now: Date): number {
@@ -95,16 +118,17 @@ function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
   if (active) {
     const badge = badgeFor(active.outage);
     const end = active.end;
+    const emergency = emergencyWindow(active.start, end, todayKey, now);
     if (end) {
       const left = minutesUntil(end, now);
       return {
-        ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge,
+        ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge, emergency,
         nextText: `${badge} · орієнтовно до ${formatHM(end)}`,
-        countdownShort: formatDurationShort(left), countdownCaption: 'до орієнтовного увімкнення',
+        countdownShort: formatDurationShort(left), countdownCaption: `орієнтовно до ${formatHM(end)}`,
       };
     }
     return {
-      ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge,
+      ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge, emergency,
       nextText: `${badge} відключення · час відновлення невідомий`,
     };
   }
@@ -131,7 +155,20 @@ function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
   const at = kyivWallTimeToInstant(change.dateKey, change.j * 30);
   const left = minutesUntil(at, now);
   const hm = formatHM(at);
-  const when = `${change.dateKey !== todayKey ? 'завтра ' : ''}о ${hm}`;
+  const tomorrowChange = change.dateKey !== todayKey;
+  // A maybe-off stretch says how long it may last (mockup), and the end of today reads «24:00». A sure outage right
+  // after it keeps the outage copy below.
+  if (state === 'maybe-off' && change.slot === 'on') {
+    const endOfToday = tomorrowChange && change.j === 0;
+    const until = endOfToday ? '24:00' : hm;
+    return {
+      ...base, state, title,
+      nextText: `Можливо без світла до ${tomorrowChange && !endOfToday ? 'завтра ' : ''}${until} · ще ${formatDurationLong(left)}`,
+      countdownShort: formatDurationShort(left),
+      countdownCaption: `можливо до ${until}`,
+    };
+  }
+  const when = `${tomorrowChange ? 'завтра ' : ''}о ${hm}`;
   const [lead, caption] =
     change.slot === 'on' ? ['Увімкнуть', `до увімкнення о ${hm}`]
     : change.slot === 'off' ? ['Вимкнення', `до вимкнення о ${hm}`]

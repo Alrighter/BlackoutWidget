@@ -1,17 +1,33 @@
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 
 const LIMIT = 50;
 
+/** Whether `text` contains `query`, trimmed and in any case (the suggestions here, the wizard's house filter). */
+export function matches(text: string, query: string): boolean {
+  return text.toLowerCase().includes(query.trim().toLowerCase());
+}
+
+/** `text` with the first occurrence of `q` (lower case) in bold. */
+function withMatch(text: string, q: string): ReactNode {
+  const at = q ? text.toLowerCase().indexOf(q) : -1;
+  if (at < 0) return text;
+  return <>{text.slice(0, at)}<b>{text.slice(at, at + q.length)}</b>{text.slice(at + q.length)}</>;
+}
+
+/** A labelled field with the matching options listed under it (setup-wizard.html). */
 export function Autocomplete({ label, options, value, onChange }: {
   label: string; options: string[]; value: string | null; onChange(v: string | null): void;
 }) {
+  const id = useId();
   const [query, setQuery] = useState(value ?? '');
   const q = query.trim().toLowerCase();
-  const shown = (q ? options.filter(o => o.toLowerCase().includes(q)) : options).slice(0, LIMIT);
+  const shown = options.filter(o => matches(o, query)).slice(0, LIMIT);
   return (
-    <div className="autocomplete">
+    <>
+      <label className="st-label wz-label" htmlFor={`${id}-input`}>{label}</label>
       <input
-        role="combobox" aria-label={label} aria-expanded="true" aria-controls={`ac-${label}`} aria-autocomplete="list"
+        id={`${id}-input`} className="st-input wz-input"
+        role="combobox" aria-expanded="true" aria-controls={`${id}-list`} aria-autocomplete="list"
         value={query} placeholder="Почніть вводити…" autoFocus
         onChange={e => {
           const v = e.target.value;
@@ -19,16 +35,15 @@ export function Autocomplete({ label, options, value, onChange }: {
           onChange(options.includes(v) ? v : null);
         }}
       />
-      <div className="options" role="listbox" id={`ac-${label}`} aria-label={label}>
+      <div className="wz-list" role="listbox" id={`${id}-list`} aria-label={label} data-capture="options">
         {shown.map(o => (
           <button
-            type="button" role="option" key={o} aria-selected={o === value}
-            className={o === value ? 'option selected' : 'option'}
+            type="button" role="option" key={o} aria-selected={o === value} className="wz-option"
             onClick={() => { setQuery(o); onChange(o); }}
-          >{o}</button>
+          ><span>{withMatch(o, q)}</span></button>
         ))}
-        {shown.length === 0 && <div className="empty">Нічого не знайдено</div>}
+        {shown.length === 0 && <div className="wz-empty">Нічого не знайдено</div>}
       </div>
-    </div>
+    </>
   );
 }

@@ -1,112 +1,237 @@
-:root { --fg: #fff; --fg-soft: rgba(255,255,255,0.92); --muted: rgba(255,255,255,0.68); --tick: rgba(255,255,255,0.55);
-  --cell: rgba(255,255,255,0.2); --hatch-a: rgba(255,255,255,0.12); --hatch-b: rgba(255,255,255,0.04);
-  --border: rgba(255,255,255,0.28); --hl: rgba(255,255,255,0.35);
-  --tint-image: rgba(20,22,40,0.28); --tint-flat: rgba(30,30,60,0.45); --warn: #ffc23d; }
-@media (prefers-color-scheme: light) {
-  :root { --fg: #1a1c2e; --fg-soft: rgba(26,28,46,0.92); --muted: rgba(26,28,46,0.68); --tick: rgba(26,28,46,0.55);
-    --cell: rgba(26,28,46,0.16); --hatch-a: rgba(26,28,46,0.14); --hatch-b: rgba(26,28,46,0.04);
-    --border: rgba(255,255,255,0.5); --hl: rgba(255,255,255,0.6);
-    --tint-image: rgba(255,255,255,0.16); --tint-flat: rgba(245,245,250,0.55); --warn: #b45f00; }
-}
+@import '../ui/tokens.css';
+
+/* Solid underlay under the glass when there is no wallpaper crop: the base of the mockup's light / dark wallpaper. */
+:root { --w-underlay: #eef1f7; }
+@media (prefers-color-scheme: dark) { :root { --w-underlay: #10131f; } }
+
 html, body, #root { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
 body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-root { position: relative; width: 100%; height: 100%; }
 
-/* Move mode (tray «Перемістити віджет»): highlighted frame and a «Готово» button. */
+/*
+ * Move mode (tray «Перемістити віджет», D6): the mockup's frame, glyph and pill (tray-menu.html), the same in both
+ * themes, drawn inside the card. The frame sits 3 px in, so its outer dark ring shows, concentric with the card. The
+ * glyph sits on the frame's top-right corner: the mockup's bottom-right one would cover «оновлено …» on the ring and
+ * the timeline. The pill: one row on the timeline, the hint on two lines beside «Готово» on the compact, above it on the
+ * ring. It is centred on the ring; on the compact and the timeline a fixed top makes it cover whole lines rather than
+ * cut through them (compact: the next-change and warning lines, 43–80; timeline: the warning line, 70–86).
+ */
 .w-moving { cursor: move; }
-.w-moving::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
-  border: 2px solid #4da3ff; border-radius: 22px; box-shadow: 0 0 12px rgba(77,163,255,0.6) inset; }
-.w-done { position: absolute; right: 10px; bottom: 10px; z-index: 3; cursor: pointer;
-  font: 600 12px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; color: #fff;
-  background: #2f7fe0; border: 0; border-radius: 999px; padding: 5px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-.w-done:hover { background: #3a8cf0; }
+.w-move { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.w-move-frame { position: absolute; inset: 3px; border: 2px dashed #ffffff; border-radius: calc(var(--bw-r-compact) - 3px);
+  box-shadow: 0 0 0 2px rgba(17, 19, 26, 0.55), inset 0 0 0 2px rgba(17, 19, 26, 0.35); }
+.w-timeline .w-move-frame { border-radius: calc(var(--bw-r-timeline) - 3px); }
+.w-ring .w-move-frame { border-radius: calc(var(--bw-r-dial) - 3px); }
+.w-move-glyph { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+.w-move-glyph svg { fill: none; stroke: #11131a; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.w-move-pill { pointer-events: auto; box-sizing: border-box; display: flex; align-items: center; gap: 14px;
+  min-height: 46px; max-width: calc(100% - 24px); padding: 0 6px 0 16px; border-radius: var(--bw-r-pill);
+  background: rgba(18, 20, 28, 0.78); border: 1px solid rgba(255, 255, 255, 0.16); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color: #f5f7fc; font-size: 13px; line-height: 16px; backdrop-filter: blur(24px); }
+.w-move-hint { min-width: 0; text-wrap: balance; }
+.w-done { flex: none; height: 34px; padding: 0 18px; border: 0; border-radius: var(--bw-r-pill); cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 650; background: #f5f7fc; color: #11131a; }
+.w-done:hover { filter: brightness(0.93); }
+.w-done:active { filter: brightness(0.85); }
+.w-compact .w-move, .w-timeline .w-move { align-items: flex-start; }
+/* 40–86: under the status row (14–40), over the top 1 px of the strip at most (85 with an EcoFlow line). */
+.w-compact .w-move-pill { margin-top: 40px; }
+/* 64–110: under the count caption (51–64), above the strips (113 at the earliest). */
+.w-timeline .w-move-pill { margin-top: 64px; }
+.w-ring .w-move-pill { flex-direction: column; gap: 8px; padding: 10px 6px 6px; border-radius: 23px; text-align: center; }
 
+/* State colour of the card, dot and tint. */
+.w-tone-on { --bw-state: var(--bw-on); }
+.w-tone-off { --bw-state: var(--bw-off-dot); }
+.w-tone-maybe-off { --bw-state: var(--bw-maybe); }
+.w-tone-emergency { --bw-state: var(--bw-emergency); }
+.w-tone-unknown { --bw-state: var(--bw-unknown); }
+
+/*
+ * Card (D1): blurred wallpaper crop (.w-bg) or the solid underlay, then the mockup's glass with the state tint and edge
+ * (.w-glass). The glass carries the border so that, as in the mockup, the edge lies over glass. The outer shadow falls
+ * outside the window, which clips it.
+ */
 .w-card {
   position: relative; box-sizing: border-box; width: 100%; height: 100%; overflow: hidden;
-  font-family: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  color: var(--fg); border: 1px solid var(--border); border-radius: 22px;
-  box-shadow: inset 0 1px 0 var(--hl);
+  font-family: var(--bw-font); -webkit-font-smoothing: antialiased; color: var(--bw-ink);
+  border-radius: var(--bw-r-compact); box-shadow: var(--bw-shadow);
 }
+.w-bg-tint { background: var(--w-underlay); }
 .w-bg { position: absolute; inset: -30px; background-size: cover; background-position: center; filter: blur(18px) saturate(160%); }
-.w-tint { position: absolute; inset: 0; background: var(--tint-image); }
-.w-bg-tint .w-tint { background: var(--tint-flat); }
+.w-glass {
+  position: absolute; inset: 0; box-sizing: border-box; border: 1px solid var(--bw-glass-edge); border-radius: inherit;
+  background: radial-gradient(130% 110% at 0% 0%, rgb(from var(--bw-state) r g b / var(--bw-tint-a)) 0%, transparent 60%), var(--bw-glass);
+}
 .w-content { position: relative; z-index: 1; height: 100%; box-sizing: border-box; }
-.w-compact .w-content { padding: 16px 18px 14px; }
-.w-ring .w-content { padding: 12px 14px 8px; }
-.w-timeline .w-content { padding: 16px 18px 14px; }
+/* Paddings include the 1 px edge drawn by .w-glass. */
+.w-compact .w-content { display: flex; flex-direction: column; padding: 14px 17px 13px; }
+.w-ring .w-content { display: flex; flex-direction: column; align-items: center; padding: 13px 15px; }
+.w-timeline .w-content { display: flex; flex-direction: column; padding: 15px 17px 13px; }
 
-.w-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; background: #9aa0b4; }
-.w-dot.on { background: #5dffa8; box-shadow: 0 0 10px #5dffa8; }
-.w-dot.off, .w-dot.emergency { background: #ff5b5b; box-shadow: 0 0 10px #ff5b5b; }
-.w-dot.maybe-off { background: #ffc23d; box-shadow: 0 0 10px #ffc23d; }
-.w-status { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; line-height: 1.25; }
-.w-muted { color: var(--muted); font-size: 12px; line-height: 1.25; }
-.w-muted.w-warn { color: var(--warn); }
-.w-warn { color: var(--warn); }
-.w-next { font-size: 14px; margin-top: 4px; color: var(--fg-soft); }
-.w-big { font-size: 22px; font-weight: 650; line-height: 1.25; }
-.w-badge { font-size: 11px; font-weight: 650; letter-spacing: 0; padding: 2px 8px; border-radius: 999px; background: rgba(255,77,77,0.85); color: #fff; }
+/* Status row: dot, title, badge, EcoFlow bolt, «з HH:MM». */
+.w-status { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0;
+  font-size: 20px; line-height: 26px; font-weight: 650; letter-spacing: -0.2px; }
+/* «Можливе відключення» beside the bolt fits the compact's row only a step smaller, with a little room to spare. */
+.w-compact .w-status.w-long { gap: 6px; font-size: 19px; }
+.w-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--bw-state);
+  box-shadow: 0 0 0 3px rgb(from var(--bw-state) r g b / 0.22), 0 0 12px rgb(from var(--bw-state) r g b / 0.55); }
+.w-badge { flex: none; font-size: 11px; line-height: 15px; font-weight: 650; letter-spacing: 0.2px; color: #fff;
+  background: var(--bw-badge); padding: 2px 8px; border-radius: var(--bw-r-pill); }
+.w-since { flex: none; font-size: 12px; font-weight: 400; letter-spacing: 0; font-variant-numeric: tabular-nums; color: var(--bw-ink-3); }
 
-.w-bar { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; position: relative; flex: 1; }
-.w-hour { display: grid; grid-template-columns: 1fr 1fr; height: 14px; border-radius: 3px; overflow: hidden; background: var(--cell); }
-.w-half.off { background: linear-gradient(180deg, #ffc23d, #ff8a1f); }
-.w-half.maybe { background: repeating-linear-gradient(45deg, #ff9f2a 0 3px, rgba(255,159,42,0.3) 3px 6px); }
-.w-half.unk { background: repeating-linear-gradient(45deg, var(--hatch-a) 0 3px, var(--hatch-b) 3px 6px); }
-.w-bar-empty { display: flex; align-items: center; justify-content: center; height: 14px; border-radius: 3px;
-  background: repeating-linear-gradient(45deg, var(--hatch-a) 0 3px, var(--hatch-b) 3px 6px);
-  font-size: 10px; color: var(--muted); }
-.w-now { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px #fff; }
-.w-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--tick); margin-top: 4px; flex: 1; }
+.w-eco { position: relative; flex: none; display: flex; align-items: center; }
+.w-bolt { display: flex; align-items: center; color: var(--bw-ink); }
+.w-bolt svg { fill: currentColor; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.w-bolt-unk { color: var(--bw-ink-3); opacity: 0.5; }
+.w-bolt-unk svg { fill: none; }
+.w-tip { position: absolute; top: calc(100% + 10px); left: -14px; z-index: 5; box-sizing: border-box;
+  width: max-content; max-width: calc(100vw - 16px);
+  font-size: 11.5px; line-height: 15px; font-weight: 500; letter-spacing: 0; padding: 5px 9px; border-radius: 8px;
+  pointer-events: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  background: var(--bw-tip-bg); color: var(--bw-tip-ink); border: 1px solid var(--bw-tip-edge); }
 
-.w-compact-bar { margin-top: 14px; }
-.w-compact-bar > .w-ticks { flex: none; }
-.w-compact .w-content > .w-foot { margin-top: 8px; }
+.w-next { margin-top: 3px; font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums; color: var(--bw-ink-2); }
+.w-warnline { margin-top: 3px; display: flex; align-items: center; gap: 6px; min-width: 0;
+  font-size: 12px; line-height: 16px; font-weight: 600; color: var(--bw-warn-ink); }
+.w-warnline svg { flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.w-spacer { flex: 1 1 auto; }
 
-.w-tl-head { display: flex; justify-content: space-between; align-items: flex-start; }
-.w-tl-head > div:first-child { flex-shrink: 0; }
-.w-tl-count { text-align: right; min-width: 0; margin-left: 10px; }
-.w-tl-text { max-width: 200px; }
-.w-tl-row { display: flex; align-items: center; gap: 8px; }
-.w-tl-row > .w-ticks { margin-top: 4px; }
-.w-row-label { font-size: 11px; color: var(--muted); width: 74px; flex-shrink: 0; }
-.w-timeline .w-content > .w-foot { margin-top: 6px; }
+/* Day strip: 48 half-hour cells, the actual line and the «now» marker across both. */
+.w-strip { position: relative; }
+.w-cells { display: flex; gap: 1px; height: 12px; }
+.w-cell { flex: 1 1 0; min-width: 0; border-radius: var(--bw-r-cell); }
+.w-cell:first-child { border-radius: var(--bw-r-cell-end) var(--bw-r-cell) var(--bw-r-cell) var(--bw-r-cell-end); }
+.w-cell:last-child { border-radius: var(--bw-r-cell) var(--bw-r-cell-end) var(--bw-r-cell-end) var(--bw-r-cell); }
+.w-cell.on { background: var(--bw-on); }
+.w-cell.emergency { background: var(--bw-emergency); }
+/* An off run is one off-a → off-b gradient along its length; each cell paints its own stretch of it. */
+.w-cell.off { background: linear-gradient(90deg,
+  color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) var(--off-from)),
+  color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) var(--off-to))); }
+.w-now { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 2px;
+  background: var(--bw-now); box-shadow: 0 0 0 1px var(--bw-now-ring); }
+.w-actual-line { position: relative; height: 3px; margin-top: 3px; border-radius: 2px; overflow: hidden; background: var(--bw-hair); }
+.w-ap { position: absolute; top: 0; bottom: 0; }
+.w-ap.on { background: rgb(from var(--bw-on) r g b / 0.7); }
+.w-ap.off { background: var(--bw-off-dot); }
+.w-ap.unknown { background: repeating-linear-gradient(90deg, rgb(from var(--bw-unknown) r g b / 0.95) 0 2px, transparent 2px 4px); }
+/* A day not published yet: a hatched bar with the text on a pill. */
+.w-bar-empty { display: flex; align-items: center; justify-content: center; height: 14px; border-radius: var(--bw-r-cell-end);
+  background: repeating-linear-gradient(135deg, rgb(from var(--bw-unknown) r g b / 0.4) 0 2px, rgb(from var(--bw-unknown) r g b / 0.1) 2px 5px); }
+.w-bar-empty span { font-size: 9.5px; line-height: 12px; font-weight: 600; padding: 0 7px; border-radius: var(--bw-r-pill);
+  background: var(--bw-pill); color: var(--bw-ink-2); }
+.w-ticks { display: flex; justify-content: space-between; margin-top: 3px;
+  font-size: 9.5px; line-height: 11px; font-variant-numeric: tabular-nums; color: var(--bw-ink-3); }
 
-.w-svg-label, .w-svg-main { font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
-.w-svg-label { fill: var(--tick); }
-.w-svg-main { fill: var(--fg); }
-.w-svg-sub { fill: var(--muted); }
-.w-ring-caption { text-align: center; margin-top: 2px; }
+/* Caption: «Лінія 1 · черга 1.2 · оновлено 11:45» and the stale pill. */
+.w-cap { display: flex; align-items: center; min-width: 0;
+  font-size: 11px; line-height: 14px; font-variant-numeric: tabular-nums; color: var(--bw-ink-3); }
+.w-sep { flex: none; white-space: pre; margin-left: 2px; }
+.w-fixed { flex: none; white-space: nowrap; }
+.w-stale { flex: none; white-space: nowrap; margin-left: 5px; font-size: 10.5px; line-height: 14px; font-weight: 650;
+  padding: 1px 7px; border-radius: var(--bw-r-pill); color: var(--bw-warn-ink); background: var(--bw-warn-bg); }
+.w-compact .w-foot { margin-top: 6px; }
 
-/* Everything must fit the fixed window: single lines ellipsize; «оновлено HH:MM» and the stale mark never shrink. */
+/* Single lines ellipsize so everything fits the fixed window. */
 .w-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.w-cap { display: flex; }
-.w-fixed, .w-stale { flex-shrink: 0; white-space: nowrap; }
-.w-sep { flex-shrink: 0; white-space: pre; }
-.w-cap-warn { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.w-foot-changed .w-cap { margin-top: 1px; }
-/* Line changed in compact: warning and caption share the caption's room (smaller type, tighter gaps). */
-.w-compact .w-compact-bar.w-tight { margin-top: 7px; }
-.w-compact .w-content > .w-foot-changed { margin-top: 4px; }
-.w-compact .w-foot-changed .w-muted { font-size: 11px; line-height: 1.25; }
-.w-ring .w-cap-warn { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center; }
-.w-ring .w-foot-changed .w-muted { font-size: 11px; line-height: 1.25; }
-/* Below the warning the caption is one short line («оновлено HH:MM · дані застаріли»): no clamp that could clip it. */
-.w-ring .w-foot-changed .w-cap { display: block; overflow: visible; }
-.w-status.w-long { font-size: 19px; }
-.w-ring .w-cap { display: block; text-align: center; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.w-ring .w-cap .w-ellipsis { display: inline; white-space: normal; overflow: visible; }
-.w-ring .w-cap .w-sep { white-space: normal; }
-.w-tl-text.w-ellipsis { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
-/* Actual power: source mark next to the status, and a thin line (ring: inner arc) of today's real outages. */
-.w-src { display: inline-flex; align-items: center; flex-shrink: 0; color: #5dffa8; }
-.w-src-unk { color: var(--tick); opacity: 0.7; }
-.w-actual-line { position: relative; height: 4px; margin-top: 3px; border-radius: 2px; background: transparent; }
-.w-ap { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
-.w-ap.off { background: #ff6b5b; }
-.w-ap.unknown { background: repeating-linear-gradient(45deg, var(--hatch-a) 0 3px, var(--hatch-b) 3px 6px); outline: 1px solid var(--hatch-a); outline-offset: -1px; }
-.w-ap.on { background: transparent; }
-.w-compact-bar > .w-bar { flex: none; }
-.w-tl-bar { flex: 1; min-width: 0; }
-.w-tl-bar > .w-bar { flex: none; }
-.w-tl-sub { max-width: 190px; }
+/*
+ * Timeline (widget-timeline.html): the status and the next change with the big countdown beside them, the warning
+ * row, then at the bottom today's and tomorrow's strips under one tick scale, and the caption.
+ */
+.w-card.w-timeline { border-radius: var(--bw-r-timeline); }
+.w-timeline .w-glass {
+  background: radial-gradient(110% 120% at 0% 0%, rgb(from var(--bw-state) r g b / var(--bw-tint-a)) 0%, transparent 55%), var(--bw-glass);
+}
+/*
+ * The title outranks the countdown. The left column never gets narrower than the status row (the next line, ellipsized,
+ * adds no width); the count block takes what is left, up to its own width, and narrows when the row needs the room.
+ */
+.w-tl-head { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.w-tl-main { flex: 1 0 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.w-timeline .w-status { font-size: 19px; }
+.w-tl-line { contain: inline-size; font-size: 12.5px; line-height: 17px; font-variant-numeric: tabular-nums; color: var(--bw-ink-2); }
+.w-tl-count { flex: 0 1 auto; display: flex; flex-direction: column; align-items: flex-end; max-width: 150px; }
+.w-tl-big { font-family: var(--bw-font-display); font-size: 34px; line-height: 36px; font-weight: 600; letter-spacing: -0.8px;
+  font-variant-numeric: tabular-nums; }
+/*
+ * The caption wraps to two lines rather than cut the time: when it is wider than 150 px, or when the block is narrowed.
+ * Its box adds no width (size containment); a hidden copy of the text (data-cap) gives the block the caption's width,
+ * at most 150 px.
+ */
+.w-tl-count::after { content: attr(data-cap); max-width: 150px; height: 0; overflow: hidden; visibility: hidden;
+  font-size: 10.5px; line-height: 13px; }
+.w-tl-cap { align-self: stretch; contain: inline-size; }
+.w-tl-cl { font-size: 10.5px; line-height: 13px; color: var(--bw-ink-2); text-align: right; overflow: hidden; text-wrap: pretty;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.w-timeline .w-warnline { margin-top: 6px; }
+.w-tl-row { display: flex; align-items: center; gap: 8px; }
+.w-tl-row > .w-strip { flex: 1 1 auto; min-width: 0; }
+.w-tl-tomorrow { margin-top: 7px; }
+.w-tl-label { flex: none; width: 86px; font-size: 11px; line-height: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.w-tl-day { font-weight: 600; }
+.w-tl-date { color: var(--bw-ink-3); }
+/* Under the strips only: the 86 px label plus the 8 px gap. */
+.w-timeline .w-ticks { margin-left: 94px; }
+.w-timeline .w-foot { margin-top: 7px; }
+
+/*
+ * Ring (widget-ring.html): a 24-hour dial, 00 at the top, clockwise. Its own tint geometry and radius; the dial, then
+ * the warning row and the caption at the bottom, all centred.
+ */
+.w-card.w-ring { border-radius: var(--bw-r-dial); }
+.w-ring .w-glass {
+  background: radial-gradient(120% 90% at 50% 0%, rgb(from var(--bw-state) r g b / var(--bw-tint-a)) 0%, transparent 60%), var(--bw-glass);
+}
+.w-dial { position: relative; flex: none; }
+/* 48 segments (--w-segs, from RingWidget) on a 12 px band; the actual power on a 3 px band 16 px inside it. */
+.w-dial-segs, .w-dial-actual { position: absolute; border-radius: 50%; }
+.w-dial-segs { inset: 0; background: var(--w-segs);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11.5px)); }
+.w-dial-actual { inset: 16px; background: var(--w-actual);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); }
+.w-dial-track { background: var(--bw-hair); }
+.w-dial-tick { position: absolute; transform: translate(-50%, -50%);
+  font-size: 9.5px; font-variant-numeric: tabular-nums; color: var(--bw-ink-3); }
+.w-at-00 { left: 50%; top: 17%; }
+.w-at-06 { left: 83%; top: 50%; }
+.w-at-12 { left: 50%; top: 83%; }
+.w-at-18 { left: 17%; top: 50%; }
+/* White with a ring in both themes, unlike the strip's --bw-now marker. */
+.w-dial-now { position: absolute; width: 12px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%);
+  background: #fff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.38), 0 0 0 5px rgba(255, 255, 255, 0.3), 0 2px 6px rgba(0, 0, 0, 0.35); }
+
+.w-dial-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 124px;
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.w-dial-center .w-badge { font-size: 10px; line-height: 14px; padding: 1px 7px; margin-bottom: 2px; }
+.w-dial-center .w-status { justify-content: center; gap: 5px; height: auto; max-width: 100%;
+  font-size: 12px; line-height: 15px; font-weight: 600; letter-spacing: 0; }
+.w-dial-center .w-dot { width: 7px; height: 7px;
+  box-shadow: 0 0 0 3px rgb(from var(--bw-state) r g b / 0.22), 0 0 10px rgb(from var(--bw-state) r g b / 0.55); }
+.w-dial-center .w-bolt svg { width: 11px; height: 11px; stroke-width: 2; }
+.w-dial-center .w-since { font-size: 11px; }
+.w-dial-count { font-family: var(--bw-font-display); font-size: 40px; line-height: 44px; font-weight: 600;
+  letter-spacing: -1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.w-dial-cap { max-width: 116px; font-size: 10.5px; line-height: 13px; text-wrap: balance; color: var(--bw-ink-2);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* No countdown: the dot (and bolt) over the badge, a big status, a caption of up to three lines. */
+.w-dial-marks { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.w-dial-marks .w-dot { width: 9px; height: 9px; }
+.w-dial-marks .w-bolt svg { width: 12px; height: 12px; }
+.w-dial-nocount .w-badge { margin-bottom: 0; letter-spacing: 0; }
+.w-dial-title { max-width: 100%; font-size: 18px; line-height: 22px; font-weight: 650; letter-spacing: -0.2px; text-wrap: balance;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.w-dial-nocount .w-dial-cap { -webkit-line-clamp: 3; }
+/* The small ring (warning row) brings the 18 / 06 ticks 12 px closer: wide centre lines get smaller to clear them. */
+.w-dial-small .w-dial-title { font-size: 16px; line-height: 20px; }
+.w-dial-small .w-dial-count-long { font-size: 34px; }
+/* Inside the ring there is room above the bolt. */
+.w-tip-above { top: auto; bottom: calc(100% + 8px); }
+.w-ring .w-tip { font-size: 11px; line-height: 14px; }
+
+.w-ring .w-warnline { margin: 0 0 5px; gap: 5px; max-width: 100%; font-size: 11px; line-height: 15px; }
+.w-ring .w-warnline svg { width: 12px; height: 12px; }
+.w-ring .w-foot { max-width: 100%; }
+.w-ring .w-cap { justify-content: center; }

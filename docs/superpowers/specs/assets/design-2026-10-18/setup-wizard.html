@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="uk"><head>
+<meta charset="utf-8">
+<title>Майстер першого запуску</title>
+<script src="ea9ad70f-5c9e-4509-b287-2077211fc443"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#2a5bd7}a:hover{color:#1d44a8}
+</style>
+</helmet>
+<div style="width: 3000px; min-height: 1360px; box-sizing: border-box; padding: 56px 64px; background: #121419; color: #eef0f6; font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px; -webkit-font-smoothing: antialiased">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.6px">Майстер першого запуску · 640×460</h1>
+    <p style="margin: 0; font-size: 15px; line-height: 22px; color: #a7adbd">Сім кроків, прогрес — у лівій колонці. Крок «Лінія» показується лише коли в будинку дві лінії; поруч — графік на сьогодні для кожної, щоб звірити із сайтом.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px 24px">
+    <sc-for list="{{steps}}" as="s" hint-placeholder-count="7">
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 14px; color: #a7adbd"><span style="font-weight: 600; color: #eef0f6">Крок {{s.n}}</span> · {{s.name}}</div>
+        <div style="height: 520px; border-radius: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)">
+          <div style="width: 640px; height: 460px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; border-radius: 8px; background: linear-gradient(160deg, #f4f2f1 0%, #eef0f5 55%, #e8ecf3 100%); border: 1px solid rgba(0, 0, 0, 0.14); box-shadow: 0 30px 80px rgba(20, 24, 40, 0.28), 0 8px 24px rgba(20, 24, 40, 0.14); color: #11131a">
+            <div style="height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between">
+              <div style="display: flex; align-items: center; gap: 10px; padding-left: 14px; font-size: 12px">
+                <span style="width: 16px; height: 16px; border-radius: 5px; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, #2b2f3b, #11131a); color: #5dffa8"><svg width="10" height="10" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: currentColor"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg></span>
+                <span>Налаштування Blackout Widget</span>
+              </div>
+              <button aria-label="Закрити" style="width: 46px; height: 32px; border: 0; background: transparent; color: #474c59; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true" style="stroke: currentColor; stroke-width: 1"><path d="M0 0l10 10M10 0 0 10"></path></svg></button>
+            </div>
+            <div style="flex: 1 1 auto; min-height: 0; display: flex">
+              <nav aria-label="Кроки" style="flex: none; width: 196px; box-sizing: border-box; padding: 14px 12px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid rgba(17, 19, 26, 0.08); background: rgba(255, 255, 255, 0.35)">
+                <div style="font-size: 13px; font-weight: 650; padding: 0 6px 10px">Перше налаштування</div>
+                <sc-for list="{{s.rail}}" as="r" hint-placeholder-count="7">
+                  <div style="display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 6px; border-radius: 8px; background: {{r.rowBg}}">
+                    <span style="flex: none; width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; background: {{r.bg}}; border: 1.5px solid {{r.edge}}; color: {{r.ink}}">
+                      <sc-if value="{{r.done}}" hint-placeholder-val="{{false}}"><svg width="11" height="11" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></sc-if>
+                      <sc-if value="{{r.notDone}}" hint-placeholder-val="{{true}}">{{r.n}}</sc-if>
+                    </span>
+                    <span style="display: flex; flex-direction: column; min-width: 0">
+                      <span style="font-size: 13px; line-height: 17px; font-weight: {{r.fw}}; color: {{r.labelInk}}">{{r.label}}</span>
+                      <sc-if value="{{r.hasSub}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; line-height: 14px; color: #686d7c">якщо в будинку дві лінії</span></sc-if>
+                    </span>
+                  </div>
+                </sc-for>
+              </nav>
+              <div style="flex: 1 1 auto; min-width: 0; box-sizing: border-box; padding: 18px 24px 16px; display: flex; flex-direction: column">
+                <div style="font-size: 12px; color: #686d7c; font-variant-numeric: tabular-nums">Крок {{s.n}} з 7</div>
+                <h2 style="margin: 2px 0 0; font-size: 20px; line-height: 26px; font-weight: 700; letter-spacing: -0.2px">{{s.title}}</h2>
+                <p style="margin: 2px 0 14px; font-size: 13px; line-height: 19px; color: #474c59; text-wrap: pretty">{{s.desc}}</p>
+                <div style="flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column">
+
+                  <sc-if value="{{s.is1}}" hint-placeholder-val="{{false}}">
+                    <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px">
+                      <legend style="position: absolute; width: 1px; height: 1px; overflow: hidden">Регіон</legend>
+                      <sc-for list="{{regions}}" as="g" hint-placeholder-count="4">
+                        <label style="display: flex; align-items: center; gap: 10px; min-height: 46px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; background: {{g.bg}}; border: 1px solid {{g.edge}}">
+                          <input type="radio" name="region" checked="{{g.sel}}" style="margin: 0; width: 16px; height: 16px; accent-color: #2a5bd7">
+                          <span style="display: flex; flex-direction: column; min-width: 0"><span style="font-size: 13.5px; font-weight: 600">{{g.name}}</span><span style="font-size: 12px; color: #686d7c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{g.company}}</span></span>
+                        </label>
+                      </sc-for>
+                    </fieldset>
+                  </sc-if>
+
+                  <sc-if value="{{s.is2}}" hint-placeholder-val="{{false}}">
+                    <label for="city" style="font-size: 12.5px; font-weight: 600; margin-bottom: 6px">Місто або село</label>
+                    <input id="city" type="text" value="Бу" role="combobox" aria-expanded="true" aria-controls="city-list" style="box-sizing: border-box; width: 100%; height: 36px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #2a5bd7; box-shadow: 0 0 0 3px rgba(42, 91, 215, 0.18); background: #ffffff; font: inherit; font-size: 14px; color: #11131a">
+                    <div id="city-list" role="listbox" style="margin-top: 6px; padding: 4px; border-radius: 10px; background: #ffffff; border: 1px solid rgba(17, 19, 26, 0.10); box-shadow: 0 12px 28px rgba(20, 24, 40, 0.14); display: flex; flex-direction: column">
+                      <div role="option" aria-selected="true" style="display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 0 10px; border-radius: 7px; background: rgba(42, 91, 215, 0.08)"><span style="font-size: 13.5px">м. <b>Бу</b>ча</span><span style="font-size: 12px; color: #686d7c">Бучанський р-н</span></div>
+                      <div role="option" aria-selected="false" style="display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 0 10px; border-radius: 7px"><span style="font-size: 13.5px">с. <b>Бу</b>зова</span><span style="font-size: 12px; color: #686d7c">Бучанський р-н</span></div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{s.is3}}" hint-placeholder-val="{{false}}">
+                    <div style="display: flex; gap: 6px; margin-bottom: 10px"><span style="font-size: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(17, 19, 26, 0.06); color: #474c59">м. Буча</span></div>
+                    <label for="street" style="font-size: 12.5px; font-weight: 600; margin-bottom: 6px">Вулиця</label>
+                    <input id="street" type="text" value="Вокз" role="combobox" aria-expanded="true" aria-controls="street-list" style="box-sizing: border-box; width: 100%; height: 36px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #2a5bd7; box-shadow: 0 0 0 3px rgba(42, 91, 215, 0.18); background: #ffffff; font: inherit; font-size: 14px; color: #11131a">
+                    <div id="street-list" role="listbox" style="margin-top: 6px; padding: 4px; border-radius: 10px; background: #ffffff; border: 1px solid rgba(17, 19, 26, 0.10); box-shadow: 0 12px 28px rgba(20, 24, 40, 0.14); display: flex; flex-direction: column">
+                      <div role="option" aria-selected="true" style="display: flex; align-items: center; min-height: 40px; padding: 0 10px; border-radius: 7px; background: rgba(42, 91, 215, 0.08); font-size: 13.5px">вул. <b>Вокз</b>альна</div>
+                      <div role="option" aria-selected="false" style="display: flex; align-items: center; min-height: 40px; padding: 0 10px; border-radius: 7px; font-size: 13.5px">пров. <b>Вокз</b>альний</div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{s.is4}}" hint-placeholder-val="{{false}}">
+                    <div style="display: flex; gap: 6px; margin-bottom: 12px"><span style="font-size: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(17, 19, 26, 0.06); color: #474c59">м. Буча, вул. Вокзальна</span></div>
+                    <div role="radiogroup" aria-label="Номер будинку" style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px">
+                      <sc-for list="{{houses}}" as="hs" hint-placeholder-count="12">
+                        <button role="radio" aria-checked="{{hs.sel}}" style="height: 44px; border-radius: 9px; font: inherit; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; background: {{hs.bg}}; border: 1px solid {{hs.edge}}; color: {{hs.ink}}">{{hs.n}}</button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{s.is5}}" hint-placeholder-val="{{false}}">
+                    <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px">
+                      <legend style="position: absolute; width: 1px; height: 1px; overflow: hidden">Лінія</legend>
+                      <sc-for list="{{lines}}" as="ln" hint-placeholder-count="2">
+                        <label style="display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; background: {{ln.bg}}; border: 1px solid {{ln.edge}}">
+                          <span style="display: flex; align-items: center; gap: 10px"><input type="radio" name="line" checked="{{ln.sel}}" style="margin: 0; width: 16px; height: 16px; accent-color: #2a5bd7"><span style="flex: none; font-size: 13.5px; font-weight: 600">{{ln.name}}</span><span style="min-width: 0; font-size: 12px; color: #686d7c; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums">{{ln.summary}}</span></span>
+                          <span style="display: flex; gap: 1px; height: 12px">
+                            <sc-for list="{{ln.cells}}" as="c" hint-placeholder-count="48"><span style="flex: 1 1 0; border-radius: 1.5px; background: {{c.bg}}"></span></sc-for>
+                          </span>
+                          <span style="display: flex; justify-content: space-between; font-size: 9.5px; color: #686d7c; font-variant-numeric: tabular-nums"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></span>
+                        </label>
+                      </sc-for>
+                    </fieldset>
+                    <a href="#" style="margin-top: 10px; font-size: 12.5px">Відкрити графік на сайті ДТЕК</a>
+                  </sc-if>
+
+                  <sc-if value="{{s.is6}}" hint-placeholder-val="{{false}}">
+                    <div role="radiogroup" aria-label="Стиль віджета" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+                      <button role="radio" aria-checked="true" style="box-sizing: border-box; padding: 7px; border-radius: 12px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 7px; background: rgba(42, 91, 215, 0.06); border: 2px solid #2a5bd7; color: #11131a">
+                        <span style="height: 86px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #0b0e18 0%, #1a2142 100%)">
+                          <span style="position: relative; display: block; width: 104px; height: 54px"><span style="position: absolute; left: 0; top: 0; display: block; width: 290px; height: 150px; transform: scale(0.36); transform-origin: 0 0"><dc-import name="Compact" scenario="on" theme="dark" hint-size="290px,150px"></dc-import></span></span>
+                        </span>
+                        <span style="font-size: 13px; font-weight: 600; padding: 0 2px">Компакт</span>
+                      </button>
+                      <button role="radio" aria-checked="false" style="box-sizing: border-box; padding: 7px; border-radius: 12px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 7px; background: transparent; border: 2px solid rgba(17, 19, 26, 0.13); color: #11131a">
+                        <span style="height: 86px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #0b0e18 0%, #1a2142 100%)">
+                          <span style="position: relative; display: block; width: 66px; height: 73px"><span style="position: absolute; left: 0; top: 0; display: block; width: 236px; height: 260px; transform: scale(0.28); transform-origin: 0 0"><dc-import name="Dial" scenario="off" theme="dark" hint-size="236px,260px"></dc-import></span></span>
+                        </span>
+                        <span style="font-size: 13px; font-weight: 600; padding: 0 2px">Циферблат</span>
+                      </button>
+                      <button role="radio" aria-checked="false" style="box-sizing: border-box; padding: 7px; border-radius: 12px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 7px; background: transparent; border: 2px solid rgba(17, 19, 26, 0.13); color: #11131a">
+                        <span style="height: 86px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #0b0e18 0%, #1a2142 100%)">
+                          <span style="position: relative; display: block; width: 104px; height: 52px"><span style="position: absolute; left: 0; top: 0; display: block; width: 400px; height: 200px; transform: scale(0.26); transform-origin: 0 0"><dc-import name="Timeline" scenario="ecoMatch" theme="dark" hint-size="400px,200px"></dc-import></span></span>
+                        </span>
+                        <span style="font-size: 13px; font-weight: 600; padding: 0 2px">Таймлайн</span>
+                      </button>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{s.is7}}" hint-placeholder-val="{{false}}">
+                    <div style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; background: #ffffff; border: 1px solid rgba(17, 19, 26, 0.08)">
+                      <span style="flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(31, 191, 114, 0.14); color: #0f7a45"><svg width="22" height="22" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></span>
+                      <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 14px; font-weight: 600">м. Буча, вул. Вокзальна, 9-А</span><span style="font-size: 12.5px; color: #474c59">Лінія 1 · черга 1.2 · стиль «Компакт»</span></span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; min-height: 48px; padding: 0 16px; border-radius: 12px; background: #ffffff; border: 1px solid rgba(17, 19, 26, 0.08)">
+                      <label for="auto-w" style="font-size: 13.5px; font-weight: 600">Запускати разом із системою</label>
+                      <button id="auto-w" role="switch" aria-checked="true" style="flex: none; width: 42px; height: 22px; border: 0; border-radius: 999px; padding: 0 3px; display: flex; align-items: center; justify-content: flex-end; background: #2a5bd7"><span style="width: 16px; height: 16px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25)"></span></button>
+                    </div>
+                    <p style="margin: 12px 0 0; font-size: 12.5px; line-height: 18px; color: #474c59">Фактичний стан світла можна підключити пізніше: Налаштування → EcoFlow.</p>
+                  </sc-if>
+
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px">
+                  <button disabled="{{s.backDisabled}}" style="height: 34px; padding: 0 16px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: #ffffff; border: 1px solid rgba(17, 19, 26, 0.13); color: {{s.backInk}}">Назад</button>
+                  <button style="height: 34px; min-width: 96px; padding: 0 18px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: #1b1e27; color: #ffffff">{{s.next}}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:3000,&quot;height&quot;:1360}}">
+function hx(h) { h = String(h).replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function rgba(h, a) { var c = hx(h); return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')'; }
+function mixA(h1, h2, t, a) { var p = hx(h1), q = hx(h2); return 'rgba(' + Math.round(p[0] + (q[0] - p[0]) * t) + ', ' + Math.round(p[1] + (q[1] - p[1]) * t) + ', ' + Math.round(p[2] + (q[2] - p[2]) * t) + ', ' + a + ')'; }
+function sched(base, spans) { var a = [], i, k; for (i = 0; i < 48; i++) a.push(base); for (k = 0; k < spans.length; k++) { var s = spans[k]; for (i = Math.round(s[0] * 2); i < Math.round(s[1] * 2); i++) a[i] = s[2]; } return a.join(''); }
+var T = { on: '#1fbf72', offA: '#f2a20c', offB: '#ef6a10', maybe: '#e2a000', unk: '#8a90a6' };
+function cellBg(str, i) {
+  var ch = str.charAt(i);
+  if (ch === '0') {
+    var s = i; while (s > 0 && str.charAt(s - 1) === '0') s--;
+    var e = i; while (e < 47 && str.charAt(e + 1) === '0') e++;
+    var n = e - s + 1;
+    return 'linear-gradient(90deg, ' + mixA(T.offA, T.offB, (i - s) / n, 1) + ', ' + mixA(T.offA, T.offB, (i - s + 1) / n, 1) + ')';
+  }
+  if (ch === '1') return T.on;
+  if (ch === '?') return 'repeating-linear-gradient(135deg, ' + T.maybe + ' 0px 2px, ' + rgba(T.maybe, 0.28) + ' 2px 4px)';
+  return 'repeating-linear-gradient(135deg, ' + T.unk + ' 0px 2px, ' + rgba(T.unk, 0.22) + ' 2px 4px)';
+}
+function cells(str) { var o = []; for (var i = 0; i < 48; i++) o.push({ bg: cellBg(str, i) }); return o; }
+
+var NAMES = ['Регіон / компанія', 'Місто', 'Вулиця', 'Будинок', 'Лінія', 'Стиль віджета', 'Готово'];
+var STEPS = [
+  { title: 'Регіон і компанія', desc: 'Оберіть, хто постачає світло у ваш будинок.', next: 'Далі' },
+  { title: 'Місто', desc: 'Почніть вводити назву — підкажемо варіанти.', next: 'Далі' },
+  { title: 'Вулиця', desc: 'Вулиці міста Буча.', next: 'Далі' },
+  { title: 'Будинок', desc: 'Оберіть номер будинку.', next: 'Далі' },
+  { title: 'Лінія', desc: 'У цьому будинку дві лінії. Звірте графік на сьогодні з сайтом ДТЕК і оберіть свою.', next: 'Далі' },
+  { title: 'Стиль віджета', desc: 'Змінити можна будь-коли — у налаштуваннях або в меню трею.', next: 'Далі' },
+  { title: 'Готово', desc: 'Віджет уже на робочому столі.', next: 'Завершити' }
+];
+function rail(cur) {
+  return NAMES.map(function (label, i) {
+    var n = i + 1, done = n < cur, now = n === cur;
+    return {
+      n: n, label: label, done: done, notDone: !done, hasSub: n === 5,
+      bg: done ? '#11131a' : (now ? '#ffffff' : 'rgba(0, 0, 0, 0)'),
+      edge: done ? '#11131a' : (now ? '#2a5bd7' : 'rgba(17, 19, 26, 0.25)'),
+      ink: done ? '#ffffff' : (now ? '#2a5bd7' : '#686d7c'),
+      rowBg: now ? 'rgba(42, 91, 215, 0.08)' : 'rgba(0, 0, 0, 0)',
+      fw: now ? '650' : '400', labelInk: now || done ? '#11131a' : '#474c59'
+    };
+  });
+}
+var REG = [
+  ['Київ', 'ДТЕК Київські електромережі', false],
+  ['Київська область', 'ДТЕК Київські регіональні електромережі', true],
+  ['Дніпропетровська область', 'ДТЕК Дніпровські електромережі', false],
+  ['Одеська область', 'ДТЕК Одеські електромережі', false]
+];
+var HOUSES = ['1', '3', '5', '7', '9', '9-А', '11', '13', '15', '17', '19', '21'];
+var L1 = sched('1', [[8, 12, '0'], [16, 20, '?']]);
+var L2 = sched('1', [[4, 8, '0'], [12, 16, '0'], [20, 24, '?']]);
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      steps: STEPS.map(function (s, i) {
+        var n = i + 1;
+        return { n: n, name: NAMES[i], title: s.title, desc: s.desc, next: s.next, rail: rail(n), is1: n === 1, is2: n === 2, is3: n === 3, is4: n === 4, is5: n === 5, is6: n === 6, is7: n === 7, backDisabled: n === 1, backInk: n === 1 ? '#9ca2b3' : '#11131a' };
+      }),
+      regions: REG.map(function (r) { return { name: r[0], company: r[1], sel: r[2], bg: r[2] ? 'rgba(42, 91, 215, 0.06)' : '#ffffff', edge: r[2] ? '#2a5bd7' : 'rgba(17, 19, 26, 0.10)' }; }),
+      houses: HOUSES.map(function (h) { var sel = h === '9-А'; return { n: h, sel: sel ? 'true' : 'false', bg: sel ? '#1b1e27' : '#ffffff', edge: sel ? '#1b1e27' : 'rgba(17, 19, 26, 0.12)', ink: sel ? '#ffffff' : '#11131a' }; }),
+      lines: [
+        { name: 'Лінія 1 · черга 1.2', summary: '08:00–12:00, 16:00–20:00 (можливо)', sel: true, bg: 'rgba(42, 91, 215, 0.06)', edge: '#2a5bd7', cells: cells(L1) },
+        { name: 'Лінія 2 · черга 4.1', summary: '04:00–08:00, 12:00–16:00, 20:00–24:00 (можливо)', sel: false, bg: '#ffffff', edge: 'rgba(17, 19, 26, 0.10)', cells: cells(L2) }
+      ]
+    };
+  }
+}
+</script>
+
+
+</body></html>
