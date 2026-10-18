@@ -12,8 +12,9 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
  * Move mode (tray «Перемістити віджет», D6): the mockup's frame, glyph and pill (tray-menu.html), the same in both
  * themes, drawn inside the card. The frame sits 3 px in, so its outer dark ring shows, concentric with the card. The
  * glyph sits on the frame's top-right corner: the mockup's bottom-right one would cover «оновлено …» on the ring and
- * the timeline. The pill is centred: one row on the timeline, the hint on two lines beside «Готово» on the compact,
- * above it on the ring.
+ * the timeline. The pill: one row on the timeline, the hint on two lines beside «Готово» on the compact, above it on the
+ * ring. It is centred on the ring; on the compact and the timeline a fixed top makes it cover whole lines rather than
+ * cut through them (compact: the next-change and warning lines, 43–80; timeline: the warning line, 70–86).
  */
 .w-moving { cursor: move; }
 .w-move { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; pointer-events: none; }
@@ -31,6 +32,13 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-move-hint { min-width: 0; text-wrap: balance; }
 .w-done { flex: none; height: 34px; padding: 0 18px; border: 0; border-radius: var(--bw-r-pill); cursor: pointer;
   font: inherit; font-size: 13px; font-weight: 650; background: #f5f7fc; color: #11131a; }
+.w-done:hover { filter: brightness(0.93); }
+.w-done:active { filter: brightness(0.85); }
+.w-compact .w-move, .w-timeline .w-move { align-items: flex-start; }
+/* 40–86: under the status row (14–40), over the top 1 px of the strip at most (85 with an EcoFlow line). */
+.w-compact .w-move-pill { margin-top: 40px; }
+/* 64–110: under the count caption (51–64), above the strips (113 at the earliest). */
+.w-timeline .w-move-pill { margin-top: 64px; }
 .w-ring .w-move-pill { flex-direction: column; gap: 8px; padding: 10px 6px 6px; border-radius: 23px; text-align: center; }
 
 /* State colour of the card, dot and tint. */
