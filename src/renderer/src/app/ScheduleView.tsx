@@ -43,7 +43,7 @@ function DayGrid({ cells, emptyText, actualRow, now }: {
     <div className="sv-grid" data-capture="grid">
       <div className="sv-grid-labels"><span /><span>Графік</span><span>Фактично</span></div>
       <div className="sv-grid-main">
-        <div className="sv-hours">{HOURS.map(h => <span key={h}>{h}</span>)}</div>
+        <div className="sv-hours" aria-hidden="true">{HOURS.map(h => <span key={h}>{h}</span>)}</div>
         {cells ? <DayStrip cells={cells} /> : <div className="sv-noday"><span>{emptyText}</span></div>}
         <div className="sv-actual-row">{actualRow}</div>
         {now && (
@@ -134,7 +134,7 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
           </div>
 
           <div className="sv-dayrow">
-            <div role="tablist" className="sv-seg">
+            <div role="tablist" aria-label="День" className="sv-seg">
               <button role="tab" aria-selected={isToday} className="sv-seg-btn" onClick={() => setTab('today')}>{`Сьогодні ${formatDM(todayKey)}`}</button>
               <button role="tab" aria-selected={!isToday} className="sv-seg-btn" onClick={() => setTab('tomorrow')}>{`Завтра ${formatDM(tomorrowKey)}`}</button>
             </div>

@@ -37,7 +37,7 @@ export function App({ api, view }: { api: RendererApi; view: MainView }) {
     // D3: the wizard fills the window, without the tab row.
     return (
       <div className="app">
-        <SetupWizard api={api} autostart={state.settings.autostart}
+        <SetupWizard api={api} autostart={state.settings.autostart} widgetStyle={state.settings.widgetStyle}
           onDone={() => { setWizard(false); show('schedule'); }}
           onCancel={hasAddress ? () => setWizard(false) : undefined} />
       </div>
@@ -47,7 +47,7 @@ export function App({ api, view }: { api: RendererApi; view: MainView }) {
   return (
     <div className="app">
       <header className="app-bar">
-        <nav role="tablist" className="app-tabs">
+        <nav role="tablist" aria-label="Розділи" className="app-tabs">
           <button role="tab" aria-selected={tab === 'schedule'} className="app-tab" onClick={() => show('schedule')}>Графік</button>
           <button role="tab" aria-selected={tab === 'settings'} className="app-tab" onClick={() => show('settings')}>Налаштування</button>
         </nav>

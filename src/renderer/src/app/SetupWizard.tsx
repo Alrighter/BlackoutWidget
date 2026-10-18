@@ -130,10 +130,12 @@ function Status<T>({ res, api, children }: { res: Loaded<T>; api: RendererApi; c
   return <>{children(res.data as T)}</>;
 }
 
-export function SetupWizard({ api, autostart, onDone, onCancel }: {
+export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   api: RendererApi;
   /** settings.autostart, for the «Готово» step's switch (it works as the one in the settings). */
   autostart: boolean;
+  /** settings.widgetStyle: the style step starts from it, so changing the address keeps the style. */
+  widgetStyle: WidgetStyle;
   onDone(): void;
   /** Leave without saving; shown when an address is already set. */
   onCancel?(): void;
@@ -144,7 +146,7 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
   const [street, setStreet] = useState<string | null>(null);
   const [house, setHouse] = useState<string | null>(null);
   const [line, setLine] = useState<LineInfo | null>(null);
-  const [style, setStyle] = useState<WidgetStyle>('compact');
+  const [style, setStyle] = useState<WidgetStyle>(widgetStyle);
   const [houseLines, setHouseLines] = useState<LineInfo[]>([]);
   const [houseOutage, setHouseOutage] = useState(false);
   const [houseQuery, setHouseQuery] = useState('');
@@ -292,9 +294,11 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
             <>
               <div className="wz-chips wz-chips-house"><span className="sv-chip wz-chip" title={`${city}, ${street}`}>{`${city}, ${street}`}</span></div>
               <Status res={houses} api={api}>{list => {
-                // A long street gets a filter field over the grid (the house search the step used to have).
+                // A long street gets a filter field over the grid (the house search the step used to have). The picked
+                // house always stays in the grid, so the choice is never hidden.
                 const filtered = list.length > HOUSE_FILTER_FROM;
-                const shown = filtered ? list.filter(h => matches(h.house, houseQuery)) : list;
+                const found = filtered ? list.filter(h => matches(h.house, houseQuery)) : list;
+                const shown = filtered ? list.filter(h => h.house === house || matches(h.house, houseQuery)) : list;
                 return (
                   <>
                     {filtered && (
@@ -305,7 +309,7 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
                       </>
                     )}
                     {shown.length > 0 && <HouseGrid houses={shown} picked={house} onPick={pickHouse} />}
-                    {shown.length === 0 && <p className="wz-muted">Нічого не знайдено</p>}
+                    {found.length === 0 && <p className="wz-muted">Нічого не знайдено</p>}
                     {house !== null && houseOutage && <Note text={OUTAGE_NOTE} />}
                     {/* During an outage an empty list is expected to be temporary; the note above says what to do. */}
                     {noLines && !houseOutage && <Note text="Для цього будинку ДТЕК не публікує графік відключень" />}

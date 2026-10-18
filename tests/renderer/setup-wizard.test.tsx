@@ -35,7 +35,7 @@ async function pickAddress(user: UserEvent) {
 }
 test('two lines: shows both previews and saves chosen line', async () => {
   const api = mockApi(two); const onDone = vi.fn(); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={onDone} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={onDone} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Лінія 1 · черга 1.2')).toBeInTheDocument(); expect(screen.getByText('Лінія 2 · черга 4.2')).toBeInTheDocument();
   // Each line's radio is described by today's outage times shown beside it.
@@ -50,7 +50,7 @@ test('two lines: shows both previews and saves chosen line', async () => {
 });
 test('one line: skips line step', async () => {
   const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={() => {}} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Компакт')).toBeInTheDocument(); expect(api.previewLines).not.toHaveBeenCalled();
   // The rail keeps all seven steps: the skipped «Лінія» still counts, and screen readers hear the done ones as done.
@@ -59,13 +59,13 @@ test('one line: skips line step', async () => {
 });
 test('up to 24 houses: just the grid, no filter', async () => {
   const user = userEvent.setup();
-  render(<SetupWizard api={mockApi(street(24))} autostart onDone={() => {}} />); await toHouseStep(user);
+  render(<SetupWizard api={mockApi(street(24))} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
   expect(await screen.findAllByRole('radio')).toHaveLength(24);
   expect(screen.queryByRole('textbox', { name: 'Номер будинку' })).toBeNull();
 });
 test('more than 24 houses: a filter field narrows the grid, matching as the old house search', async () => {
   const api = mockApi(street(30)); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={() => {}} />); await toHouseStep(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
   const filter = await screen.findByRole('textbox', { name: 'Номер будинку' });
   expect(filter).toHaveFocus();
   expect(screen.getAllByRole('radio')).toHaveLength(30);
@@ -75,12 +75,23 @@ test('more than 24 houses: a filter field narrows the grid, matching as the old 
   await user.click(screen.getByRole('radio', { name: '25' }));
   expect(screen.getByRole('button', { name: 'Далі' })).toBeEnabled();
   await user.type(filter, '9');
-  expect(screen.queryAllByRole('radio')).toHaveLength(0);
+  // Nothing matches «259»: the note says so, and the picked house stays (see the next test).
+  expect(screen.getAllByRole('radio').map(r => r.textContent)).toEqual(['25']);
   expect(screen.getByText('Нічого не знайдено')).toBeInTheDocument();
+});
+test('the filter never hides the picked house: it keeps its place in the grid', async () => {
+  const user = userEvent.setup();
+  render(<SetupWizard api={mockApi(street(30))} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
+  await user.click(await screen.findByRole('radio', { name: '7' }));
+  await user.type(screen.getByRole('textbox', { name: 'Номер будинку' }), '2');
+  expect(screen.getAllByRole('radio').map(r => r.textContent)).toEqual(['2', '7', '12', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29']);
+  expect(screen.getByRole('radio', { name: '7' })).toHaveAttribute('aria-checked', 'true');
+  expect(screen.queryByText('Нічого не знайдено')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Далі' })).toBeEnabled();
 });
 test('the house grid is one Tab stop: arrows move the focus, a row is 6, Space picks', async () => {
   const user = userEvent.setup();
-  render(<SetupWizard api={mockApi(street(8))} autostart onDone={() => {}} />); await toHouseStep(user);
+  render(<SetupWizard api={mockApi(street(8))} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
   const house = (n: string) => screen.getByRole('radio', { name: n });
   await screen.findByRole('radio', { name: '1' });
   expect(tabbable()).toEqual(['1']);
@@ -98,7 +109,7 @@ test('the house grid is one Tab stop: arrows move the focus, a row is 6, Space p
 });
 test('each new step\'s title takes the focus, unless the step\'s own field does; nothing on first show', async () => {
   const user = userEvent.setup();
-  render(<SetupWizard api={mockApi(two)} autostart onDone={() => {}} />);
+  render(<SetupWizard api={mockApi(two)} autostart widgetStyle="compact" onDone={() => {}} />);
   await screen.findByRole('radio', { name: /Київська область/, checked: true });
   expect(document.body).toHaveFocus();
   await user.click(screen.getByRole('button', { name: 'Далі' }));
@@ -114,24 +125,24 @@ test('each new step\'s title takes the focus, unless the step\'s own field does;
 });
 test('«Скасувати» shows only when an address is set, and leaves without saving', async () => {
   const api = mockApi(two); const onCancel = vi.fn(); const user = userEvent.setup();
-  const { rerender } = render(<SetupWizard api={api} autostart onDone={() => {}} />);
+  const { rerender } = render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />);
   await screen.findByRole('radio', { name: /Київська область/, checked: true });
   expect(screen.queryByRole('button', { name: 'Скасувати' })).toBeNull();
-  rerender(<SetupWizard api={api} autostart onDone={() => {}} onCancel={onCancel} />);
+  rerender(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} onCancel={onCancel} />);
   await user.click(screen.getByRole('button', { name: 'Скасувати' }));
   expect(onCancel).toHaveBeenCalledTimes(1);
   expect(api.saveAddress).not.toHaveBeenCalled(); expect(api.setWidgetStyle).not.toHaveBeenCalled();
 });
 test('no lines: explains and blocks', async () => {
   const api = mockApi([{ house: '40', outageActive: false, lines: [] }]); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={() => {}} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
   expect(screen.getByText('Для цього будинку ДТЕК не публікує графік відключень')).toBeInTheDocument();
   expect(screen.queryByText(OUTAGE_NOTE)).toBeNull();
   expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
 });
 test('active outage: the house and line steps warn that the line list may be incomplete', async () => {
   const api = mockApi([{ ...two[0], outageActive: true }]); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={() => {}} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
   expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Лінія 2 · черга 4.2')).toBeInTheDocument();
@@ -139,7 +150,7 @@ test('active outage: the house and line steps warn that the line list may be inc
 });
 test('active outage and one line: the line step is shown, needs an explicit choice, nothing is saved before it', async () => {
   const api = mockApi([{ house: '40', outageActive: true, lines: [two[0].lines[0]] }]); const onDone = vi.fn(); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={onDone} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={onDone} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Лінія 1 · черга 1.2')).toBeInTheDocument();
   expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
@@ -153,14 +164,14 @@ test('active outage and one line: the line step is shown, needs an explicit choi
 });
 test('active outage and no lines: only the outage note, still blocked', async () => {
   const api = mockApi([{ house: '40', outageActive: true, lines: [] }]); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={() => {}} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
   expect(screen.getByText(OUTAGE_NOTE)).toBeInTheDocument();
   expect(screen.queryByText('Для цього будинку ДТЕК не публікує графік відключень')).toBeNull();
   expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
 });
 test('the line step opens the schedule on the DTEK site (D11)', async () => {
   const api = mockApi(two); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={() => {}} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   await user.click(await screen.findByRole('button', { name: 'Відкрити графік на сайті ДТЕК' }));
   expect(api.openDtekSite).toHaveBeenCalledTimes(1);
@@ -168,7 +179,7 @@ test('the line step opens the schedule on the DTEK site (D11)', async () => {
 });
 test('«Готово» sums up the choice and switches autostart; nothing is saved before «Завершити»', async () => {
   const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const onDone = vi.fn(); const user = userEvent.setup();
-  render(<SetupWizard api={api} autostart onDone={onDone} />); await pickAddress(user);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={onDone} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' })); await user.click(await screen.findByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Крок 7 з 7')).toBeInTheDocument();
   expect(screen.getByText('м. Біла Церква, бул. Грушевського Михайла, 40')).toBeInTheDocument();
@@ -183,12 +194,23 @@ test('«Готово» sums up the choice and switches autostart; nothing is sav
   expect(api.saveAddress).toHaveBeenCalledWith({ providerId: 'dtek-krem', city: 'м. Біла Церква', street: 'бул. Грушевського Михайла', house: '40', lineIndex: 1, groupId: 'GPV1.2' });
   expect(api.setWidgetStyle).toHaveBeenCalledWith('compact'); expect(onDone).toHaveBeenCalled();
 });
+test('changing the address keeps the widget style: the style step starts from the saved one', async () => {
+  const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="ring" onDone={() => {}} onCancel={() => {}} />); await pickAddress(user);
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(await screen.findByRole('radio', { name: 'Циферблат' })).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByRole('radio', { name: 'Компакт' })).toHaveAttribute('aria-checked', 'false');
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(screen.getByText('Лінія 1 · черга 1.2 · стиль «Циферблат»')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Завершити' }));
+  expect(api.setWidgetStyle).toHaveBeenCalledWith('ring');
+});
 test('captcha: shows prompt, solves, then retries the load', async () => {
   const api = mockApi(two); const user = userEvent.setup();
   (api.listCities as ReturnType<typeof vi.fn>)
     .mockRejectedValueOnce(new Error("Error invoking remote method 'addr:cities': Error: CAPTCHA_REQUIRED"))
     .mockResolvedValue(['м. Біла Церква']);
-  render(<SetupWizard api={api} autostart onDone={() => {}} />);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />);
   await user.click(await screen.findByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Сайт ДТЕК просить пройти перевірку')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Пройти перевірку' }));
@@ -201,7 +223,7 @@ test('other errors show the Ukrainian message and allow retry', async () => {
   (api.listCities as ReturnType<typeof vi.fn>)
     .mockRejectedValueOnce(new Error("Error invoking remote method 'addr:cities': Error: Сайт ДТЕК недоступний"))
     .mockResolvedValue(['м. Біла Церква']);
-  render(<SetupWizard api={api} autostart onDone={() => {}} />);
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />);
   await user.click(await screen.findByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Сайт ДТЕК недоступний')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));

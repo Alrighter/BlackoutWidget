@@ -48,5 +48,5 @@ export function ActualLine({ parts }: { parts: StripPart[] }) {
 }
 
 export function DayTicks() {
-  return <div className="w-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>;
+  return <div className="w-ticks" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>;
 }

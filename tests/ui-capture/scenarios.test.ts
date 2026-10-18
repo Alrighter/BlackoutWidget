@@ -17,8 +17,14 @@ function view(name: string, now?: string): { view: WidgetView; state: AppState }
 const EXPECTED: Record<string, Partial<WidgetView>> = {
   on: { state: 'on', nextText: 'Вимкнення о 15:00 · через 3 год 10 хв', updatedText: 'оновлено 11:45', stale: false },
   off: { state: 'off', nextText: 'Увімкнуть о 19:00 · через 1 год 5 хв', updatedText: 'оновлено 17:50' },
-  maybe: { state: 'maybe-off', countdownShort: '1:40', updatedText: 'оновлено 22:10' },
-  emergency: { state: 'emergency', outageBadge: 'Аварійне', nextText: 'Аварійне · орієнтовно до 17:00', countdownShort: '2:40' },
+  maybe: {
+    state: 'maybe-off', nextText: 'Можливо без світла до 24:00 · ще 1 год 40 хв', countdownShort: '1:40',
+    countdownCaption: 'можливо до 24:00', updatedText: 'оновлено 22:10',
+  },
+  emergency: {
+    state: 'emergency', outageBadge: 'Аварійне', nextText: 'Аварійне · орієнтовно до 17:00', countdownShort: '2:40',
+    countdownCaption: 'орієнтовно до 17:00',
+  },
   nodata: { state: 'unknown', nextText: 'Графік на сьогодні ще не отримано', today: null },
   stale: { state: 'on', stale: true, nextText: 'Можливе вимкнення о 22:00 · через 1 год 20 хв', updatedText: 'оновлено 14:50' },
   warning: { state: 'on', nextText: 'Вимкнення о 15:00 · через 3 год 10 хв' },

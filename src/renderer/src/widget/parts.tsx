@@ -22,6 +22,9 @@ function placeTip(bolt: HTMLElement, tip: HTMLElement, above: boolean) {
   tip.style.left = `${left - b.left}px`;
 }
 
+/** The EcoFlow bolt shows: a live reading, or a source that is silent. */
+const hasBolt = (view: WidgetView): boolean => !!view.actual || view.actualUnknownReason !== undefined;
+
 /**
  * Which source the state comes from: a bolt when it is the live EcoFlow reading, a hollow muted one when the source is
  * silent. Hover or focus shows the tooltip, below the bolt or, with `tipAbove`, above it.
@@ -34,8 +37,8 @@ export function EcoBolt({ view, tipAbove = false }: { view: WidgetView; tipAbove
   useLayoutEffect(() => {
     if (open && bolt.current && tip.current) placeTip(bolt.current, tip.current, tipAbove);
   });
+  if (!hasBolt(view)) return null;
   const unknown = view.actualUnknownReason !== undefined;
-  if (!view.actual && !unknown) return null;
   const text = unknown ? `EcoFlow: ${view.actualUnknownReason}` : 'Фактичний стан · EcoFlow';
   const show = () => setOpen(true);
   const hide = () => setOpen(false);
@@ -56,14 +59,15 @@ export function EcoBolt({ view, tipAbove = false }: { view: WidgetView; tipAbove
 
 /**
  * Status row: dot, title, outage badge, EcoFlow bolt and, when given, «з HH:MM». The title outranks the rest, so with
- * an outage badge «з HH:MM» is left out: the row has no room for both. The ring sets the badge above the row itself
+ * an outage badge «з HH:MM» is left out: the row has no room for both. A long title beside the bolt is marked
+ * `w-long`, so the compact can set it a step smaller. The ring sets the badge above the row itself
  * (`inlineBadge={false}`) and opens the tooltip above the bolt.
  */
 export function Status({ view, since, inlineBadge = true, tipAbove = false }: {
   view: WidgetView; since?: string; inlineBadge?: boolean; tipAbove?: boolean;
 }) {
   return (
-    <div className="w-status">
+    <div className={view.title.length > 14 && hasBolt(view) ? 'w-status w-long' : 'w-status'}>
       <StateDot state={view.state} />
       <span className="w-title w-ellipsis" title={view.title} data-capture="status">{view.title}</span>
       {inlineBadge && view.outageBadge && <OutageBadge text={view.outageBadge} />}

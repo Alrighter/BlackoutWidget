@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../../src/renderer/src/app/App';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
@@ -40,6 +40,7 @@ test('the tab row: «Графік» selected first, ⟳ beside the tabs refreshe
   const api = fakeApi({ refreshNow: vi.fn(async () => {}) });
   render(<App api={api} view="schedule" />);
   expect(await screen.findByRole('tab', { name: 'Графік' })).toHaveAttribute('aria-selected', 'true');
+  expect(within(screen.getByRole('tablist', { name: 'Розділи' })).getAllByRole('tab').map(t => t.textContent)).toEqual(['Графік', 'Налаштування']);
   await userEvent.click(screen.getByRole('button', { name: 'Оновити зараз' }));
   expect(api.refreshNow).toHaveBeenCalledTimes(1);
 });

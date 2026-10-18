@@ -73,6 +73,8 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 /* Status row: dot, title, badge, EcoFlow bolt, «з HH:MM». */
 .w-status { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0;
   font-size: 20px; line-height: 26px; font-weight: 650; letter-spacing: -0.2px; }
+/* «Можливе відключення» beside the bolt fits the compact's row only a step smaller, with a little room to spare. */
+.w-compact .w-status.w-long { gap: 6px; font-size: 19px; }
 .w-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--bw-state);
   box-shadow: 0 0 0 3px rgb(from var(--bw-state) r g b / 0.22), 0 0 12px rgb(from var(--bw-state) r g b / 0.55); }
 .w-badge { flex: none; font-size: 11px; line-height: 15px; font-weight: 650; letter-spacing: 0.2px; color: #fff;
@@ -155,18 +157,15 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-tl-big { font-family: var(--bw-font-display); font-size: 34px; line-height: 36px; font-weight: 600; letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums; }
 /*
- * The caption is one line cut at 150 px, as in the mockup, but wraps to two lines when the block is narrowed. Its box is
- * a size container and adds no width; a hidden copy of the text (data-cap) gives the block the caption's width, at most
- * 150 px. So the box is narrower than 150 px only when the caption is short anyway or the block was narrowed.
+ * The caption wraps to two lines rather than cut the time: when it is wider than 150 px, or when the block is narrowed.
+ * Its box adds no width (size containment); a hidden copy of the text (data-cap) gives the block the caption's width,
+ * at most 150 px.
  */
 .w-tl-count::after { content: attr(data-cap); max-width: 150px; height: 0; overflow: hidden; visibility: hidden;
   font-size: 10.5px; line-height: 13px; }
-.w-tl-cap { align-self: stretch; container-type: inline-size; }
-.w-tl-cl { font-size: 10.5px; line-height: 13px; color: var(--bw-ink-2); text-align: right; overflow: hidden;
+.w-tl-cap { align-self: stretch; contain: inline-size; }
+.w-tl-cl { font-size: 10.5px; line-height: 13px; color: var(--bw-ink-2); text-align: right; overflow: hidden; text-wrap: pretty;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-@container (width >= 150px) {
-  .w-tl-cl { display: block; white-space: nowrap; text-overflow: ellipsis; }
-}
 .w-timeline .w-warnline { margin-top: 6px; }
 .w-tl-row { display: flex; align-items: center; gap: 8px; }
 .w-tl-row > .w-strip { flex: 1 1 auto; min-width: 0; }

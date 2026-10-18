@@ -16,6 +16,10 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s shows status and countdo
   expect(screen.getByText('Світло є')).toBeInTheDocument();
   expect(screen.getByText(style === 'compact' ? 'Вимкнення о 15:00 · через 3 год 10 хв' : '3:10')).toBeInTheDocument();
 });
+test.each(['compact', 'timeline'] as const)('%s: the hour ticks under the strip are hidden from screen readers', style => {
+  const { container } = render(<Widget state={st({}, style)} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('.w-ticks')).toHaveAttribute('aria-hidden', 'true');
+});
 test('compact caption', () => {
   const { container } = render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
   expect(container.querySelector('.w-cap')).toHaveTextContent('Лінія 1 · черга 1.2 · оновлено 11:48');
@@ -230,7 +234,7 @@ describe('ring', () => {
     expect(badge.nextElementSibling).toHaveClass('w-status');
     expect(container.querySelector('.w-status .w-badge')).toBeNull();
     expect(container.querySelector('.w-dial-count')).toHaveTextContent(/^≈2:40$/);
-    expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^до орієнтовного увімкнення$/);
+    expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^орієнтовно до 17:00$/);
   });
   test('emergency with no known end: no-count layout, the badge between the dot and the status', () => {
     const s = st({ snapshot: fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення' } }) }, 'ring');
@@ -238,6 +242,12 @@ describe('ring', () => {
     expect(container.querySelector('.w-dial-count')).toBeNull();
     expect(container.querySelector('.w-dial-marks + .w-badge + .w-dial-title')).toHaveTextContent(/^Світла немає$/);
     expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^аварійне відключення · час відновлення невідомий$/);
+  });
+  test('the hour ticks, the segments and the now dot are decorative, hidden from screen readers', () => {
+    const { container } = render(<Widget state={st({}, 'ring')} now={now} background={bg} />);
+    const marks = [...container.querySelectorAll('.w-dial-tick, .w-dial-segs, .w-dial-now')];
+    expect(marks).toHaveLength(6);
+    marks.forEach(m => expect(m).toHaveAttribute('aria-hidden', 'true'));
   });
   test('caption: the full line label and «оновлено»; the warning is a row of its own above it', () => {
     const { container, rerender } = render(<Widget state={st({}, 'ring')} now={now} background={bg} />);
@@ -276,9 +286,9 @@ describe('timeline', () => {
     const { container } = tl({ snapshot: fixtureSnapshot({ currentOutage: outage }) }, new Date('2026-10-17T11:20:00Z')); // 14:20 Kyiv
     expect(container.querySelector('.w-status .w-badge')).toHaveTextContent(/^Аварійне$/);
     expect(container.querySelector('.w-tl-big')).toHaveTextContent(/^≈2:40$/);
-    expect(container.querySelector('.w-tl-cl')).toHaveTextContent(/^до орієнтовного увімкнення$/);
+    expect(container.querySelector('.w-tl-cl')).toHaveTextContent(/^орієнтовно до 17:00$/);
     expect(container.querySelector('.w-tl-line')).toHaveTextContent(/^Аварійне · орієнтовно до 17:00$/);
-    expect(container.querySelector('.w-tl-count')).toHaveAttribute('data-cap', 'до орієнтовного увімкнення');
+    expect(container.querySelector('.w-tl-count')).toHaveAttribute('data-cap', 'орієнтовно до 17:00');
   });
   test('line changed: the warning is a row of its own under the head, above the day rows', () => {
     const { container } = tl({ lineChanged: true });
@@ -378,6 +388,27 @@ describe('actual state', () => {
     }
     fireEvent.pointerEnter(container.querySelector('[data-actual="live"]')!);
     expect(screen.getByRole('tooltip')).toHaveClass('w-tip-above');
+  });
+  test('ring: the actual arcs are decorative too', () => {
+    const { container } = render(<Widget state={st({ actual: withStrip(later) }, 'ring')} now={later} background={bg} />);
+    const arcs = [...container.querySelectorAll('.w-dial-actual')];
+    expect(arcs).toHaveLength(2);
+    arcs.forEach(a => expect(a).toHaveAttribute('aria-hidden', 'true'));
+  });
+  test('compact: a long title beside the bolt takes the long-title step; without the bolt, or short, it does not', () => {
+    // 22:20 Kyiv in a maybe-off half hour; the station is silent, so the muted bolt shows.
+    const at = new Date('2026-10-17T19:20:00Z');
+    const snapshot = { ...fixtureSnapshot(), days: [{ date: '2026-10-17', slots: [...Array(44).fill('on'), ...Array(4).fill('maybe-off')] as Slot[] }] };
+    const silent = act(at, { power: 'unknown', reason: 'станція не в мережі' });
+    const { container } = render(<Widget state={st({ snapshot, actual: silent })} now={at} background={bg} />);
+    expect(container.querySelector('.w-title')).toHaveTextContent(/^Можливе відключення$/);
+    expect(container.querySelector('.w-status')).toHaveClass('w-long');
+    expect(container.querySelector('.w-status [data-actual="unknown"]')).not.toBeNull();
+    const noBolt = render(<Widget state={st({ snapshot })} now={at} background={bg} />);
+    expect(noBolt.container.querySelector('.w-status')).not.toHaveClass('w-long');
+    const short = render(<Widget state={st({ actual: act(now) })} now={now} background={bg} />);
+    expect(short.container.querySelector('[data-actual="live"]')).not.toBeNull();
+    expect(short.container.querySelector('.w-status')).not.toHaveClass('w-long');
   });
   test('unknown source shows muted mark with reason tooltip', () => {
     const a = act(now, { power: 'unknown', reason: 'станція не в мережі' });

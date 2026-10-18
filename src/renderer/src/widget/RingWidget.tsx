@@ -93,19 +93,19 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
   return (
     <>
       <div className={lineChanged ? 'w-dial w-dial-small' : 'w-dial'} style={{ width: size, height: size }} data-capture="dial">
-        <div className="w-dial-segs" style={{ '--w-segs': ringGradient(cells) } as CSSProperties} />
+        <div className="w-dial-segs" aria-hidden="true" style={{ '--w-segs': ringGradient(cells) } as CSSProperties} />
         {actual && (
           <>
-            <div className="w-dial-actual w-dial-track" />
-            <div className="w-dial-actual" data-actual-arc style={{ '--w-actual': actualGradient(actual) } as CSSProperties} />
+            <div className="w-dial-actual w-dial-track" aria-hidden="true" />
+            <div className="w-dial-actual" data-actual-arc aria-hidden="true" style={{ '--w-actual': actualGradient(actual) } as CSSProperties} />
           </>
         )}
-        <span className="w-dial-tick w-at-00" data-capture="tick00">00</span>
-        <span className="w-dial-tick w-at-06">06</span>
-        <span className="w-dial-tick w-at-12" data-capture="tick12">12</span>
-        <span className="w-dial-tick w-at-18">18</span>
+        <span className="w-dial-tick w-at-00" aria-hidden="true" data-capture="tick00">00</span>
+        <span className="w-dial-tick w-at-06" aria-hidden="true">06</span>
+        <span className="w-dial-tick w-at-12" aria-hidden="true" data-capture="tick12">12</span>
+        <span className="w-dial-tick w-at-18" aria-hidden="true">18</span>
         {/* Not before the first schedule arrives (no «оновлено» yet). */}
-        {view.updatedText !== '' && <div className="w-dial-now" data-capture="now" style={nowDot(size, view.nowFraction)} />}
+        {view.updatedText !== '' && <div className="w-dial-now" aria-hidden="true" data-capture="now" style={nowDot(size, view.nowFraction)} />}
         {count ? (
           <div className="w-dial-center" data-capture="center">
             {badge}

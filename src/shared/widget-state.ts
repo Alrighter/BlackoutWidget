@@ -124,7 +124,7 @@ function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
       return {
         ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge, emergency,
         nextText: `${badge} · орієнтовно до ${formatHM(end)}`,
-        countdownShort: formatDurationShort(left), countdownCaption: 'до орієнтовного увімкнення',
+        countdownShort: formatDurationShort(left), countdownCaption: `орієнтовно до ${formatHM(end)}`,
       };
     }
     return {
@@ -155,7 +155,20 @@ function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
   const at = kyivWallTimeToInstant(change.dateKey, change.j * 30);
   const left = minutesUntil(at, now);
   const hm = formatHM(at);
-  const when = `${change.dateKey !== todayKey ? 'завтра ' : ''}о ${hm}`;
+  const tomorrowChange = change.dateKey !== todayKey;
+  // A maybe-off stretch says how long it may last (mockup), and the end of today reads «24:00». A sure outage right
+  // after it keeps the outage copy below.
+  if (state === 'maybe-off' && change.slot === 'on') {
+    const endOfToday = tomorrowChange && change.j === 0;
+    const until = endOfToday ? '24:00' : hm;
+    return {
+      ...base, state, title,
+      nextText: `Можливо без світла до ${tomorrowChange && !endOfToday ? 'завтра ' : ''}${until} · ще ${formatDurationLong(left)}`,
+      countdownShort: formatDurationShort(left),
+      countdownCaption: `можливо до ${until}`,
+    };
+  }
+  const when = `${tomorrowChange ? 'завтра ' : ''}о ${hm}`;
   const [lead, caption] =
     change.slot === 'on' ? ['Увімкнуть', `до увімкнення о ${hm}`]
     : change.slot === 'off' ? ['Вимкнення', `до вимкнення о ${hm}`]

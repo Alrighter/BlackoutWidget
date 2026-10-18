@@ -38,7 +38,7 @@ export class MainWindow {
 
   private create(): BrowserWindow {
     const win = new BrowserWindow({
-      width: 900, height: 640, title: 'Blackout Widget',
+      width: 900, height: 640, minWidth: 760, minHeight: 560, title: 'Blackout Widget',
       ...(process.platform === 'win32' ? { backgroundMaterial: 'mica' as const } : {}),
       webPreferences: { preload: this.preload, contextIsolation: true, nodeIntegration: false, sandbox: true },
     });

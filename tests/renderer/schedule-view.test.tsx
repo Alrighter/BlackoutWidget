@@ -16,6 +16,13 @@ test('shows source time and unpublished tomorrow', async () => {
   await userEvent.click(screen.getByRole('tab', { name: 'Завтра 18.10' }));
   expect(screen.getByText('Графік на завтра ще не опубліковано')).toBeInTheDocument();
 });
+test('the day tabs are a labelled tablist; the hour row over the grid is decorative', () => {
+  const state: AppState = { settings: { ...DEFAULT_SETTINGS, address: fixtureSnapshot().address }, snapshot: fixtureSnapshot(), phase: 'ok', lineChanged: false };
+  const { container } = render(<ScheduleView state={state} now={new Date('2026-10-17T08:50:00Z')} api={{} as RendererApi} onConnectEcoflow={noop} />);
+  const days = screen.getByRole('tablist', { name: 'День' });
+  expect(within(days).getAllByRole('tab').map(t => t.textContent)).toEqual(['Сьогодні 17.10', 'Завтра 18.10']);
+  expect(container.querySelector('.sv-hours')).toHaveAttribute('aria-hidden', 'true');
+});
 test('captcha banner calls solveCaptcha', async () => {
   const api = { solveCaptcha: vi.fn(async () => {}) } as unknown as RendererApi;
   render(<ScheduleView state={{ settings: DEFAULT_SETTINGS, snapshot: fixtureSnapshot(), phase: 'captcha', lineChanged: false }} now={new Date('2026-10-17T08:50:00Z')} api={api} onConnectEcoflow={noop} />);
