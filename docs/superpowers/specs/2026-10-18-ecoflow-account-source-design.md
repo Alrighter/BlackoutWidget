@@ -52,7 +52,7 @@ Error codes:
 
 **Politeness and recovery (R§7).**
 - One login plus certification at start.
-- A full re-login plus certification only on CONNACK 4/5/134/135: once, then a 30-minute pause, the existing rule.
+- A full re-login plus certification only on CONNACK 4/5/134/135: once immediately, then after pauses that climb 30, 60 and 120 minutes (staying at 120, reset by a proven session), each ending in one login. The reason shows the real wait.
 - A plain disconnect reconnects with the same credentials, using `MQTT_BACKOFF_MS` (10 s doubling to 300 s), reset after a proven session.
 - A login rejection retries after 30, then 60, then 120 minutes, staying at 120. A network failure retries on the MQTT backoff.
 - Stall watchdog: if the client is connected but nothing fresh arrives for 2× the get interval, it reconnects once with the same credentials.

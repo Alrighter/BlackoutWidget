@@ -19,7 +19,7 @@
 - **Read-only client.** It publishes only `latestQuotas` to `/app/<userId>/<sn>/thing/property/get`, and never anything to `/set`.
 - **Login politeness.**
   - Log in once at start.
-  - Re-login only on CONNACK 4/5/134/135: once, then a 30-minute pause.
+  - Re-login only on CONNACK 4/5/134/135: once immediately, then after pauses of 30, 60, then 120 minutes (reset by a proven session).
   - A login rejection retries after 30, 60, then 120 minutes, staying at 120.
   - Never delete the stored credentials because of an EcoFlow error.
 - **The keys source (`ecoflow`) keeps its behaviour.** Its existing tests may change only imports.
