@@ -2,21 +2,19 @@ import { useState, type ReactNode } from 'react';
 import type { RendererApi } from '../../../shared/ipc';
 import { outageParts, recentOutages } from '../../../shared/actual-view';
 import { dayCells, type DayCell } from '../../../shared/day-cells';
+import { outageRanges } from '../../../shared/outage-ranges';
 import { addDays, formatDM, formatHM, parseDtekDateTime } from '../../../shared/time';
 import type { AppState, DaySchedule } from '../../../shared/types';
-import { computeWidgetView, countdownText, slotRuns } from '../../../shared/widget-state';
+import { computeWidgetView, countdownText } from '../../../shared/widget-state';
 import { ActualStrip } from './ActualStrip';
 import { DayStrip } from './DayStrip';
 
-const hm = (slotIndex: number) => `${String(Math.floor(slotIndex / 2)).padStart(2, '0')}:${slotIndex % 2 ? '30' : '00'}`;
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
 const BOLT = 'M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z';
 
 /** «Відключення: …» under the grid; on today's tab during an emergency it also says when the emergency began. */
 function outageLine(day: DaySchedule, emergencyFrom?: string): string {
-  const parts = slotRuns(day.slots)
-    .filter(r => r.slot === 'off' || r.slot === 'maybe-off')
-    .map(r => `${hm(r.start)}–${hm(r.end)}${r.slot === 'maybe-off' ? ' (можливо)' : ''}`);
+  const parts = outageRanges(day.slots);
   const line = parts.length ? `Відключення: ${parts.join(', ')}` : 'Відключень не заплановано';
   return emergencyFrom ? `${line} · аварійне з ${emergencyFrom}` : line;
 }

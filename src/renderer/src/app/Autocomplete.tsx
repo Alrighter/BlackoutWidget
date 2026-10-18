@@ -2,6 +2,11 @@ import { useId, useState, type ReactNode } from 'react';
 
 const LIMIT = 50;
 
+/** Whether `text` contains `query`, trimmed and in any case (the suggestions here, the wizard's house filter). */
+export function matches(text: string, query: string): boolean {
+  return text.toLowerCase().includes(query.trim().toLowerCase());
+}
+
 /** `text` with the first occurrence of `q` (lower case) in bold. */
 function withMatch(text: string, q: string): ReactNode {
   const at = q ? text.toLowerCase().indexOf(q) : -1;
@@ -16,7 +21,7 @@ export function Autocomplete({ label, options, value, onChange }: {
   const id = useId();
   const [query, setQuery] = useState(value ?? '');
   const q = query.trim().toLowerCase();
-  const shown = (q ? options.filter(o => o.toLowerCase().includes(q)) : options).slice(0, LIMIT);
+  const shown = options.filter(o => matches(o, query)).slice(0, LIMIT);
   return (
     <>
       <label className="st-label wz-label" htmlFor={`${id}-input`}>{label}</label>

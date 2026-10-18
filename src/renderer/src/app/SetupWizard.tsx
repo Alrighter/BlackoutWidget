@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { RendererApi } from '../../../shared/ipc';
 import { dayCells } from '../../../shared/day-cells';
+import { outageRanges } from '../../../shared/outage-ranges';
 import { providerRegion } from '../../../shared/providers';
 import type { DaySchedule, HouseInfo, LineInfo, WidgetStyle } from '../../../shared/types';
-import { slotRuns } from '../../../shared/widget-state';
-import { Autocomplete } from './Autocomplete';
+import { Autocomplete, matches } from './Autocomplete';
 import { DayStrip } from './DayStrip';
 import { unwrapIpcError } from './ipc-error';
 import { StyleThumb } from './StyleThumb';
@@ -25,6 +25,12 @@ const OUTAGE_NOTE = 'Зараз для цього будинку діє відк
 const THUMB_SCALE: Record<WidgetStyle, number> = { compact: 0.36, ring: 0.28, timeline: 0.26 };
 const HOURS = ['00', '06', '12', '18', '24'];
 const CHECK = 'm5 12.5 4.5 4.5L19 7.5';
+/** Houses per row of the grid (= .wz-houses), and the count above which the step shows a filter field. */
+const HOUSE_COLUMNS = 6;
+const HOUSE_FILTER_FROM = 24;
+const HOUSE_KEYS: Partial<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -HOUSE_COLUMNS, ArrowDown: HOUSE_COLUMNS };
+/** Steps whose own field takes the focus (autoFocus) instead of the title. */
+const FIELD_STEPS: Step[] = ['city', 'street'];
 
 function subline(step: Step, city: string | null, lineCount: number): string {
   switch (step) {
@@ -40,14 +46,36 @@ function subline(step: Step, city: string | null, lineCount: number): string {
   }
 }
 
-const hm = (slotIndex: number) => `${String(Math.floor(slotIndex / 2)).padStart(2, '0')}:${slotIndex % 2 ? '30' : '00'}`;
 /** Today's outages of a line, worded as on the schedule tab: «08:00–12:00, 16:00–20:00 (можливо)». */
-function outageRanges(day: DaySchedule | null): string {
+function lineOutages(day: DaySchedule | null): string {
   if (!day) return 'Графік на сьогодні ще не отримано';
-  const parts = slotRuns(day.slots)
-    .filter(r => r.slot === 'off' || r.slot === 'maybe-off')
-    .map(r => `${hm(r.start)}–${hm(r.end)}${r.slot === 'maybe-off' ? ' (можливо)' : ''}`);
+  const parts = outageRanges(day.slots);
   return parts.length ? parts.join(', ') : 'Відключень не заплановано';
+}
+
+/**
+ * The house numbers as one radio group with a single Tab stop (roving tabindex): the picked house, else the first.
+ * Arrows move the focus, ↑/↓ by a row; Space or Enter picks (the buttons' own click).
+ */
+function HouseGrid({ houses, picked, onPick }: { houses: HouseInfo[]; picked: string | null; onPick(h: HouseInfo): void }) {
+  const stop = houses.some(h => h.house === picked) ? picked : houses[0]?.house;
+  const move = (e: KeyboardEvent<HTMLDivElement>) => {
+    const by = HOUSE_KEYS[e.key];
+    if (!by) return;
+    e.preventDefault();
+    const buttons = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    buttons[buttons.indexOf(e.target as HTMLButtonElement) + by]?.focus();
+  };
+  return (
+    <div className="wz-houses" role="radiogroup" aria-label="Номер будинку" data-capture="houses" onKeyDown={move}>
+      {houses.map(h => (
+        <button key={h.house} type="button" role="radio" aria-checked={picked === h.house} tabIndex={h.house === stop ? 0 : -1}
+          className="wz-house" title={h.house} onClick={() => onPick(h)}>
+          {h.house}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 interface LoadError { captcha: boolean; message: string }
@@ -119,8 +147,20 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
   const [style, setStyle] = useState<WidgetStyle>('compact');
   const [houseLines, setHouseLines] = useState<LineInfo[]>([]);
   const [houseOutage, setHouseOutage] = useState(false);
+  const [houseQuery, setHouseQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const uid = useId();
+
+  // The step's content changes under the button just pressed, so the new step's title takes the focus (as the EcoFlow
+  // card's steps do), unless the step's own field takes it with autoFocus; not on the first show.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const shownStep = useRef(step);
+  useEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    if (!FIELD_STEPS.includes(step)) titleRef.current?.focus();
+  }, [step]);
 
   const providers = useLoad(() => api.listProviders(), 'providers');
   useEffect(() => {
@@ -171,8 +211,9 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
 
   const resetBelow = (from: 'city' | 'street') => {
     if (from === 'city') setStreet(null);
-    setHouse(null); setLine(null); setHouseLines([]); setHouseOutage(false);
+    setHouse(null); setLine(null); setHouseLines([]); setHouseOutage(false); setHouseQuery('');
   };
+  const pickHouse = (h: HouseInfo) => { setHouse(h.house); setLine(null); setHouseLines(h.lines); setHouseOutage(!!h.outageActive); };
 
   const num = RAIL.findIndex(r => r.step === step) + 1;
   const place = `${city}, ${street}, ${house}`;
@@ -187,12 +228,16 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
             const state = i + 1 < num ? 'done' : i + 1 === num ? 'now' : 'next';
             return (
               <li key={s} className={`wz-step ${state}`} aria-current={state === 'now' ? 'step' : undefined}>
+                {/* A done step shows ✓ instead of its number; screen readers still hear the number, and that it's done. */}
                 <span className="wz-step-num">
-                  {state === 'done' ? <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d={CHECK} /></svg> : i + 1}
+                  {state === 'done'
+                    ? <><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d={CHECK} /></svg><span className="st-sr">{i + 1}</span></>
+                    : i + 1}
                 </span>
                 <span className="wz-step-text">
                   <span className="wz-step-label">{label}</span>
                   {s === 'line' && <span className="wz-step-sub">якщо в будинку дві лінії</span>}
+                  {state === 'done' && <span className="st-sr">, пройдено</span>}
                 </span>
               </li>
             );
@@ -202,7 +247,7 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
 
       <main className="wz-main" data-capture="wz-main">
         <div className="wz-count">{`Крок ${num} з 7`}</div>
-        <h2 className="wz-title">{TITLES[step]}</h2>
+        <h2 className="wz-title" ref={titleRef} tabIndex={-1}>{TITLES[step]}</h2>
         <p className="wz-desc" data-capture="wz-desc">{subline(step, city, houseLines.length)}</p>
 
         <div className="wz-body" data-capture="wz-body">
@@ -246,22 +291,27 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
           {step === 'house' && (
             <>
               <div className="wz-chips wz-chips-house"><span className="sv-chip wz-chip" title={`${city}, ${street}`}>{`${city}, ${street}`}</span></div>
-              <Status res={houses} api={api}>{list => (
-                <>
-                  <div className="wz-houses" role="radiogroup" aria-label="Номер будинку" data-capture="houses">
-                    {list.map(h => (
-                      <button key={h.house} type="button" role="radio" aria-checked={house === h.house} className="wz-house" title={h.house}
-                        onClick={() => { setHouse(h.house); setLine(null); setHouseLines(h.lines); setHouseOutage(!!h.outageActive); }}>
-                        {h.house}
-                      </button>
-                    ))}
-                  </div>
-                  {list.length === 0 && <p className="wz-muted">Нічого не знайдено</p>}
-                  {house !== null && houseOutage && <Note text={OUTAGE_NOTE} />}
-                  {/* During an outage an empty list is expected to be temporary; the note above says what to do. */}
-                  {noLines && !houseOutage && <Note text="Для цього будинку ДТЕК не публікує графік відключень" />}
-                </>
-              )}</Status>
+              <Status res={houses} api={api}>{list => {
+                // A long street gets a filter field over the grid (the house search the step used to have).
+                const filtered = list.length > HOUSE_FILTER_FROM;
+                const shown = filtered ? list.filter(h => matches(h.house, houseQuery)) : list;
+                return (
+                  <>
+                    {filtered && (
+                      <>
+                        <label className="st-label wz-label" htmlFor={`${uid}-house`}>Номер будинку</label>
+                        <input id={`${uid}-house`} className="st-input wz-input wz-filter" value={houseQuery} placeholder="Пошук номера"
+                          autoFocus onChange={e => setHouseQuery(e.target.value)} />
+                      </>
+                    )}
+                    {shown.length > 0 && <HouseGrid houses={shown} picked={house} onPick={pickHouse} />}
+                    {shown.length === 0 && <p className="wz-muted">Нічого не знайдено</p>}
+                    {house !== null && houseOutage && <Note text={OUTAGE_NOTE} />}
+                    {/* During an outage an empty list is expected to be temporary; the note above says what to do. */}
+                    {noLines && !houseOutage && <Note text="Для цього будинку ДТЕК не публікує графік відключень" />}
+                  </>
+                );
+              }}</Status>
             </>
           )}
 
@@ -271,16 +321,17 @@ export function SetupWizard({ api, autostart, onDone, onCancel }: {
                 <fieldset className="wz-opts wz-lines">
                   <legend className="st-sr">Лінія</legend>
                   {list.map(({ line: l, today }) => {
-                    const ranges = outageRanges(today);
+                    const ranges = lineOutages(today);
+                    const sumId = `${uid}-line-${l.index}`;
                     // The whole card picks the line; the radio inside is what the keyboard and screen readers use.
                     return (
                       <div key={l.index} className="wz-opt wz-line" onClick={() => setLine(l)}>
                         <div className="wz-line-head">
                           <label className="wz-line-pick">
-                            <input type="radio" name="wz-line" checked={line?.index === l.index} onChange={() => setLine(l)} />
+                            <input type="radio" name="wz-line" checked={line?.index === l.index} aria-describedby={sumId} onChange={() => setLine(l)} />
                             <span className="wz-opt-name">{`Лінія ${l.index} · ${l.label.toLowerCase()}`}</span>
                           </label>
-                          <span className="wz-line-sum" title={ranges} data-capture="line-summary">{ranges}</span>
+                          <span className="wz-line-sum" id={sumId} title={ranges} data-capture="line-summary">{ranges}</span>
                         </div>
                         <DayStrip cells={dayCells(today?.slots ?? null)} />
                         <div className="wz-hours" aria-hidden="true">{HOURS.map(h => <span key={h}>{h}</span>)}</div>
