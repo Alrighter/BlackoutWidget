@@ -1,9 +1,8 @@
 name: Build macOS
 
+# Manual only: macOS runners use private-repo minutes at 10x. Run: gh workflow run build-mac.yml
 on:
   workflow_dispatch:
-  push:
-    branches: [macos-build]
 
 jobs:
   dmg:
