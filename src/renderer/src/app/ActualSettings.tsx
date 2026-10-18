@@ -1,21 +1,27 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import type { EcoflowDeviceView, EcoflowKeysInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
 
 /** `initiallyOpen`: start with the connect / change form expanded (D10). */
-type PanelProps = { state: AppState; api: RendererApi; initiallyOpen?: boolean };
+type SettingsProps = { state: AppState; api: RendererApi; initiallyOpen?: boolean };
+/** A panel draws the whole card: its heading changes with its step. `sourcePicker` goes into its connect form. */
+type PanelProps = SettingsProps & { sourceName: string; sourcePicker: ReactNode };
 
 const cap = (s?: string) => (s ? s[0].toLocaleUpperCase('uk') + s.slice(1) : '');
 const SAVE_FAILED = 'Не вдалося зберегти налаштування. Спробуйте ще раз.';
+const BOLT = 'M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z';
 
-function previewText(r: EcoflowPreviewResult): string {
-  if (!r.ok) return r.error;
-  if (!r.online) return 'Станція не в мережі';
-  if (r.unsupported) return 'Модель поки не підтримується';
-  if (r.power === 'on') return r.detail ? `${cap(r.detail)} — світло є` : 'Світло є';
-  if (r.power === 'off') return r.detail ? `${cap(r.detail)} — світла немає` : 'Світла немає';
-  return cap(r.reason);
+/** Colour of the «Перевірка» box: the power read, a model we can't read, or nothing to tell. */
+type Tone = 'on' | 'off' | 'warn' | 'neutral';
+
+function previewView(r: EcoflowPreviewResult): { text: string; tone: Tone } {
+  if (!r.ok) return { text: r.error, tone: 'neutral' };
+  if (!r.online) return { text: 'Станція не в мережі', tone: 'neutral' };
+  if (r.unsupported) return { text: 'Модель поки не підтримується', tone: 'warn' };
+  if (r.power === 'on') return { text: r.detail ? `${cap(r.detail)} — світло є` : 'Світло є', tone: 'on' };
+  if (r.power === 'off') return { text: r.detail ? `${cap(r.detail)} — світла немає` : 'Світла немає', tone: 'off' };
+  return { text: cap(r.reason), tone: 'neutral' };
 }
 
 function currentText(actual: AppState['actual']): string | null {
@@ -26,10 +32,53 @@ function currentText(actual: AppState['actual']): string | null {
   return `Зараз: невідомо${actual.reason ? ` — ${actual.reason}` : ''}`;
 }
 
-type Preview = { sn: string; text: string } | { sn: string; pending: true };
+type Preview = { sn: string; text: string; tone: Tone } | { sn: string; pending: true };
 
-/** The keys live only in this component's state; the form is unmounted after save or cancel. */
-function EcoflowForm({ api, initialRegion, onClose }: { api: RendererApi; initialRegion: EcoflowRegion; onClose(): void }) {
+function Head({ title, chip }: { title: string; chip?: string }) {
+  return (
+    <div className="st-head">
+      <h2 className="st-title">{title}</h2>
+      {chip && (
+        <span className="sv-chip st-chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d={BOLT} /></svg>{chip}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Alert({ text }: { text: string }) {
+  return (
+    <div className="st-alert" role="alert">
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5" /><path d="M12 16.4v.1" /></svg>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function CheckResult({ preview }: { preview: Preview }) {
+  const pending = 'pending' in preview;
+  const tone = pending ? 'neutral' : preview.tone;
+  return (
+    <div className={`st-result ${tone}`} aria-live="polite" data-capture="check">
+      <span className="st-result-label">Перевірка</span>
+      <span className="st-result-value">
+        {tone === 'warn'
+          ? <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20.5h20z" /><path d="M12 10v4.5" /><path d="M12 17.6v.1" /></svg>
+          : <i />}
+        {pending ? 'Читаю показники…' : preview.text}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The keys live only in this component's state; the form is unmounted after save or cancel. Two steps: the keys, then
+ * (after a successful check) the account's stations; «Назад» drops the check result and keeps the keys.
+ */
+function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
+  api: RendererApi; initialRegion: EcoflowRegion; sourcePicker: ReactNode; onClose(): void;
+}) {
   const [region, setRegion] = useState<EcoflowRegion>(initialRegion);
   const [accessKey, setAccessKey] = useState('');
   const [secretKey, setSecretKey] = useState('');
@@ -48,9 +97,9 @@ function EcoflowForm({ api, initialRegion, onClose }: { api: RendererApi; initia
   async function choose(next: string, k: EcoflowKeysInput) {
     const mine = ++seq.current;
     setSn(next); setPreview({ sn: next, pending: true }); setSaveError(null);
-    let text: string;
-    try { text = previewText(await api.ecoflowPreview(k, next)); } catch { text = 'Не вдалося прочитати показники'; }
-    if (mine === seq.current) setPreview({ sn: next, text });
+    let view: { text: string; tone: Tone };
+    try { view = previewView(await api.ecoflowPreview(k, next)); } catch { view = { text: 'Не вдалося прочитати показники', tone: 'neutral' }; }
+    if (mine === seq.current) setPreview({ sn: next, ...view });
   }
   async function check() {
     const k = keys(); resetResult(); setChecking(true);
@@ -73,75 +122,107 @@ function EcoflowForm({ api, initialRegion, onClose }: { api: RendererApi; initia
     if (res.ok) { setAccessKey(''); setSecretKey(''); onClose(); } else setSaveError(res.error);
   }
 
-  const canCheck = !checking && accessKey.trim() !== '' && secretKey.trim() !== '';
-  return (
-    <div className="actual-form">
-      <label className="field"><span>Регіон</span>
-        <select value={region} onChange={e => { setRegion(e.target.value as EcoflowRegion); resetResult(); }}>
-          <option value="eu">Європа</option>
-          <option value="us">Інший регіон (api.ecoflow.com)</option>
-        </select>
-      </label>
-      <label className="field"><span>Access Key</span>
-        <input type="password" autoComplete="off" value={accessKey} onChange={e => { setAccessKey(e.target.value); resetResult(); }} />
-      </label>
-      <label className="field"><span>Secret Key</span>
-        <input type="password" autoComplete="off" value={secretKey} onChange={e => { setSecretKey(e.target.value); resetResult(); }} />
-      </label>
-      <p className="muted">Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).</p>
-      <button className="link" onClick={() => api.openEcoflowHelp()}>Як отримати ключі</button>
-      <div className="row">
-        <button className="secondary" disabled={!canCheck} onClick={() => void check()}>{checking ? 'Перевіряю…' : 'Перевірити'}</button>
-        <button className="link" onClick={() => { setAccessKey(''); setSecretKey(''); onClose(); }}>Скасувати</button>
-      </div>
-      {testError && <p className="error" role="alert">{testError}</p>}
-      {devices && (
-        <div className="stations">
-          <h3>Станції в акаунті</h3>
-          {devices.length === 0 && <p className="muted">У цьому акаунті немає станцій</p>}
-          {devices.map(d => (
-            <label key={d.sn} className="station">
-              <input type="radio" name="ecoflow-station" checked={sn === d.sn} onChange={() => void choose(d.sn, keys())} />
-              <span>{`${d.label} · …${d.sn.slice(-4)}`}</span>
-              <span className="muted">{d.online ? 'в мережі' : 'не в мережі'}</span>
-            </label>
-          ))}
-          {preview && <p className="preview" aria-live="polite">{'pending' in preview ? 'Читаю показники…' : preview.text}</p>}
+  if (devices) {
+    return (
+      <div className="st-panel">
+        <h2 className="st-title">Станції в акаунті</h2>
+        {devices.length === 0 ? <p className="st-text">У цьому акаунті немає станцій</p> : (
+          <fieldset className="st-stations">
+            <legend className="st-sr">Станція</legend>
+            {devices.map(d => (
+              <label key={d.sn} className="st-station">
+                <input type="radio" name="ecoflow-station" checked={sn === d.sn} onChange={() => void choose(d.sn, keys())} />
+                <span className="st-station-name">{d.label} <span>{`· …${d.sn.slice(-4)}`}</span></span>
+                <span className={`st-station-state${d.online ? ' online' : ''}`}><i />{d.online ? 'в мережі' : 'не в мережі'}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
+        {preview && <CheckResult preview={preview} />}
+        <div className="st-actions">
+          <button className="sv-primary" disabled={!sn || saving} onClick={() => void save()}>Зберегти</button>
+          <button className="sv-btn st-ghost st-tall" disabled={saving} onClick={resetResult}>Назад</button>
         </div>
-      )}
-      <div className="row">
-        <button className="primary" disabled={!devices || !sn || saving} onClick={() => void save()}>Зберегти</button>
+        {saveError && <Alert text={saveError} />}
       </div>
-      {saveError && <p className="error" role="alert">{saveError}</p>}
+    );
+  }
+
+  const canCheck = !checking && accessKey.trim() !== '' && secretKey.trim() !== '';
+  const pickRegion = (next: EcoflowRegion) => { setRegion(next); resetResult(); };
+  return (
+    <div className="st-panel st-form">
+      <h2 className="st-title">Підключення EcoFlow</h2>
+      {sourcePicker}
+      <fieldset className="st-radios">
+        <legend>Регіон</legend>
+        <label className="st-radio">
+          <input type="radio" name="ecoflow-region" checked={region === 'eu'} onChange={() => pickRegion('eu')} />Європа
+        </label>
+        <label className="st-radio">
+          <input type="radio" name="ecoflow-region" checked={region === 'us'} onChange={() => pickRegion('us')} />Інший регіон <span>(api.ecoflow.com)</span>
+        </label>
+      </fieldset>
+      <label className="st-field"><span className="st-label">Access Key</span>
+        <input className="st-input st-mono" type="password" autoComplete="off" value={accessKey} onChange={e => { setAccessKey(e.target.value); resetResult(); }} />
+      </label>
+      <label className="st-field"><span className="st-label">Secret Key</span>
+        <input className="st-input" type="password" autoComplete="off" placeholder="Вставте Secret Key" value={secretKey}
+          onChange={e => { setSecretKey(e.target.value); resetResult(); }} />
+      </label>
+      <p className="st-hint">
+        Ключі створюються в кабінеті розробника EcoFlow для вашого акаунта.{' '}
+        <button className="st-link" onClick={() => api.openEcoflowHelp()}>Як отримати ключі</button>
+      </p>
+      {testError && <Alert text={testError} />}
+      <div className="st-actions">
+        <button className={`sv-primary${checking ? ' st-busy' : ''}`} disabled={!canCheck} onClick={() => void check()}>
+          {checking && <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>}
+          {checking ? 'Перевіряю…' : 'Перевірити'}
+        </button>
+        <button className="sv-btn st-ghost st-tall" onClick={() => { setAccessKey(''); setSecretKey(''); onClose(); }}>Скасувати</button>
+      </div>
     </div>
   );
 }
 
-function EcoflowPanel({ state, api, initiallyOpen = false }: PanelProps) {
+function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePicker }: PanelProps) {
   const source = state.settings.actualSource;
   const [editing, setEditing] = useState(initiallyOpen);
   const [error, setError] = useState<string | null>(null);
 
-  if (editing) return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} onClose={() => setEditing(false)} />;
+  if (editing) {
+    return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} sourcePicker={sourcePicker} onClose={() => setEditing(false)} />;
+  }
   if (!source) {
     return (
-      <>
-        <p>Зарядна станція EcoFlow може показувати, чи є світло насправді.</p>
-        <button className="primary" onClick={() => setEditing(true)}>Підключити EcoFlow</button>
-      </>
+      <div className="st-panel">
+        <Head title="Фактичний стан світла" chip={sourceName} />
+        <p className="st-text">Зарядна станція EcoFlow може показувати, чи є світло насправді.</p>
+        <div className="st-actions"><button className="sv-primary" onClick={() => setEditing(true)}>Підключити EcoFlow</button></div>
+      </div>
     );
   }
+  const name = `EcoFlow · ${source.deviceName} · ключ ${source.accessKeyHint}`;
   const now = currentText(state.actual);
   return (
-    <>
-      <p>{`EcoFlow · ${source.deviceName} · ключ ${source.accessKeyHint}`}</p>
-      {now && <p className="muted">{now}</p>}
-      <div className="row">
-        <button className="secondary" onClick={() => { setError(null); setEditing(true); }}>Змінити</button>
-        <button className="secondary" onClick={() => { setError(null); api.actualDisconnect().catch(() => setError(SAVE_FAILED)); }}>Вимкнути</button>
+    <div className="st-panel">
+      <Head title="Фактичний стан світла" chip={sourceName} />
+      <div className="st-device">
+        <span className="st-icon st-icon-lg">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3" /><path d="M8 6V4h8v2" /><path d="m12.5 9-3 4.5h4l-1 3.5" /></svg>
+        </span>
+        <div className="st-device-text">
+          <span className="st-device-name" title={name} data-capture="device">{name}</span>
+          {now && <span className="st-device-now"><i className={`sv-tone-${state.actual!.power}`} />{now}</span>}
+        </div>
       </div>
-      {error && <p className="error" role="alert">{error}</p>}
-    </>
+      <div className="st-actions">
+        <button className="sv-btn" onClick={() => { setError(null); setEditing(true); }}>Змінити</button>
+        <button className="sv-btn st-ghost" onClick={() => { setError(null); api.actualDisconnect().catch(() => setError(SAVE_FAILED)); }}>Вимкнути</button>
+      </div>
+      {error && <Alert text={error} />}
+    </div>
   );
 }
 
@@ -149,21 +230,25 @@ const PANELS: Record<string, { name: string; Panel: ComponentType<PanelProps> }>
   ecoflow: { name: 'EcoFlow', Panel: EcoflowPanel },
 };
 
-export function ActualSettings({ state, api, initiallyOpen = false }: PanelProps) {
+export function ActualSettings({ state, api, initiallyOpen = false }: SettingsProps) {
   const [sourceId, setSourceId] = useState('ecoflow');
-  const { Panel } = PANELS[sourceId];
+  const { name, Panel } = PANELS[sourceId];
   const ref = useRef<HTMLElement>(null);
   // Opened for the form: bring it into view (jsdom has no scrollIntoView).
   useEffect(() => { if (initiallyOpen) ref.current?.scrollIntoView?.({ block: 'start' }); }, [initiallyOpen]);
-  return (
-    <section className="actual-settings" ref={ref}>
-      <h2>Фактичний стан світла</h2>
-      <label className="field"><span className="muted">Джерело</span>
-        <select aria-label="Джерело" value={sourceId} onChange={e => setSourceId(e.target.value)}>
+  const picker = (
+    <label className="st-field"><span className="st-label">Джерело</span>
+      <span className="st-select">
+        <select value={sourceId} onChange={e => setSourceId(e.target.value)}>
           {Object.entries(PANELS).map(([id, p]) => <option key={id} value={id}>{p.name}</option>)}
         </select>
-      </label>
-      <Panel state={state} api={api} initiallyOpen={initiallyOpen} />
+        <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </span>
+    </label>
+  );
+  return (
+    <section className="sv-card st-card" ref={ref} data-capture="ecoflow">
+      <Panel state={state} api={api} initiallyOpen={initiallyOpen} sourceName={name} sourcePicker={picker} />
     </section>
   );
 }

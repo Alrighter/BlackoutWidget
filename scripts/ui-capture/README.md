@@ -26,6 +26,7 @@ Rebuild after every source change: the rig only sees `out/`.
 | `--wallpaper` | `auto` (= theme), `light`, `dark`, `busy`, `none` (no image: `{ kind: 'tint' }`) | `auto` |
 | `--move-mode` | flag: the widget is told it is in move mode (`onMoveMode(true)`) | off |
 | `--patch` | JSON merged into the AppState (`settings` one level deep), e.g. `'{"phase":"captcha"}'` | none |
+| `--stubs` | JSON replacing what `window.api` calls resolve with, by name: `ecoflowTest`, `ecoflowPreview`, `ecoflowSave` (see [Scenarios](#scenarios)); `"pending"` never settles | none |
 | `--exec` | JS run in the page after it rendered (awaited if it returns a promise), e.g. clicks | none |
 | `--tag` | text appended to the file name, for variants made with `--now` / `--patch` / `--exec` | none |
 | `--delay` | ms to wait before the capture (after `--exec`) | `300` |
@@ -124,8 +125,10 @@ The fake data departs from the mockup in a few places, so that the app's own log
 Non-EcoFlow scenarios have `actual: null` and no `actualSource`, so the main window shows the EcoFlow empty state.
 
 The other `window.api` methods resolve with plausible data: providers, cities, streets, houses, the two lines with
-today's schedule, and an EcoFlow test/preview/save that succeeds with one «Delta 2». Pushes (`onState`, `onNavigate`)
-never fire.
+today's schedule, and an EcoFlow test/preview/save that succeeds with one online «Delta 2» reading «на вході 229 В».
+`--stubs` swaps the EcoFlow results, e.g. `'{"ecoflowTest":"pending"}'` (the check never ends) or
+`'{"ecoflowPreview":{"ok":true,"online":false,"power":"unknown"}}'` (station offline). Pushes (`onState`,
+`onNavigate`) never fire. Nothing calls the real EcoFlow API.
 
 ## Recipes
 
@@ -140,6 +143,10 @@ npm run ui:capture -- --target app --scenario on --patch '{"phase":"captcha"}' -
 npm run ui:capture -- --target app --patch '{"settings":{"address":null}}' --tag first-run --out …
 # move mode on busy wallpaper
 npm run ui:capture -- --style compact --scenario on --theme all --wallpaper busy --move-mode --out …
+# the EcoFlow check that never ends: open the form, type the keys (React needs the native value setter), press «Перевірити»
+npm run ui:capture -- --target app --view settings --stubs '{"ecoflowTest":"pending"}' --exec "(async () => { …clicks… })()" --tag checking --out …
+# on Windows `npm run` goes through cmd.exe, which ends the command at a newline: keep --exec on one line there, or run
+# node_modules/electron/dist/electron.exe scripts/ui-capture/capture.cjs … directly (same options) for multi-line JS
 # a later wizard step: click through first (the page's Date is frozen, so wait with setTimeout, not Date)
 npm run ui:capture -- --target app --view setup --exec "[...document.querySelectorAll('button')].find(b => b.textContent === 'Далі').click()" --tag step2 --out …
 ```

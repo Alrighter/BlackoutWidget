@@ -44,6 +44,13 @@ describe('design tokens', () => {
     expect([THEMES.dark.appInk, THEMES.dark.appInk2, THEMES.dark.appInk3]).toEqual(['#f2f4f9', '#c4c8d3', '#9ca2b3']);
     expect([THEMES.light.card, THEMES.dark.card]).toEqual(['rgba(255, 255, 255, 0.82)', 'rgba(255, 255, 255, 0.05)']);
     expect([THEMES.light.accent, THEMES.dark.accent]).toEqual(['#2a5bd7', '#8fb4ff']);
+    // Settings (TH in main-settings.html; ecoflow-panel.html).
+    expect([THEMES.light.accentInk, THEMES.dark.accentInk]).toEqual(['#ffffff', '#10131c']);
+    expect([THEMES.light.optOn, THEMES.dark.optOn]).toEqual(['rgba(42, 91, 215, 0.06)', 'rgba(143, 180, 255, 0.08)']);
+    expect([THEMES.light.field, THEMES.light.fieldEdge, THEMES.light.primaryBusy]).toEqual(['#ffffff', 'rgba(17, 19, 26, 0.18)', '#3a3e4a']);
+    expect([THEMES.light.onInk, THEMES.light.warnText, THEMES.light.dangerInk, THEMES.light.dangerIcon]).toEqual(['#0f6b3d', '#6b4500', '#7a1712', '#c4241d']);
+    expect(THEMES.light.thumbWp).toMatch(/^radial-gradient\(55% 70% at 12% 18%, #ffd6bd 0%/);
+    expect(THEMES.dark.thumbWp).toMatch(/0 0 \/ 74px 62px, .*linear-gradient\(180deg, #0b0e18 0%, #10131f 100%\)$/);
   });
 
   it('picks the theme by the dark flag', () => {

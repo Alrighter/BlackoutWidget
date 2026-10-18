@@ -1,6 +1,6 @@
 /**
  * Theme colours of the design (docs/superpowers/specs/assets/design-2026-10-18: tokens.html, THEMES in
- * widget-compact.html and main-schedule.html), for code that paints with JS/SVG. src/renderer/src/ui/tokens.css declares the same values as
+ * widget-compact.html, main-schedule.html and main-settings.html), for code that paints with JS/SVG. src/renderer/src/ui/tokens.css declares the same values as
  * `--bw-*` custom properties (key `offA` → `--bw-off-a`); a test keeps the two in step.
  */
 export interface ThemeTokens {
@@ -23,6 +23,15 @@ export interface ThemeTokens {
   ctl: string; ctlOn: string; ctlOnShadow: string;
   btn: string; btnEdge: string;
   accent: string; primary: string; primaryInk: string;
+  /**
+   * Settings (TH in main-settings.html, ecoflow-panel.html): ink on the accent, a selected option's background, the
+   * primary button while it works, form fields, the «в мережі» / warning / error inks, and the wallpaper behind the
+   * style thumbnails. The EcoFlow panel mockup is light only, so its dark shades are derived.
+   */
+  accentInk: string; optOn: string; primaryBusy: string;
+  field: string; fieldEdge: string;
+  onInk: string; warnText: string; dangerInk: string; dangerIcon: string;
+  thumbWp: string;
 }
 
 export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
@@ -43,6 +52,10 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     ctl: 'rgba(17, 19, 26, 0.06)', ctlOn: '#ffffff', ctlOnShadow: '0 1px 2px rgba(17, 19, 26, 0.14), 0 0 0 0.5px rgba(17, 19, 26, 0.08)',
     btn: 'rgba(255, 255, 255, 0.9)', btnEdge: 'rgba(17, 19, 26, 0.13)',
     accent: '#2a5bd7', primary: '#1b1e27', primaryInk: '#ffffff',
+    accentInk: '#ffffff', optOn: 'rgba(42, 91, 215, 0.06)', primaryBusy: '#3a3e4a',
+    field: '#ffffff', fieldEdge: 'rgba(17, 19, 26, 0.18)',
+    onInk: '#0f6b3d', warnText: '#6b4500', dangerInk: '#7a1712', dangerIcon: '#c4241d',
+    thumbWp: 'radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)',
   },
   dark: {
     on: '#5dffa8', offA: '#ffc23d', offB: '#ff7a1a', offDot: '#ff6b5b', maybe: '#ffc23d', unknown: '#9aa0b4',
@@ -61,6 +74,10 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     ctl: 'rgba(255, 255, 255, 0.07)', ctlOn: 'rgba(255, 255, 255, 0.15)', ctlOnShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
     btn: 'rgba(255, 255, 255, 0.08)', btnEdge: 'rgba(255, 255, 255, 0.14)',
     accent: '#8fb4ff', primary: '#f2f4f9', primaryInk: '#15171d',
+    accentInk: '#10131c', optOn: 'rgba(143, 180, 255, 0.08)', primaryBusy: '#d3d5da',
+    field: 'rgba(255, 255, 255, 0.06)', fieldEdge: 'rgba(255, 255, 255, 0.18)',
+    onInk: '#5dffa8', warnText: '#ffd27a', dangerInk: '#ffb4ae', dangerIcon: '#ff4d4d',
+    thumbWp: 'radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)',
   },
 };
 

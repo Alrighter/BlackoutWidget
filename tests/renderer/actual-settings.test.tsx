@@ -34,11 +34,14 @@ test('not configured → connect button opens the form', async () => {
   render(<ActualSettings state={stateOf()} api={mockApi()} />);
   expect(screen.getByRole('heading', { name: 'Фактичний стан світла' })).toBeInTheDocument();
   expect(screen.getByText('Зарядна станція EcoFlow може показувати, чи є світло насправді.')).toBeInTheDocument();
+  expect(screen.getByText('EcoFlow')).toBeInTheDocument(); // the source chip
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
-  expect(screen.getByLabelText('Регіон')).toHaveValue('eu');
+  expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Джерело')).toHaveValue('ecoflow');
+  expect(screen.getByRole('radio', { name: 'Європа' })).toBeChecked();
   expect(screen.getByLabelText('Access Key')).toHaveAttribute('type', 'password');
   expect(screen.getByLabelText('Secret Key')).toHaveAttribute('type', 'password');
-  expect(screen.getByText('Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).')).toBeInTheDocument();
+  expect(screen.getByText('Ключі створюються в кабінеті розробника EcoFlow для вашого акаунта.')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Скасувати' }));
   expect(screen.getByRole('button', { name: 'Підключити EcoFlow' })).toBeInTheDocument();
 });
@@ -76,13 +79,30 @@ test('no stations in the account', async () => {
   expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
 });
 
-test('check error is shown and save stays disabled', async () => {
+test('check error is shown and there is nothing to save', async () => {
   const user = userEvent.setup();
   const api = mockApi({ ecoflowTest: vi.fn(async () => ({ ok: false, error: 'Ключі не підійшли (8521)' })) });
   render(<ActualSettings state={stateOf()} api={api} />);
   await openAndCheck(user);
-  expect(await screen.findByText('Ключі не підійшли (8521)')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Ключі не підійшли (8521)');
+  // «Зберегти» lives in the stations step, which a failed check never reaches.
+  expect(screen.queryByRole('button', { name: 'Зберегти' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Перевірити' })).toBeEnabled();
+});
+
+test('«Назад» from the stations goes back to the form with the keys kept', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openAndCheck(user);
+  expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Access Key')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Назад' }));
+  expect(screen.queryByText('Станції в акаунті')).toBeNull();
+  expect(screen.getByLabelText('Access Key')).toHaveValue('AK-123');
+  expect(screen.getByLabelText('Secret Key')).toHaveValue('SK-456');
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(api.ecoflowTest).toHaveBeenCalledTimes(2);
+  expect(await screen.findByText('Станції в акаунті')).toBeInTheDocument();
 });
 
 test('save sends keys once and clears the form', async () => {
@@ -153,9 +173,21 @@ test('«Змінити» opens a form with empty keys and the configured region'
   const user = userEvent.setup(); const api = mockApi();
   render(<ActualSettings state={stateOf({ ...CONFIG, region: 'us' })} api={api} />);
   await user.click(screen.getByRole('button', { name: 'Змінити' }));
-  expect(screen.getByLabelText('Регіон')).toHaveValue('us');
+  expect(screen.getByRole('radio', { name: 'Інший регіон (api.ecoflow.com)' })).toBeChecked();
   expect(screen.getByLabelText('Access Key')).toHaveValue('');
   expect(screen.getByLabelText('Secret Key')).toHaveValue('');
+  await user.type(screen.getByLabelText('Access Key'), 'AK-123');
+  await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
+});
+
+test('the region radios pick the API region', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.click(screen.getByRole('radio', { name: 'Інший регіон (api.ecoflow.com)' }));
+  expect(screen.getByRole('radio', { name: 'Європа' })).not.toBeChecked();
   await user.type(screen.getByLabelText('Access Key'), 'AK-123');
   await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));

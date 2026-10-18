@@ -95,6 +95,8 @@ function widgetBackground() {
 const noop = () => {};
 const soon = fn => { setTimeout(fn, 0); return noop; };
 const done = value => Promise.resolve(value);
+/** A stubbed result; "pending" never settles, so the page stays in its working state. */
+const reply = value => (value === 'pending' ? new Promise(noop) : done(value));
 const stubs = cfg.stubs;
 
 contextBridge.exposeInMainWorld('api', {
@@ -117,9 +119,9 @@ contextBridge.exposeInMainWorld('api', {
   widgetDrag: noop,
   onMoveMode: cb => (cfg.moveMode ? soon(() => cb(true)) : noop),
   endMoveMode: noop,
-  ecoflowTest: () => done({ ok: true, devices: stubs.ecoflowDevices }),
-  ecoflowPreview: () => done({ ok: true, online: true, power: 'on' }),
-  ecoflowSave: () => done({ ok: true }),
+  ecoflowTest: () => reply(stubs.ecoflowTest),
+  ecoflowPreview: () => reply(stubs.ecoflowPreview),
+  ecoflowSave: () => reply(stubs.ecoflowSave),
   actualDisconnect: () => done(undefined),
   openEcoflowHelp: noop,
 });

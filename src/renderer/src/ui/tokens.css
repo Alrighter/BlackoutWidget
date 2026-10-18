@@ -1,6 +1,6 @@
 /*
- * Design tokens (docs/superpowers/specs/assets/design-2026-10-18: tokens.html, THEMES in widget-compact.html and
- * main-schedule.html).
+ * Design tokens (docs/superpowers/specs/assets/design-2026-10-18: tokens.html, THEMES in widget-compact.html,
+ * main-schedule.html and main-settings.html; ecoflow-panel.html).
  * Light theme by default, dark under prefers-color-scheme. src/shared/design-tokens.ts carries the same colours for
  * JS/SVG (--bw-off-a = offA ...); tests/shared/design-tokens.test.ts keeps the two in step.
  */
@@ -52,6 +52,17 @@
   --bw-accent: #2a5bd7;
   --bw-primary: #1b1e27;
   --bw-primary-ink: #ffffff;
+  /* settings (main-settings.html, ecoflow-panel.html) */
+  --bw-accent-ink: #ffffff;
+  --bw-opt-on: rgba(42, 91, 215, 0.06);
+  --bw-primary-busy: #3a3e4a;
+  --bw-field: #ffffff;
+  --bw-field-edge: rgba(17, 19, 26, 0.18);
+  --bw-on-ink: #0f6b3d;
+  --bw-warn-text: #6b4500;
+  --bw-danger-ink: #7a1712;
+  --bw-danger-icon: #c4241d;
+  --bw-thumb-wp: radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%);
 
   /* radii */
   --bw-r-compact: 22px;
@@ -119,6 +130,17 @@
     --bw-accent: #8fb4ff;
     --bw-primary: #f2f4f9;
     --bw-primary-ink: #15171d;
+    --bw-accent-ink: #10131c;
+    --bw-opt-on: rgba(143, 180, 255, 0.08);
+    /* The EcoFlow panel mockup is light only: the next seven are derived (primary-busy = 86 % primary + primary-ink). */
+    --bw-primary-busy: #d3d5da;
+    --bw-field: rgba(255, 255, 255, 0.06);
+    --bw-field-edge: rgba(255, 255, 255, 0.18);
+    --bw-on-ink: #5dffa8;
+    --bw-warn-text: #ffd27a;
+    --bw-danger-ink: #ffb4ae;
+    --bw-danger-icon: #ff4d4d;
+    --bw-thumb-wp: radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%);
   }
 }
 

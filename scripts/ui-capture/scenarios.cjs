@@ -158,7 +158,10 @@ function buildScenario(name, { style = 'compact', now } = {}) {
       { house: '42', lines: [LINES[1]], outageActive: false },
     ],
     previewLines: [{ line: LINES[0], today: { date: day, slots: T_A } }, { line: LINES[1], today: { date: day, slots: T_C } }],
-    ecoflowDevices: [{ ...ECOFLOW_DEVICE, online: true }],
+    // What window.api's EcoFlow calls resolve with; --stubs replaces them ("pending": never settles).
+    ecoflowTest: { ok: true, devices: [{ ...ECOFLOW_DEVICE, online: true }] },
+    ecoflowPreview: { ok: true, online: true, power: 'on', detail: 'на вході 229 В' },
+    ecoflowSave: { ok: true },
   };
   return { nowMs, state, stubs };
 }

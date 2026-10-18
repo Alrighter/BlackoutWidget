@@ -37,7 +37,7 @@ function parseArgs(argv) {
     if (!m) throw new Error(`unexpected argument "${args[i]}"`);
     const [, key, inline] = m;
     if (FLAGS.has(key)) { opts[key] = true; continue; }
-    if (!Object.hasOwn(DEFAULTS, key) && !['now', 'patch', 'exec', 'tag'].includes(key)) throw new Error(`unknown option --${key}`);
+    if (!Object.hasOwn(DEFAULTS, key) && !['now', 'patch', 'stubs', 'exec', 'tag'].includes(key)) throw new Error(`unknown option --${key}`);
     const value = inline ?? args[++i];
     if (value === undefined) throw new Error(`--${key} needs a value`);
     opts[key] = value;
@@ -52,6 +52,7 @@ function parseArgs(argv) {
     if (!(opts[key] >= 0)) throw new Error(`--${key} needs a number`);
   }
   if (opts.patch) opts.patch = JSON.parse(opts.patch);
+  if (opts.stubs) opts.stubs = JSON.parse(opts.stubs);
   opts.out = path.resolve(opts.out);
   return opts;
 }
@@ -116,6 +117,7 @@ async function capture(job, opts) {
     Object.assign(state, rest);
     if (settings) Object.assign(state.settings, settings);
   }
+  if (opts.stubs) Object.assign(stubs, opts.stubs);
   const widget = job.target === 'widget';
   const [width, height] = widget ? WIDGET_SIZES[job.style] : APP_SIZE;
   // Transparent for the app too: over an opaque base colour Chromium paints its own dark canvas (#121212) behind a
