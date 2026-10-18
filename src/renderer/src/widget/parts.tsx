@@ -87,12 +87,6 @@ export function WarnLine() {
   );
 }
 
-/** The big countdown; «≈» marks the estimated end of an emergency outage. */
-export function countdownText(view: WidgetView): string | undefined {
-  if (!view.countdownShort) return undefined;
-  return view.state === 'emergency' ? `≈${view.countdownShort}` : view.countdownShort;
-}
-
 /**
  * Footer, one row always kept inside the fixed window: «оновлено HH:MM» and the stale pill never shrink, only the
  * optional label before them ellipsizes.

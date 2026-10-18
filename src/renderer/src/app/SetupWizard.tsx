@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { RendererApi } from '../../../shared/ipc';
+import { dayCells } from '../../../shared/day-cells';
 import type { DaySchedule, HouseInfo, LineInfo, WidgetStyle } from '../../../shared/types';
 import { Autocomplete } from './Autocomplete';
 import { DayStrip } from './DayStrip';
@@ -171,7 +172,7 @@ export function SetupWizard({ api, onDone }: { api: RendererApi; onDone(): void 
               {list.map(({ line: l, today }) => (
                 <button key={l.index} className={`card${line?.index === l.index ? ' selected' : ''}`} onClick={() => setLine(l)}>
                   <strong>{`Лінія ${l.index} · ${l.label}`}</strong>
-                  <DayStrip slots={today?.slots ?? []} />
+                  <DayStrip cells={dayCells(today?.slots ?? null)} />
                 </button>
               ))}
             </div>

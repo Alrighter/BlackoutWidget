@@ -31,6 +31,12 @@ export function formatDurationShort(min: number): string {
   return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
 }
 
+/** The big countdown; «≈» marks the estimated end of an emergency outage. */
+export function countdownText(view: WidgetView): string | undefined {
+  if (!view.countdownShort) return undefined;
+  return view.state === 'emergency' ? `≈${view.countdownShort}` : view.countdownShort;
+}
+
 export function slotRuns(slots: Slot[]): { start: number; end: number; slot: Slot }[] {
   const runs: { start: number; end: number; slot: Slot }[] = [];
   slots.forEach((slot, i) => {

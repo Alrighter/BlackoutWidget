@@ -3,7 +3,12 @@ import type { AppState } from '../../../shared/types';
 import { ActualSettings } from './ActualSettings';
 import { STYLES } from './widget-styles';
 
-export function SettingsView({ state, api, onChangeAddress }: { state: AppState; api: RendererApi; onChangeAddress(): void }) {
+export function SettingsView({ state, api, ecoflowFormOpen = false, onChangeAddress }: {
+  state: AppState; api: RendererApi;
+  /** Open with the EcoFlow form already expanded (D10). */
+  ecoflowFormOpen?: boolean;
+  onChangeAddress(): void;
+}) {
   const { address, widgetStyle, autostart } = state.settings;
   return (
     <div className="settings panel">
@@ -23,7 +28,7 @@ export function SettingsView({ state, api, onChangeAddress }: { state: AppState;
           ))}
         </div>
       </section>
-      <ActualSettings state={state} api={api} />
+      <ActualSettings state={state} api={api} initiallyOpen={ecoflowFormOpen} />
       <section>
         <label className="switch">
           <input type="checkbox" role="switch" checked={autostart} onChange={e => void api.setAutostart(e.target.checked)} />

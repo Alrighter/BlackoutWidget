@@ -39,6 +39,11 @@ describe('design tokens', () => {
     expect(THEMES.light.pill).toBe('rgba(248, 249, 252, 0.92)');
     expect(THEMES.light.tintA).toBe(0.14);
     expect(THEMES.dark.tintA).toBe(0.18);
+    // Main window (main-schedule.html): its text shades differ from the widget's.
+    expect([THEMES.light.appInk2, THEMES.light.appInk3]).toEqual(['#474c59', '#686d7c']);
+    expect([THEMES.dark.appInk, THEMES.dark.appInk2, THEMES.dark.appInk3]).toEqual(['#f2f4f9', '#c4c8d3', '#9ca2b3']);
+    expect([THEMES.light.card, THEMES.dark.card]).toEqual(['rgba(255, 255, 255, 0.82)', 'rgba(255, 255, 255, 0.05)']);
+    expect([THEMES.light.accent, THEMES.dark.accent]).toEqual(['#2a5bd7', '#8fb4ff']);
   });
 
   it('picks the theme by the dark flag', () => {

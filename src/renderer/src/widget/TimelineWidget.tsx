@@ -1,7 +1,7 @@
 import { addDays, formatDM } from '../../../shared/time';
-import type { WidgetView } from '../../../shared/widget-state';
+import { countdownText, type WidgetView } from '../../../shared/widget-state';
 import { DayBar, DayTicks } from './DayBar';
-import { Caption, countdownText, Status, WarnLine } from './parts';
+import { Caption, Status, WarnLine } from './parts';
 
 function DayLabel({ name, dateKey }: { name: string; dateKey: string }) {
   return <div className="w-tl-label"><span className="w-tl-day">{name}</span> <span className="w-tl-date">{formatDM(dateKey)}</span></div>;

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Widget } from '../../src/renderer/src/widget/Widget';
-import { DayBar, dayCells } from '../../src/renderer/src/widget/DayBar';
+import { DayBar } from '../../src/renderer/src/widget/DayBar';
+import { dayCells } from '../../src/shared/day-cells';
 import { actualGradient, ringGradient, segmentPaint } from '../../src/renderer/src/widget/RingWidget';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
 import type { ActualStatus, AppState, Slot, WidgetStyle } from '../../src/shared/types';

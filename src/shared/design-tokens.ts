@@ -1,6 +1,6 @@
 /**
- * Theme colours of the design (docs/superpowers/specs/assets/design-2026-10-18: tokens.html and THEMES in
- * widget-compact.html), for code that paints with JS/SVG. src/renderer/src/ui/tokens.css declares the same values as
+ * Theme colours of the design (docs/superpowers/specs/assets/design-2026-10-18: tokens.html, THEMES in
+ * widget-compact.html and main-schedule.html), for code that paints with JS/SVG. src/renderer/src/ui/tokens.css declares the same values as
  * `--bw-*` custom properties (key `offA` → `--bw-off-a`); a test keeps the two in step.
  */
 export interface ThemeTokens {
@@ -14,6 +14,15 @@ export interface ThemeTokens {
   tipBg: string; tipInk: string; tipEdge: string;
   /** Alpha of the state-colour tint over the glass. */
   tintA: number;
+  /**
+   * Main window (THEMES in main-schedule.html), over Mica: its own text and hairline shades, the «now» pill's ring
+   * and ink, cards, segmented controls (ctl, the selected segment ctlOn), buttons, the accent and the primary button.
+   */
+  appInk: string; appInk2: string; appInk3: string; appHair: string; appNowRing: string; nowInk: string;
+  card: string; cardEdge: string;
+  ctl: string; ctlOn: string; ctlOnShadow: string;
+  btn: string; btnEdge: string;
+  accent: string; primary: string; primaryInk: string;
 }
 
 export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
@@ -28,6 +37,12 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     now: '#11131a', nowRing: 'rgba(255, 255, 255, 0.9)',
     tipBg: 'rgba(252, 252, 254, 0.97)', tipInk: '#11131a', tipEdge: 'rgba(17, 19, 26, 0.12)',
     tintA: 0.14,
+    appInk: '#11131a', appInk2: '#474c59', appInk3: '#686d7c', appHair: 'rgba(17, 19, 26, 0.09)',
+    appNowRing: 'rgba(255, 255, 255, 0.95)', nowInk: '#ffffff',
+    card: 'rgba(255, 255, 255, 0.82)', cardEdge: 'rgba(17, 19, 26, 0.07)',
+    ctl: 'rgba(17, 19, 26, 0.06)', ctlOn: '#ffffff', ctlOnShadow: '0 1px 2px rgba(17, 19, 26, 0.14), 0 0 0 0.5px rgba(17, 19, 26, 0.08)',
+    btn: 'rgba(255, 255, 255, 0.9)', btnEdge: 'rgba(17, 19, 26, 0.13)',
+    accent: '#2a5bd7', primary: '#1b1e27', primaryInk: '#ffffff',
   },
   dark: {
     on: '#5dffa8', offA: '#ffc23d', offB: '#ff7a1a', offDot: '#ff6b5b', maybe: '#ffc23d', unknown: '#9aa0b4',
@@ -40,6 +55,12 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     now: '#ffffff', nowRing: 'rgba(0, 0, 0, 0.55)',
     tipBg: 'rgba(30, 32, 40, 0.97)', tipInk: '#f5f7fc', tipEdge: 'rgba(255, 255, 255, 0.14)',
     tintA: 0.18,
+    appInk: '#f2f4f9', appInk2: '#c4c8d3', appInk3: '#9ca2b3', appHair: 'rgba(255, 255, 255, 0.10)',
+    appNowRing: 'rgba(0, 0, 0, 0.6)', nowInk: '#11131a',
+    card: 'rgba(255, 255, 255, 0.05)', cardEdge: 'rgba(255, 255, 255, 0.08)',
+    ctl: 'rgba(255, 255, 255, 0.07)', ctlOn: 'rgba(255, 255, 255, 0.15)', ctlOnShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+    btn: 'rgba(255, 255, 255, 0.08)', btnEdge: 'rgba(255, 255, 255, 0.14)',
+    accent: '#8fb4ff', primary: '#f2f4f9', primaryInk: '#15171d',
   },
 };
 

@@ -1,9 +1,9 @@
 import type { CSSProperties } from 'react';
 import type { StripPart } from '../../../shared/actual-view';
-import type { WidgetView } from '../../../shared/widget-state';
-import { dayCells, type DayCell } from './DayBar';
+import { dayCells, type DayCell } from '../../../shared/day-cells';
+import { countdownText, type WidgetView } from '../../../shared/widget-state';
 import { OutageBadge } from './OutageBadge';
-import { Caption, countdownText, EcoBolt, StateDot, Status, WarnLine } from './parts';
+import { Caption, EcoBolt, StateDot, Status, WarnLine } from './parts';
 
 /** Ring diameter; under the line-changed warning row it shrinks to make room (widget-ring.html). */
 const RING = 208;

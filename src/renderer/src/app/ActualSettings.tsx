@@ -1,9 +1,10 @@
-import { useRef, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import type { EcoflowDeviceView, EcoflowKeysInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
 
-type PanelProps = { state: AppState; api: RendererApi };
+/** `initiallyOpen`: start with the connect / change form expanded (D10). */
+type PanelProps = { state: AppState; api: RendererApi; initiallyOpen?: boolean };
 
 const cap = (s?: string) => (s ? s[0].toLocaleUpperCase('uk') + s.slice(1) : '');
 const SAVE_FAILED = 'Не вдалося зберегти налаштування. Спробуйте ще раз.';
@@ -116,9 +117,9 @@ function EcoflowForm({ api, initialRegion, onClose }: { api: RendererApi; initia
   );
 }
 
-function EcoflowPanel({ state, api }: PanelProps) {
+function EcoflowPanel({ state, api, initiallyOpen = false }: PanelProps) {
   const source = state.settings.actualSource;
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initiallyOpen);
   const [error, setError] = useState<string | null>(null);
 
   if (editing) return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} onClose={() => setEditing(false)} />;
@@ -148,18 +149,21 @@ const PANELS: Record<string, { name: string; Panel: ComponentType<PanelProps> }>
   ecoflow: { name: 'EcoFlow', Panel: EcoflowPanel },
 };
 
-export function ActualSettings({ state, api }: PanelProps) {
+export function ActualSettings({ state, api, initiallyOpen = false }: PanelProps) {
   const [sourceId, setSourceId] = useState('ecoflow');
   const { Panel } = PANELS[sourceId];
+  const ref = useRef<HTMLElement>(null);
+  // Opened for the form: bring it into view (jsdom has no scrollIntoView).
+  useEffect(() => { if (initiallyOpen) ref.current?.scrollIntoView?.({ block: 'start' }); }, [initiallyOpen]);
   return (
-    <section className="actual-settings">
+    <section className="actual-settings" ref={ref}>
       <h2>Фактичний стан світла</h2>
       <label className="field"><span className="muted">Джерело</span>
         <select aria-label="Джерело" value={sourceId} onChange={e => setSourceId(e.target.value)}>
           {Object.entries(PANELS).map(([id, p]) => <option key={id} value={id}>{p.name}</option>)}
         </select>
       </label>
-      <Panel state={state} api={api} />
+      <Panel state={state} api={api} initiallyOpen={initiallyOpen} />
     </section>
   );
 }
