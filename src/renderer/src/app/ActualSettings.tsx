@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { EcoflowDeviceView, EcoflowInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
 
 /** `initiallyOpen`: start with the connect / change form expanded (D10). */
 type SettingsProps = { state: AppState; api: RendererApi; initiallyOpen?: boolean };
-/** A panel draws the whole card: its heading changes with its step. `sourcePicker` goes into its connect form. */
-type PanelProps = SettingsProps & { sourceName: string; sourcePicker: ReactNode };
+type Mode = 'account' | 'keys';
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'account', label: 'EcoFlow — вхід через акаунт' },
+  { value: 'keys', label: 'EcoFlow — ключі розробника' },
+];
 
 const cap = (s?: string) => (s ? s[0].toLocaleUpperCase('uk') + s.slice(1) : '');
 const SAVE_FAILED = 'Не вдалося зберегти налаштування. Спробуйте ще раз.';
@@ -91,9 +94,12 @@ function CheckResult({ preview }: { preview: Preview }) {
  * The keys live only in this component's state; the form is unmounted after save or cancel. Two steps: the keys, then
  * (after a successful check) the account's stations; «Назад» drops the check result and keeps the keys.
  */
-function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
-  api: RendererApi; initialRegion: EcoflowRegion; sourcePicker: ReactNode; onClose(): void;
+function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
+  api: RendererApi; initialRegion: EcoflowRegion; initialMode: Mode; onClose(): void;
 }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [region, setRegion] = useState<EcoflowRegion>(initialRegion);
   const [accessKey, setAccessKey] = useState('');
   const [secretKey, setSecretKey] = useState('');
@@ -105,9 +111,12 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const seq = useRef(0);
-  const headRef = useStepFocus(devices ? 'stations' : 'keys', true);
+  const headRef = useStepFocus(devices ? 'stations' : 'form', true);
 
-  const keys = (): EcoflowInput => ({ mode: 'keys', region, accessKey: accessKey.trim(), secretKey: secretKey.trim() });
+  const input = (): EcoflowInput => mode === 'account'
+    ? { mode, region, email: email.trim(), password }
+    : { mode, region, accessKey: accessKey.trim(), secretKey: secretKey.trim() };
+  const clearSecrets = () => { setAccessKey(''); setSecretKey(''); setEmail(''); setPassword(''); };
   const resetResult = () => { seq.current++; setChecking(false); setDevices(null); setTestError(null); setSn(null); setPreview(null); setSaveError(null); };
 
   async function choose(next: string, k: EcoflowInput) {
@@ -118,10 +127,10 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
     if (mine === seq.current) setPreview({ sn: next, ...view });
   }
   async function check() {
-    const k = keys(); resetResult(); setChecking(true);
+    const k = input(); resetResult(); setChecking(true);
     const mine = seq.current;
     let res;
-    try { res = await api.ecoflowTest(k); } catch { res = { ok: false as const, error: 'Не вдалося перевірити ключі' }; }
+    try { res = await api.ecoflowTest(k); } catch { res = { ok: false as const, error: mode === 'account' ? 'Не вдалося перевірити вхід' : 'Не вдалося перевірити ключі' }; }
     if (mine !== seq.current) return;
     setChecking(false);
     if (!res.ok) { setTestError(res.error); return; }
@@ -133,9 +142,9 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
     if (!device) return;
     setSaving(true); setSaveError(null);
     let res;
-    try { res = await api.ecoflowSave(keys(), { sn: device.sn, label: device.label }); } catch { res = { ok: false as const, error: SAVE_FAILED }; }
+    try { res = await api.ecoflowSave(input(), { sn: device.sn, label: device.label }); } catch { res = { ok: false as const, error: SAVE_FAILED }; }
     setSaving(false);
-    if (res.ok) { setAccessKey(''); setSecretKey(''); onClose(); } else setSaveError(res.error);
+    if (res.ok) { clearSecrets(); onClose(); } else setSaveError(res.error);
   }
 
   if (devices) {
@@ -147,7 +156,7 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
             <legend className="st-sr">Станція</legend>
             {devices.map(d => (
               <label key={d.sn} className="st-station">
-                <input type="radio" name="ecoflow-station" checked={sn === d.sn} onChange={() => void choose(d.sn, keys())} />
+                <input type="radio" name="ecoflow-station" checked={sn === d.sn} onChange={() => void choose(d.sn, input())} />
                 <span className="st-station-name">{d.label} <span>{`· …${d.sn.slice(-4)}`}</span></span>
                 <span className={`st-station-state${d.online ? ' online' : ''}`}><i />{d.online ? 'в мережі' : 'не в мережі'}</span>
               </label>
@@ -164,12 +173,20 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
     );
   }
 
-  const canCheck = !checking && accessKey.trim() !== '' && secretKey.trim() !== '';
+  const canCheck = !checking && (mode === 'account' ? email.trim() !== '' && password !== '' : accessKey.trim() !== '' && secretKey.trim() !== '');
+  const pickMode = (next: Mode) => { setMode(next); resetResult(); };
   const pickRegion = (next: EcoflowRegion) => { setRegion(next); resetResult(); };
   return (
     <div className="st-panel st-form">
       <h2 className="st-title" ref={headRef} tabIndex={-1}>Підключення EcoFlow</h2>
-      {sourcePicker}
+      <label className="st-field"><span className="st-label">Джерело</span>
+        <span className="st-select">
+          <select value={mode} onChange={e => pickMode(e.target.value as Mode)}>
+            {MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+          <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </span>
+      </label>
       <fieldset className="st-radios">
         <legend>Регіон</legend>
         <label className="st-radio">
@@ -179,42 +196,58 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
           <input type="radio" name="ecoflow-region" checked={region === 'us'} onChange={() => pickRegion('us')} />Інший регіон <span>(api.ecoflow.com)</span>
         </label>
       </fieldset>
-      <label className="st-field"><span className="st-label">Access Key</span>
-        <input className="st-input st-mono" type="password" autoComplete="off" value={accessKey} onChange={e => { setAccessKey(e.target.value); resetResult(); }} />
-      </label>
-      <label className="st-field"><span className="st-label">Secret Key</span>
-        <input className="st-input" type="password" autoComplete="off" placeholder="Вставте Secret Key" value={secretKey}
-          onChange={e => { setSecretKey(e.target.value); resetResult(); }} />
-      </label>
-      <p className="st-hint">
-        Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).{' '}
-        <button className="st-link" onClick={() => api.openEcoflowHelp()}>Як отримати ключі</button>
-      </p>
+      {mode === 'account' ? (
+        <>
+          <label className="st-field"><span className="st-label">Email</span>
+            <input className="st-input" type="email" autoComplete="off" value={email} onChange={e => { setEmail(e.target.value); resetResult(); }} />
+          </label>
+          <label className="st-field"><span className="st-label">Пароль</span>
+            <input className="st-input" type="password" autoComplete="off" value={password} onChange={e => { setPassword(e.target.value); resetResult(); }} />
+          </label>
+          <p className="st-hint">
+            Неофіційний спосіб — той самий вхід, що й у застосунку EcoFlow. Може перестати працювати, якщо EcoFlow щось змінить. Пароль зберігається зашифрованим лише на цьому комп'ютері.
+          </p>
+        </>
+      ) : (
+        <>
+          <label className="st-field"><span className="st-label">Access Key</span>
+            <input className="st-input st-mono" type="password" autoComplete="off" value={accessKey} onChange={e => { setAccessKey(e.target.value); resetResult(); }} />
+          </label>
+          <label className="st-field"><span className="st-label">Secret Key</span>
+            <input className="st-input" type="password" autoComplete="off" placeholder="Вставте Secret Key" value={secretKey}
+              onChange={e => { setSecretKey(e.target.value); resetResult(); }} />
+          </label>
+          <p className="st-hint">
+            Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).{' '}
+            <button className="st-link" onClick={() => api.openEcoflowHelp()}>Як отримати ключі</button>
+          </p>
+        </>
+      )}
       {testError && <Alert text={testError} />}
       <div className="st-actions">
         <button className={`sv-primary${checking ? ' st-busy' : ''}`} disabled={!canCheck} onClick={() => void check()}>
           {checking && <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>}
           {checking ? 'Перевіряю…' : 'Перевірити'}
         </button>
-        <button className="sv-btn st-ghost st-tall" onClick={() => { setAccessKey(''); setSecretKey(''); onClose(); }}>Скасувати</button>
+        <button className="sv-btn st-ghost st-tall" onClick={() => { clearSecrets(); onClose(); }}>Скасувати</button>
       </div>
     </div>
   );
 }
 
-function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePicker }: PanelProps) {
+function EcoflowPanel({ state, api, initiallyOpen = false }: SettingsProps) {
   const source = state.settings.actualSource;
   const [editing, setEditing] = useState(initiallyOpen);
   const [error, setError] = useState<string | null>(null);
   const headRef = useStepFocus(editing ? 'form' : source ? 'connected' : 'idle');
 
   if (editing) {
-    return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} sourcePicker={sourcePicker} onClose={() => setEditing(false)} />;
+    return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} initialMode={source && !('accountHint' in source) ? 'keys' : 'account'} onClose={() => setEditing(false)} />;
   }
   if (!source) {
     return (
       <div className="st-panel">
-        <Head title="Фактичний стан світла" chip={sourceName} headRef={headRef} />
+        <Head title="Фактичний стан світла" chip="EcoFlow" headRef={headRef} />
         <p className="st-text">Зарядна станція EcoFlow може показувати, чи є світло насправді.</p>
         <div className="st-actions"><button className="sv-primary" onClick={() => setEditing(true)}>Підключити EcoFlow</button></div>
       </div>
@@ -224,7 +257,7 @@ function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePic
   const now = currentText(state.actual);
   return (
     <div className="st-panel">
-      <Head title="Фактичний стан світла" chip={sourceName} headRef={headRef} />
+      <Head title="Фактичний стан світла" chip="EcoFlow" headRef={headRef} />
       <div className="st-device">
         <span className="st-icon st-icon-lg">
           <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3" /><path d="M8 6V4h8v2" /><path d="m12.5 9-3 4.5h4l-1 3.5" /></svg>
@@ -243,29 +276,13 @@ function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePic
   );
 }
 
-const PANELS: Record<string, { name: string; Panel: ComponentType<PanelProps> }> = {
-  ecoflow: { name: 'EcoFlow', Panel: EcoflowPanel },
-};
-
 export function ActualSettings({ state, api, initiallyOpen = false }: SettingsProps) {
-  const [sourceId, setSourceId] = useState('ecoflow');
-  const { name, Panel } = PANELS[sourceId];
   const ref = useRef<HTMLElement>(null);
   // Opened for the form: bring it into view (jsdom has no scrollIntoView).
   useEffect(() => { if (initiallyOpen) ref.current?.scrollIntoView?.({ block: 'start' }); }, [initiallyOpen]);
-  const picker = (
-    <label className="st-field"><span className="st-label">Джерело</span>
-      <span className="st-select">
-        <select value={sourceId} onChange={e => setSourceId(e.target.value)}>
-          {Object.entries(PANELS).map(([id, p]) => <option key={id} value={id}>{p.name}</option>)}
-        </select>
-        <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-      </span>
-    </label>
-  );
   return (
     <section className="sv-card st-card" ref={ref} data-capture="ecoflow">
-      <Panel state={state} api={api} initiallyOpen={initiallyOpen} sourceName={name} sourcePicker={picker} />
+      <EcoflowPanel state={state} api={api} initiallyOpen={initiallyOpen} />
     </section>
   );
 }

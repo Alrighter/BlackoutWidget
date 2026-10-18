@@ -50,11 +50,11 @@ test.each(['Підключити EcoFlow', 'Підключити'])('«%s» open
   render(<App api={fakeApi()} view="schedule" />);
   await userEvent.click(await screen.findByRole('button', { name }));
   expect(screen.getByRole('tab', { name: 'Налаштування' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByLabelText('Access Key')).toBeInTheDocument();
+  expect(screen.getByLabelText('Email')).toBeInTheDocument();
   // Going back and forth by the tabs shows the settings as usual, the form closed.
   await userEvent.click(screen.getByRole('tab', { name: 'Графік' }));
   await userEvent.click(screen.getByRole('tab', { name: 'Налаштування' }));
-  expect(screen.queryByLabelText('Access Key')).toBeNull();
+  expect(screen.queryByLabelText('Email')).toBeNull();
   expect(screen.getByRole('button', { name: 'Підключити EcoFlow' })).toBeInTheDocument();
 });
 
@@ -65,5 +65,5 @@ test('back from the wizard the settings show the EcoFlow form closed', async () 
   await userEvent.click(screen.getByRole('button', { name: 'Змінити адресу' }));
   await userEvent.click(await screen.findByRole('button', { name: 'Скасувати' }));
   expect(screen.getByRole('tab', { name: 'Налаштування' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.queryByLabelText('Access Key')).toBeNull();
+  expect(screen.queryByLabelText('Email')).toBeNull();
 });

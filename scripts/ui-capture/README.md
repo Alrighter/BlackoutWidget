@@ -149,6 +149,9 @@ npm run ui:capture -- --style compact --scenario on --theme all --wallpaper busy
 npm run ui:capture -- --target app --view settings --stubs '{"ecoflowTest":"pending"}' --exec "(async () => { …clicks… })()" --tag checking --out …
 # on Windows `npm run` goes through cmd.exe, which ends the command at a newline: keep --exec on one line there, or run
 # node_modules/electron/dist/electron.exe scripts/ui-capture/capture.cjs … directly (same options) for multi-line JS
+# EcoFlow account mode: «Налаштування» opens the form (account is the default «Джерело»); the stubs answer the account input like the keys one
+# connected via the account: --patch swaps actualSource whole (accountHint instead of accessKeyHint)
+npm run ui:capture -- --target app --view settings --scenario ecoMatch --patch '{"settings":{"actualSource":{"id":"ecoflow-app","region":"eu","deviceSn":"R331ZEB4ZEA00142","deviceName":"Delta 2","accountHint":"r…@dully.io"}}}' --tag account-connected --out …
 # a later wizard step: click through first (the page's Date is frozen, so wait with setTimeout, not Date)
 npm run ui:capture -- --target app --view setup --exec "[...document.querySelectorAll('button')].find(b => b.textContent === 'Далі').click()" --tag step2 --out …
 # the wizard's house step with 140 houses: the grid scrolls, the buttons stay (JSON from a file, via bash)

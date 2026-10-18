@@ -22,8 +22,11 @@ function mockApi(over: Partial<Record<keyof RendererApi, unknown>> = {}) {
 function stateOf(actualSource: AppState['settings']['actualSource'] = null, actual: ActualStatus | null = null): AppState {
   return { settings: { ...DEFAULT_SETTINGS, actualSource }, snapshot: null, phase: 'ok', lineChanged: false, actual };
 }
+const APP_CONFIG = { id: 'ecoflow-app' as const, region: 'eu' as const, deviceSn: 'R331ZEB4ZEA01234', deviceName: 'Delta 2', accountHint: 'r…@dully.io' };
+const keysMode = (user: ReturnType<typeof userEvent.setup>) => user.selectOptions(screen.getByLabelText('Джерело'), 'keys');
 async function openAndCheck(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await keysMode(user);
   await user.type(screen.getByLabelText('Access Key'), 'AK-123');
   await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
@@ -37,8 +40,9 @@ test('not configured → connect button opens the form', async () => {
   expect(screen.getByText('EcoFlow')).toBeInTheDocument(); // the source chip
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
   expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toBeInTheDocument();
-  expect(screen.getByLabelText('Джерело')).toHaveValue('ecoflow');
+  expect(screen.getByLabelText('Джерело')).toHaveValue('account');
   expect(screen.getByRole('radio', { name: 'Європа' })).toBeChecked();
+  await keysMode(user);
   expect(screen.getByLabelText('Access Key')).toHaveAttribute('type', 'password');
   expect(screen.getByLabelText('Secret Key')).toHaveAttribute('type', 'password');
   expect(screen.getByText('Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).')).toBeInTheDocument();
@@ -115,6 +119,7 @@ test('save sends keys once and clears the form', async () => {
   expect(api.ecoflowSave).toHaveBeenCalledWith({ mode: 'keys', region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' }, { sn: 'R331ZEB4ZEA01234', label: 'Delta 2' });
   expect(await screen.findByRole('button', { name: 'Підключити EcoFlow' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await keysMode(user);
   expect(screen.getByLabelText('Access Key')).toHaveValue('');
   expect(screen.getByLabelText('Secret Key')).toHaveValue('');
 });
@@ -186,6 +191,7 @@ test('«Змінити» opens a form with empty keys and the configured region'
   const user = userEvent.setup(); const api = mockApi();
   render(<ActualSettings state={stateOf({ ...CONFIG, region: 'us' })} api={api} />);
   await user.click(screen.getByRole('button', { name: 'Змінити' }));
+  expect(screen.getByLabelText('Джерело')).toHaveValue('keys');
   expect(screen.getByRole('radio', { name: 'Інший регіон (api.ecoflow.com)' })).toBeChecked();
   expect(screen.getByLabelText('Access Key')).toHaveValue('');
   expect(screen.getByLabelText('Secret Key')).toHaveValue('');
@@ -199,6 +205,7 @@ test('the region radios pick the API region', async () => {
   const user = userEvent.setup(); const api = mockApi();
   render(<ActualSettings state={stateOf()} api={api} />);
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await keysMode(user);
   await user.click(screen.getByRole('radio', { name: 'Інший регіон (api.ecoflow.com)' }));
   expect(screen.getByRole('radio', { name: 'Європа' })).not.toBeChecked();
   await user.type(screen.getByLabelText('Access Key'), 'AK-123');
@@ -213,6 +220,7 @@ test('focus follows the card when its step changes (the pressed button is gone)'
   expect(document.body).toHaveFocus(); // nothing is focused on first show
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
   expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toHaveFocus();
+  await keysMode(user);
   await user.type(screen.getByLabelText('Access Key'), 'AK-123');
   await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
@@ -231,6 +239,8 @@ test('help link calls openEcoflowHelp', async () => {
   const user = userEvent.setup(); const api = mockApi();
   render(<ActualSettings state={stateOf()} api={api} />);
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  expect(screen.queryByRole('button', { name: 'Як отримати ключі' })).toBeNull();
+  await keysMode(user);
   await user.click(screen.getByRole('button', { name: 'Як отримати ключі' }));
   expect(api.openEcoflowHelp).toHaveBeenCalled();
 });
@@ -245,4 +255,130 @@ test('editing a key while the check is pending does not leave the button stuck',
   resolve({ ok: true, devices: [stations[0]] });
   expect(await screen.findByRole('button', { name: 'Перевірити' })).toBeEnabled();
   expect(screen.queryByText('Станції в акаунті')).toBeNull();
+});
+
+// --- account mode ---
+const PASSWORD = 'Sup3r-Secret-pw!';
+async function openAndCheckAccount(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.type(screen.getByLabelText('Email'), ' roman@dully.io ');
+  await user.type(screen.getByLabelText('Пароль'), PASSWORD);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+}
+
+test('account is the default mode: email, password and the unofficial-way hint; keys fields are hidden', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi()} />);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  expect(screen.getByRole('option', { name: 'EcoFlow — вхід через акаунт' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'EcoFlow — ключі розробника' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email');
+  expect(screen.getByLabelText('Email')).toHaveAttribute('autocomplete', 'off');
+  expect(screen.getByLabelText('Пароль')).toHaveAttribute('type', 'password');
+  expect(screen.getByLabelText('Пароль')).toHaveAttribute('autocomplete', 'off');
+  expect(screen.getByText("Неофіційний спосіб — той самий вхід, що й у застосунку EcoFlow. Може перестати працювати, якщо EcoFlow щось змінить. Пароль зберігається зашифрованим лише на цьому комп'ютері.")).toHaveClass('st-hint');
+  expect(screen.queryByLabelText('Access Key')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Як отримати ключі' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Перевірити' })).toBeDisabled();
+});
+
+test('switching to keys shows the key fields and the help link; back to account keeps what was typed', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi()} />);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.type(screen.getByLabelText('Email'), 'a@b.co');
+  await keysMode(user);
+  expect(screen.getByLabelText('Access Key')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Як отримати ключі' })).toBeInTheDocument();
+  expect(screen.queryByLabelText('Email')).toBeNull();
+  await user.type(screen.getByLabelText('Access Key'), 'AK-1');
+  await user.selectOptions(screen.getByLabelText('Джерело'), 'account');
+  expect(screen.getByLabelText('Email')).toHaveValue('a@b.co');
+  await keysMode(user);
+  expect(screen.getByLabelText('Access Key')).toHaveValue('AK-1');
+});
+
+test('account test → stations → save sends exactly the account input', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openAndCheckAccount(user);
+  const input = { mode: 'account', region: 'eu', email: 'roman@dully.io', password: PASSWORD };
+  expect(api.ecoflowTest).toHaveBeenCalledWith(input);
+  expect(await screen.findByText('Станції в акаунті')).toBeInTheDocument();
+  expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(input, 'R331ZEB4ZEA01234');
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(api.ecoflowSave).toHaveBeenCalledTimes(1);
+  expect(api.ecoflowSave).toHaveBeenCalledWith(input, { sn: 'R331ZEB4ZEA01234', label: 'Delta 2' });
+});
+
+test('the preview runs only on a station pick, never on region change, typing or mode change', async () => {
+  const user = userEvent.setup();
+  const api = mockApi({ ecoflowTest: vi.fn(async () => ({ ok: true, devices: stations })) });
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openAndCheckAccount(user);
+  await screen.findByText('Станції в акаунті');
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Назад' }));
+  await user.click(screen.getByRole('radio', { name: 'Інший регіон (api.ecoflow.com)' }));
+  await user.type(screen.getByLabelText('Email'), 'x');
+  await keysMode(user);
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+});
+
+test('changing the source drops the check result', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi({ ecoflowTest: vi.fn(async () => ({ ok: false, error: 'Невірний пароль' })) })} />);
+  await openAndCheckAccount(user);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Невірний пароль');
+  await keysMode(user);
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+test('«Змінити» on an account connection opens on account with empty fields', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf(APP_CONFIG)} api={mockApi()} />);
+  await user.click(screen.getByRole('button', { name: 'Змінити' }));
+  expect(screen.getByLabelText('Джерело')).toHaveValue('account');
+  expect(screen.getByLabelText('Email')).toHaveValue('');
+  expect(screen.getByLabelText('Пароль')).toHaveValue('');
+});
+
+test('the connected card shows the account hint', () => {
+  const actual = { sourceLabel: 'EcoFlow', power: 'on', observedAt: '2026-10-17T08:50:00Z', history: [] } as ActualStatus;
+  render(<ActualSettings state={stateOf(APP_CONFIG, actual)} api={mockApi()} />);
+  expect(screen.getByText('EcoFlow · Delta 2 · акаунт r…@dully.io')).toBeInTheDocument();
+});
+
+test('the password lives only in the password input, never elsewhere in the DOM, and is gone after save', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi()} />);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.type(screen.getByLabelText('Email'), 'roman@dully.io');
+  const field = screen.getByLabelText('Пароль');
+  await user.type(field, PASSWORD);
+  const b64 = btoa(PASSWORD);
+  const leaks = () => [...document.body.querySelectorAll('*')].flatMap(el => {
+    const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent ?? '').join('');
+    const attrs = [...el.attributes].filter(a => !(el === field && a.name === 'value')).map(a => a.value);
+    return [own, ...attrs].filter(v => v.includes(PASSWORD) || v.includes(b64));
+  });
+  expect(field).toHaveValue(PASSWORD);
+  expect(leaks()).toEqual([]);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  await screen.findByText('Станції в акаунті');
+  expect(document.body.innerHTML).not.toContain(PASSWORD);
+  await user.click(await screen.findByRole('button', { name: 'Зберегти' }));
+  await screen.findByRole('button', { name: 'Підключити EcoFlow' });
+  expect(document.body.innerHTML).not.toContain(PASSWORD);
+  expect(document.body.innerHTML).not.toContain(b64);
+});
+
+test('a failed account check shows its error and keeps «Перевірити» usable', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi({ ecoflowTest: vi.fn(async () => { throw new Error('x'); }) })} />);
+  await openAndCheckAccount(user);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не вдалося перевірити вхід');
+  expect(screen.getByRole('button', { name: 'Перевірити' })).toBeEnabled();
 });
