@@ -1,10 +1,10 @@
-import { createEcoflowFactory } from './ecoflow';
+import { createEcoflowAppFactory, createEcoflowFactory } from './ecoflow';
 import type { FetchLike } from './ecoflow/api';
 import type { MqttConnect } from './ecoflow/source';
 import type { ActualSourceFactory } from './types';
 
 export function createActualSources(deps: { fetch: FetchLike; connect: MqttConnect }): ActualSourceFactory[] {
-  return [createEcoflowFactory(deps)];
+  return [createEcoflowFactory(deps), createEcoflowAppFactory(deps)];
 }
 
 export function findActualSource(list: ActualSourceFactory[], id: string): ActualSourceFactory {

@@ -42,6 +42,7 @@ function deferred<T>() {
 
 class FakeClient extends EventEmitter implements MqttClientLike {
   subscribe = vi.fn();
+  publish = vi.fn();
   end = vi.fn();
 }
 

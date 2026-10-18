@@ -29,3 +29,27 @@ export function parseStatusMessage(msg: unknown): boolean | null {
   const s = msg.params.status;
   return s === 1 ? true : s === 0 ? false : null;
 }
+
+/**
+ * A successful `latestQuotas` answer on the app broker's get_reply topic (R§3.6), else null. An offline station's
+ * quotaMap, if any, is not taken: tolwi drops it too.
+ */
+export function parseGetReply(msg: unknown): { online: boolean; quota: Record<string, unknown> | null } | null {
+  if (!isObj(msg) || msg.operateType !== 'latestQuotas' || String(msg.code) !== '0' || !isObj(msg.data)) return null;
+  const online = Number(msg.data.online) === 1;
+  return { online, quota: online && isObj(msg.data.quotaMap) ? msg.data.quotaMap : null };
+}
+
+/** Not JSON-object text: newer models speak protobuf on the app broker (R§5.3), typically starting with 0x0a. */
+export function isProtobufPayload(buf: Buffer): boolean {
+  try {
+    return !isObj(JSON.parse(buf.toString('utf8')));
+  } catch {
+    return true;
+  }
+}
+
+/** The app's "get all" request, byte for byte as the Android app sends it (R§3.6). */
+export function latestQuotasRequest(now: number): string {
+  return JSON.stringify({ from: 'Android', id: String(now), moduleType: 0, operateType: 'latestQuotas', params: {}, version: '1.1' });
+}
