@@ -351,7 +351,13 @@ test('the connected card shows the account hint', () => {
   expect(screen.getByText('EcoFlow · Delta 2 · акаунт r…@dully.io')).toBeInTheDocument();
 });
 
-test('the password lives only in the password input, never elsewhere in the DOM, and is gone after save', async () => {
+/** Every text node and attribute that holds `secret` (or its base64): the field's value property is not in the DOM. */
+const leaks = (secret: string) => [...document.body.querySelectorAll('*')].flatMap(el => {
+  const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent ?? '').join('');
+  return [own, ...[...el.attributes].map(a => a.value)].filter(v => v.includes(secret) || v.includes(btoa(secret)));
+});
+
+test('the password is never in the DOM, attributes included, and is gone after save', async () => {
   const user = userEvent.setup();
   render(<ActualSettings state={stateOf()} api={mockApi()} />);
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
@@ -359,13 +365,8 @@ test('the password lives only in the password input, never elsewhere in the DOM,
   const field = screen.getByLabelText('Пароль');
   await user.type(field, PASSWORD);
   const b64 = btoa(PASSWORD);
-  const leaks = () => [...document.body.querySelectorAll('*')].flatMap(el => {
-    const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent ?? '').join('');
-    const attrs = [...el.attributes].filter(a => !(el === field && a.name === 'value')).map(a => a.value);
-    return [own, ...attrs].filter(v => v.includes(PASSWORD) || v.includes(b64));
-  });
   expect(field).toHaveValue(PASSWORD);
-  expect(leaks()).toEqual([]);
+  expect(leaks(PASSWORD)).toEqual([]);
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
   await screen.findByText('Станції в акаунті');
   expect(document.body.innerHTML).not.toContain(PASSWORD);
@@ -373,6 +374,39 @@ test('the password lives only in the password input, never elsewhere in the DOM,
   await screen.findByRole('button', { name: 'Підключити EcoFlow' });
   expect(document.body.innerHTML).not.toContain(PASSWORD);
   expect(document.body.innerHTML).not.toContain(b64);
+});
+
+test('«Назад» brings the password back into its field, still out of the DOM', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openAndCheckAccount(user);
+  await user.click(await screen.findByRole('button', { name: 'Назад' }));
+  expect(screen.getByLabelText('Пароль')).toHaveValue(PASSWORD);
+  expect(leaks(PASSWORD)).toEqual([]);
+  await keysMode(user); // a mode switch unmounts the field as well
+  await user.selectOptions(screen.getByLabelText('Джерело'), 'account');
+  expect(screen.getByLabelText('Пароль')).toHaveValue(PASSWORD);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(api.ecoflowTest).toHaveBeenLastCalledWith({ mode: 'account', region: 'eu', email: 'roman@dully.io', password: PASSWORD });
+});
+
+test('the Secret Key is never in the DOM either, attributes included', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi()} />);
+  await openAndCheck(user);
+  await user.click(await screen.findByRole('button', { name: 'Назад' }));
+  expect(screen.getByLabelText('Secret Key')).toHaveValue('SK-456');
+  expect(leaks('SK-456')).toEqual([]);
+});
+
+test('the password goes out exactly as typed, spaces included', async () => {
+  const user = userEvent.setup(); const api = mockApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.type(screen.getByLabelText('Email'), 'roman@dully.io');
+  await user.type(screen.getByLabelText('Пароль'), ' pw ');
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ mode: 'account', region: 'eu', email: 'roman@dully.io', password: ' pw ' });
 });
 
 test('a failed account check shows its error and keeps «Перевірити» usable', async () => {

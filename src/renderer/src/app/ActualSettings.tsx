@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { EcoflowDeviceView, EcoflowInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
@@ -91,18 +91,46 @@ function CheckResult({ preview }: { preview: Preview }) {
 }
 
 /**
- * The keys live only in this component's state; the form is unmounted after save or cancel. Two steps: the keys, then
- * (after a successful check) the account's stations; «Назад» drops the check result and keeps the keys.
+ * A secret input React does not control: a controlled one mirrors its value into the `value` attribute, so the secret
+ * would sit in the DOM. The value lives in a ref; the field gets it back (the property, not the attribute) whenever it
+ * mounts again, after the stations step or a mode switch. `filled` drives the «Перевірити» button.
+ */
+function useSecretField(isFilled: (v: string) => boolean) {
+  const value = useRef('');
+  const field = useRef<HTMLInputElement | null>(null);
+  const [filled, setFilled] = useState(false);
+  // Stable, so React calls it on mount and unmount only, never while the user types.
+  const ref = useCallback((el: HTMLInputElement | null) => {
+    field.current = el;
+    if (el) el.value = value.current;
+  }, []);
+  return {
+    ref,
+    filled,
+    read: () => value.current,
+    change: (v: string) => { value.current = v; setFilled(isFilled(v)); },
+    clear: () => {
+      value.current = '';
+      if (field.current) field.current.value = '';
+      setFilled(false);
+    },
+  };
+}
+
+/**
+ * The keys live only in this component, the two secrets outside the DOM; the form is unmounted after save or cancel.
+ * Two steps: the keys, then (after a successful check) the account's stations; «Назад» drops the check result and
+ * keeps the keys.
  */
 function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
   api: RendererApi; initialRegion: EcoflowRegion; initialMode: Mode; onClose(): void;
 }) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const password = useSecretField(v => v !== '');
   const [region, setRegion] = useState<EcoflowRegion>(initialRegion);
   const [accessKey, setAccessKey] = useState('');
-  const [secretKey, setSecretKey] = useState('');
+  const secretKey = useSecretField(v => v.trim() !== '');
   const [checking, setChecking] = useState(false);
   const [devices, setDevices] = useState<EcoflowDeviceView[] | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
@@ -114,9 +142,9 @@ function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
   const headRef = useStepFocus(devices ? 'stations' : 'form', true);
 
   const input = (): EcoflowInput => mode === 'account'
-    ? { mode, region, email: email.trim(), password }
-    : { mode, region, accessKey: accessKey.trim(), secretKey: secretKey.trim() };
-  const clearSecrets = () => { setAccessKey(''); setSecretKey(''); setEmail(''); setPassword(''); };
+    ? { mode, region, email: email.trim(), password: password.read() }
+    : { mode, region, accessKey: accessKey.trim(), secretKey: secretKey.read().trim() };
+  const clearSecrets = () => { setAccessKey(''); secretKey.clear(); setEmail(''); password.clear(); };
   const resetResult = () => { seq.current++; setChecking(false); setDevices(null); setTestError(null); setSn(null); setPreview(null); setSaveError(null); };
 
   async function choose(next: string, k: EcoflowInput) {
@@ -173,7 +201,7 @@ function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
     );
   }
 
-  const canCheck = !checking && (mode === 'account' ? email.trim() !== '' && password !== '' : accessKey.trim() !== '' && secretKey.trim() !== '');
+  const canCheck = !checking && (mode === 'account' ? email.trim() !== '' && password.filled : accessKey.trim() !== '' && secretKey.filled);
   const pickMode = (next: Mode) => { setMode(next); resetResult(); };
   const pickRegion = (next: EcoflowRegion) => { setRegion(next); resetResult(); };
   return (
@@ -202,7 +230,7 @@ function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
             <input className="st-input" type="email" autoComplete="off" value={email} onChange={e => { setEmail(e.target.value); resetResult(); }} />
           </label>
           <label className="st-field"><span className="st-label">Пароль</span>
-            <input className="st-input" type="password" autoComplete="off" value={password} onChange={e => { setPassword(e.target.value); resetResult(); }} />
+            <input className="st-input" type="password" autoComplete="off" ref={password.ref} onChange={e => { password.change(e.target.value); resetResult(); }} />
           </label>
           <p className="st-hint">
             Неофіційний спосіб — той самий вхід, що й у застосунку EcoFlow. Може перестати працювати, якщо EcoFlow щось змінить. Пароль зберігається зашифрованим лише на цьому комп'ютері.
@@ -214,8 +242,8 @@ function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
             <input className="st-input st-mono" type="password" autoComplete="off" value={accessKey} onChange={e => { setAccessKey(e.target.value); resetResult(); }} />
           </label>
           <label className="st-field"><span className="st-label">Secret Key</span>
-            <input className="st-input" type="password" autoComplete="off" placeholder="Вставте Secret Key" value={secretKey}
-              onChange={e => { setSecretKey(e.target.value); resetResult(); }} />
+            <input className="st-input" type="password" autoComplete="off" placeholder="Вставте Secret Key" ref={secretKey.ref}
+              onChange={e => { secretKey.change(e.target.value); resetResult(); }} />
           </label>
           <p className="st-hint">
             Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).{' '}

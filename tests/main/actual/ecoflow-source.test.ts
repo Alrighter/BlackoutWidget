@@ -108,6 +108,7 @@ test('start: lists, polls, connects with stable clientId and subscribes quota+st
   expect(api.listDevices).toHaveBeenCalledTimes(2);
   expect(api.getCertification).toHaveBeenCalledTimes(1);
   expect(mqtt.connect).toHaveBeenCalledTimes(1);
+  expect(c.publish).not.toHaveBeenCalled();
 });
 
 test('MQTT quota message makes data fresh → on with detail', async () => {

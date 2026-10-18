@@ -84,6 +84,21 @@ test('certification: incomplete data is bad-json', async () => {
   expect(err).toMatchObject({ code: 'bad-json' });
 });
 
+test('a server echo of the account or the session never reaches the error, code or message', async () => {
+  const acct = { email: 'roman.test@example.com', password: 'pässwörd-77' };
+  const b64 = Buffer.from(acct.password, 'utf8').toString('base64');
+  const s = { token: 'jwt-token-abc', userId: '1234567890123456789' };
+  const echo = { code: `E-${s.token}-${s.userId}`, message: `${acct.email} ${acct.password} ${b64} ${s.token} ${s.userId}` };
+  const api = new EcoflowAppApi('eu', acct, { fetch: reply(JSON.stringify(echo)) });
+  for (const err of [await api.listDevices(s).catch(e => e), await api.getCertification(s).catch(e => e)]) {
+    expect(err).toBeInstanceOf(EcoflowApiError);
+    expect([err.code, err.message]).toEqual(['E-…-…', 'Помилка EcoFlow E-…-…: … … … … …']);
+  }
+  // The login knows no session yet: the account is what it can echo.
+  const login = new EcoflowAppApi('eu', acct, { fetch: reply(JSON.stringify({ code: `E-${acct.email}`, message: `${acct.password} ${b64}` })) });
+  expect(await login.login().catch(e => e)).toMatchObject({ code: 'E-…', message: 'Помилка EcoFlow E-…: … …' });
+});
+
 test('device list: bound keyed by SN plus share as a list', async () => {
   const body = JSON.stringify({ code: '0', data: {
     bound: { R601ABC: { deviceName: 'River', online: 1 } },

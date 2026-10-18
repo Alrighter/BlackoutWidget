@@ -2,11 +2,12 @@ import { EventEmitter } from 'node:events';
 import { EcoflowApiError, type EcoflowDevice, type FetchLike, type MqttCertificate } from '../../../src/main/actual/ecoflow/api';
 import type { AppSession, EcoflowAppApiLike } from '../../../src/main/actual/ecoflow/app-api';
 import {
-  APP_AUTH_PAUSE_REASON, APP_NO_DATA_REASON, APP_UNSUPPORTED_REASON, EcoflowAppSource, LOGIN_RETRY_MS, LOGIN_TRANSIENT_RETRY_MS,
+  APP_AUTH_REFUSED_REASON, APP_NO_DATA_REASON, APP_UNSUPPORTED_REASON, appAuthPauseReason, EcoflowAppSource, LOGIN_RETRY_MS,
+  LOGIN_TRANSIENT_RETRY_MS,
 } from '../../../src/main/actual/ecoflow/app-source';
 import { AFTER_SAVE_REASON, ecoflowAppPreview, ecoflowAppTest, PREVIEW_WAIT_MS } from '../../../src/main/actual/ecoflow/index';
 import { FRESH_MS } from '../../../src/main/actual/ecoflow/quota-tracker';
-import { MQTT_AUTH_PAUSE_MS, NO_LINK_REASON, type MqttClientLike, type MqttConnect } from '../../../src/main/actual/ecoflow/source';
+import { NO_LINK_REASON, type MqttClientLike, type MqttConnect } from '../../../src/main/actual/ecoflow/source';
 import { createActualSources, findActualSource } from '../../../src/main/actual/registry';
 import type { ActualReading } from '../../../src/main/actual/types';
 import { silentLogger } from '../../../src/main/log';
@@ -413,6 +414,19 @@ test('nothing at all from the station by the watchdog → a reason, never a sile
   expect(last()).toEqual({ power: 'on', observedAt: t(840 * SEC), detail: ON_DETAIL });
 });
 
+test('a reply with neither a quotaMap nor offline is no word from the station: the watchdog gives the no-data reason', async () => {
+  const { mqtt, begin, last } = setup();
+  await begin();
+  const c = mqtt.last();
+  c.emit('connect');
+  c.subscribed(PROPERTY)(null, [{ topic: PROPERTY, qos: 128 }]);
+  await advance(SEC);
+  send(c, REPLY, { code: '0', operateType: 'latestQuotas', data: { sn: SN, online: 1 } });
+  expect(last()).toMatchObject({ reason: WAITING });
+  await advance(239 * SEC);
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(240 * SEC), reason: APP_NO_DATA_REASON });
+});
+
 test('watchdog with a refused property topic: twice the 120 s interval', async () => {
   const { mqtt, begin } = setup();
   await begin();
@@ -480,7 +494,7 @@ test.each([5, 4, 134, 135])('CONNACK %i: one full login and certification, then 
   await flush();
   expect(order).toEqual(['login', 'cert', 'connect', 'login', 'cert', 'connect']);
   mqtt.last().emit('error', authError(code));
-  await advance(MQTT_AUTH_PAUSE_MS - 1);
+  await advance(LOGIN_RETRY_MS[0] - 1);
   expect(order).toHaveLength(6);
   await advance(1);
   expect(order.slice(6)).toEqual(['login', 'cert', 'connect']);
@@ -496,16 +510,45 @@ test('the 30 min auth pause shows its reason; it clears when the pause ends', as
   expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: WAITING });
   await advance(SEC);
   mqtt.last().emit('error', authError());
-  expect(last()).toEqual({ power: 'unknown', observedAt: t(SEC), reason: APP_AUTH_PAUSE_REASON });
-  expect(APP_AUTH_PAUSE_REASON).toBe('EcoFlow не пустив до даних станції — наступна спроба приблизно за 30 хв');
-  await advance(MQTT_AUTH_PAUSE_MS - 1);
-  expect(last()).toMatchObject({ reason: APP_AUTH_PAUSE_REASON });
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(SEC), reason: appAuthPauseReason(30) });
+  expect(appAuthPauseReason(30)).toBe('EcoFlow не пустив до даних станції — наступна спроба приблизно за 30 хв');
+  await advance(LOGIN_RETRY_MS[0] - 1);
+  expect(last()).toMatchObject({ reason: appAuthPauseReason(30) });
   await advance(1); // the pause is over: a fresh login and certificate
-  expect(last()).toEqual({ power: 'unknown', observedAt: t(SEC + MQTT_AUTH_PAUSE_MS), reason: WAITING });
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(SEC + LOGIN_RETRY_MS[0]), reason: WAITING });
   const c = mqtt.last();
   c.emit('connect');
   push(c, ON);
   expect(last()).toMatchObject({ power: 'on' });
+});
+
+test('a refusal that lasts: the pauses climb 30, 60, 120 min and stay; each ends in one login; a proven session starts over', async () => {
+  const { api, mqtt, log, begin, last } = setup();
+  await begin();
+  mqtt.last().emit('error', authError());
+  await flush(); // the one immediate re-login
+  expect([api.login.mock.calls.length, api.getCertification.mock.calls.length]).toEqual([2, 2]);
+  for (const [i, wait] of [30, 60, 120, 120].entries()) {
+    mqtt.last().emit('error', authError());
+    expect(last()).toMatchObject({ power: 'unknown', reason: appAuthPauseReason(wait) });
+    expect(log.warn).toHaveBeenLastCalledWith(`ecoflow-app: mqtt not authorized again, pausing ${wait} min`);
+    await advance(wait * MIN - 1);
+    expect(api.login).toHaveBeenCalledTimes(2 + i);
+    await advance(1);
+    expect([api.login.mock.calls.length, api.getCertification.mock.calls.length]).toEqual([3 + i, 3 + i]);
+  }
+  expect(appAuthPauseReason(120)).toBe('EcoFlow не пустив до даних станції — наступна спроба приблизно за 120 хв');
+  // 60 s connected proves the session (R12): the next refusal earns the immediate re-login again, then 30 min.
+  const c = mqtt.last();
+  c.emit('connect');
+  await advance(60 * SEC);
+  c.emit('error', authError());
+  await flush();
+  expect(api.login).toHaveBeenCalledTimes(7);
+  mqtt.last().emit('error', authError());
+  expect(last()).toMatchObject({ reason: appAuthPauseReason(30) });
+  await advance(30 * MIN);
+  expect(api.login).toHaveBeenCalledTimes(8);
 });
 
 test('three failed connects in a row before any CONNACK → «немає з’єднання з EcoFlow»; the backoff goes on; a CONNACK clears it', async () => {
@@ -794,7 +837,7 @@ test('registry: the created source scrubs a server echo of the account', async (
 
 test('ecoflowAppTest: login, then the device list of that session', async () => {
   const { api, order } = setup();
-  expect(await ecoflowAppTest(api)).toEqual([]);
+  expect(await ecoflowAppTest(api)).toEqual({ session: SESSION, devices: [] });
   expect(order).toEqual(['login', 'list']);
   expect(api.listDevices).toHaveBeenCalledWith(SESSION);
 });
@@ -860,10 +903,32 @@ test('preview: an offline station, a protobuf model, a dropped connection', asyn
 
   const c = preview();
   await flush();
-  c.mqtt.last().emit('error', authError());
+  c.mqtt.last().emit('error', Object.assign(new Error('read ECONNRESET'), { code: undefined }));
   await expect(c.result).resolves.toEqual({ online: true, verdict: { power: 'unknown', reason: AFTER_SAVE_REASON, unsupported: false } });
   for (const x of [a, b, c]) expect(x.mqtt.last().end).toHaveBeenCalledWith(true);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+test.each([4, 5, 134, 135])('preview: a refused CONNACK (%i) → «EcoFlow не пустив до даних станції»', async code => {
+  const { mqtt, result } = preview();
+  await flush();
+  mqtt.last().emit('error', authError(code));
+  mqtt.last().emit('close');
+  await expect(result).resolves.toEqual({ online: true, verdict: { power: 'unknown', reason: APP_AUTH_REFUSED_REASON, unsupported: false } });
+  expect(APP_AUTH_REFUSED_REASON).toBe('EcoFlow не пустив до даних станції');
+  expect(mqtt.last().end).toHaveBeenCalledWith(true);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test('preview: a given session is certified as is, without a login', async () => {
+  const { api, mqtt } = setup();
+  const result = ecoflowAppPreview(api, mqtt.connect, SN, counting(), SESSION);
+  await flush();
+  expect(api.login).not.toHaveBeenCalled();
+  expect(api.getCertification).toHaveBeenCalledWith(SESSION);
+  mqtt.last().emit('connect');
+  reply(mqtt.last(), OFF);
+  await expect(result).resolves.toEqual({ online: true, verdict: { power: 'off', detail: OFF_DETAIL } });
 });
 
 test('preview: a failed login rejects before any connection', async () => {

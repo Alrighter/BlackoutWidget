@@ -1,10 +1,12 @@
+import { createHash } from 'node:crypto';
 import type { ActionResult, EcoflowPreviewResult, EcoflowTestResult } from '../../shared/ipc';
 import type { EcoflowRegion, Settings } from '../../shared/types';
 import { describeError, type Logger } from '../log';
 import { NetworkError } from '../providers/types';
-import { ecoflowAppPreview, ecoflowAppTest, ecoflowPreview, ecoflowTest } from './ecoflow';
+import { ecoflowAppPreview, ecoflowAppTest, ecoflowPreview, ecoflowTest, type EcoflowPreview } from './ecoflow';
 import { deviceLabel, EcoflowApiError, type EcoflowApiLike, type EcoflowKeys } from './ecoflow/api';
-import type { AppAccount, EcoflowAppApiLike } from './ecoflow/app-api';
+import type { AppAccount, AppSession, EcoflowAppApiLike } from './ecoflow/app-api';
+import { transient } from './ecoflow/app-source';
 import type { MqttConnect } from './ecoflow/source';
 import { findActualSource } from './registry';
 import { maskEmail, maskKey, scrubKeys, scrubSecrets, SecretsUnavailableError, type SecretStore } from './secrets';
@@ -18,6 +20,8 @@ const SETTINGS_FAILED = 'Не вдалося зберегти налаштува
 export const KEYS_MISSING_REASON = 'Ключі EcoFlow не знайдено — введіть їх знову в налаштуваннях';
 export const ACCOUNT_MISSING_REASON = 'Дані входу EcoFlow не знайдено — увійдіть знову в налаштуваннях';
 const CLIENT_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+/** How long the previews may reuse the account check's session. */
+const SESSION_KEEP_MS = 10 * 60_000;
 const HEX = '0123456789ABCDEF';
 
 export interface ActualActionsDeps {
@@ -33,6 +37,7 @@ export interface ActualActionsDeps {
   restartActual(): void;
   log: Logger;
   random?: () => number;
+  now?: () => number;
 }
 
 /** The renderer's EcoFlow calls; every argument is untrusted and checked here. */
@@ -59,9 +64,8 @@ export function makeAppClientUuid(random: () => number = Math.random): string {
   return id;
 }
 
-type Input =
-  | { mode: 'keys'; region: EcoflowRegion; keys: EcoflowKeys }
-  | { mode: 'account'; region: EcoflowRegion; account: AppAccount };
+type AccountInput = { mode: 'account'; region: EcoflowRegion; account: AppAccount };
+type Input = { mode: 'keys'; region: EcoflowRegion; keys: EcoflowKeys } | AccountInput;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const badInput = () => ({ ok: false as const, error: BAD_INPUT });
@@ -95,7 +99,8 @@ function scrubInput(text: string, input: Input): string {
     : scrubSecrets(text, [input.account.email, input.account.password, Buffer.from(input.account.password).toString('base64')]);
 }
 
-const readSn = (v: unknown): string | null => (typeof v === 'string' && v !== '' && v.length <= 64 ? v : null);
+/** Letters and digits only: the SN goes into MQTT topics, where `#`, `+` and `/` have a meaning of their own. */
+const readSn = (v: unknown): string | null => (typeof v === 'string' && /^[A-Za-z0-9]{1,64}$/.test(v) ? v : null);
 
 function readDevice(v: unknown): { sn: string; label: string } | null {
   if (!isRecord(v)) return null;
@@ -103,7 +108,21 @@ function readDevice(v: unknown): { sn: string; label: string } | null {
   return sn !== null && typeof v.label === 'string' && v.label.length <= 120 ? { sn, label: v.label } : null;
 }
 
+/**
+ * The session of the last account check, so the station previews that follow cost no login of their own. One entry,
+ * in memory only; the key holds a hash of the password, never the password itself.
+ */
+function sessionCache(now: () => number) {
+  let kept: { key: string; session: AppSession; at: number } | undefined;
+  const keyOf = (i: AccountInput) => JSON.stringify([i.region, i.account.email, createHash('sha256').update(i.account.password).digest('hex')]);
+  return {
+    get: (i: AccountInput) => (kept && kept.key === keyOf(i) && now() - kept.at < SESSION_KEEP_MS ? kept.session : undefined),
+    set: (i: AccountInput, session: AppSession) => { kept = { key: keyOf(i), session, at: now() }; },
+  };
+}
+
 export function createActualActions(deps: ActualActionsDeps): ActualActions {
+  const sessions = sessionCache(deps.now ?? (() => Date.now()));
   const fail = (err: unknown, input: Input) => {
     if (err instanceof EcoflowApiError || err instanceof NetworkError) {
       return { ok: false as const, error: scrubInput(err.message, input) };
@@ -121,15 +140,37 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
       }
     }
   };
+  /** With the check's session when it is kept; a refused certification of it (a token gone bad) earns one fresh login. */
+  const previewAccount = async (input: AccountInput, station: string): Promise<EcoflowPreview> => {
+    const api = deps.makeAppApi(input.region, input.account);
+    const run = (session: AppSession) => ecoflowAppPreview(api, deps.connect, station, deps.random, session);
+    const signIn = async () => {
+      const session = await api.login();
+      sessions.set(input, session);
+      return session;
+    };
+    const kept = sessions.get(input);
+    if (!kept) return run(await signIn());
+    try {
+      return await run(kept);
+    } catch (err) {
+      if (!(err instanceof EcoflowApiError) || transient(err)) throw err;
+      return run(await signIn());
+    }
+  };
 
   return {
     async test(i) {
       const input = readInput(i);
       if (!input) return badInput();
       try {
-        const devices = input.mode === 'keys'
-          ? await ecoflowTest(deps.makeApi(input.region, input.keys))
-          : await ecoflowAppTest(deps.makeAppApi(input.region, input.account));
+        let devices;
+        if (input.mode === 'keys') devices = await ecoflowTest(deps.makeApi(input.region, input.keys));
+        else {
+          const checked = await ecoflowAppTest(deps.makeAppApi(input.region, input.account));
+          sessions.set(input, checked.session);
+          devices = checked.devices;
+        }
         return { ok: true, devices: devices.map(d => ({ sn: d.sn, label: deviceLabel(d), online: d.online })) };
       } catch (err) {
         return fail(err, input);
@@ -142,7 +183,7 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
       try {
         const { online, verdict } = input.mode === 'keys'
           ? await ecoflowPreview(deps.makeApi(input.region, input.keys), station)
-          : await ecoflowAppPreview(deps.makeAppApi(input.region, input.account), deps.connect, station, deps.random);
+          : await previewAccount(input, station);
         return verdict.power === 'unknown'
           ? { ok: true, online, power: 'unknown', reason: verdict.reason, unsupported: verdict.unsupported }
           : { ok: true, online, power: verdict.power, detail: verdict.detail };
@@ -162,7 +203,7 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
         if (!(err instanceof SecretsUnavailableError)) {
           deps.log.error(`actual: could not save the EcoFlow secrets — ${scrubInput(describeError(err), input)}`);
         }
-        return { ok: false, error: new SecretsUnavailableError().message };
+        return { ok: false, error: new SecretsUnavailableError(input.mode).message };
       }
       try {
         const current = deps.getSettings();

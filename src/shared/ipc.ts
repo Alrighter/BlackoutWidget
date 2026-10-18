@@ -53,7 +53,10 @@ export interface RendererApi {
   /** The widget's «Готово» button: save the position and pin the widget again. */
   endMoveMode(): void;
   ecoflowTest(i: EcoflowInput): Promise<EcoflowTestResult>;
-  /** HTTP only: never opens MQTT, so it spends none of the account's daily clientIds. */
+  /**
+   * Keys: HTTP only, so it spends none of the account's daily clientIds. Account: one short MQTT session with a
+   * throw-away clientId, signed in with the check's session when it is fresh (no HTTP call gives the readings).
+   */
   ecoflowPreview(i: EcoflowInput, sn: string): Promise<EcoflowPreviewResult>;
   ecoflowSave(i: EcoflowInput, device: { sn: string; label: string }): Promise<ActionResult>;
   /** Forgets the source and its keys; the history and the clientId stay. */

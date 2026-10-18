@@ -6,14 +6,17 @@ import { EcoflowApiError, type MqttCertificate } from './api';
 import type { AppAccount, AppSession, EcoflowAppApiLike } from './app-api';
 import { latestQuotasRequest, normalizeQuotaMessage, parseGetReply, parseJsonObject } from './mqtt-message';
 import {
-  AUTH_REFUSED, connectBroker, deliverReading, MQTT_AUTH_PAUSE_MS, ReconnectPacer, type MqttClientLike, type MqttConnect,
+  AUTH_REFUSED, connectBroker, deliverReading, ReconnectPacer, type MqttClientLike, type MqttConnect,
 } from './mqtt-session';
 import { OFFLINE_REASON, QuotaTracker, unknownReading } from './quota-tracker';
 import { errorCode, errorReason, NO_LINK_REASON } from './source';
 
 /** The latestQuotas cadence (R§3.7, §7): every 5 min, or every 2 min when snapshots are the only data. */
 export const GET_MS = 300_000, GET_REFUSED_MS = 120_000;
-/** A rejected login waits long (R§7): the account must never look like it is under a password attack. */
+/**
+ * A rejected login waits long (R§7): the account must never look like it is under a password attack. The pauses after
+ * a broker refusal that a fresh login did not cure climb the same way.
+ */
 export const LOGIN_RETRY_MS = [30 * 60_000, 60 * 60_000, 120 * 60_000];
 /** A login that failed on the way (network, timeout, 5xx, bad JSON — a future captcha would most likely look like that). */
 export const LOGIN_TRANSIENT_RETRY_MS = [1, 2, 5, 10, 30].map(m => m * 60_000);
@@ -22,7 +25,8 @@ export const FAILED_CONNECTS_SHOWN = 3;
 export const APP_UNSUPPORTED_REASON = 'Ця модель EcoFlow поки не підтримується входом через акаунт';
 /** Connected, yet not one message of the station by the first watchdog (a protobuf model ignores the JSON request). */
 export const APP_NO_DATA_REASON = 'EcoFlow не надсилає даних цієї станції — можливо, модель не підтримується входом через акаунт';
-export const APP_AUTH_PAUSE_REASON = 'EcoFlow не пустив до даних станції — наступна спроба приблизно за 30 хв';
+export const APP_AUTH_REFUSED_REASON = 'EcoFlow не пустив до даних станції';
+export const appAuthPauseReason = (minutes: number) => `${APP_AUTH_REFUSED_REASON} — наступна спроба приблизно за ${minutes} хв`;
 
 export interface AppTopics { property: string; reply: string; get: string }
 
@@ -46,7 +50,7 @@ interface Link { userId: string; cert: MqttCertificate }
 const refused = (err: Error | null, granted?: Granted) => !!err || !!granted?.some(g => g.qos === 128);
 
 /** A failure on the way (network, timeout, 5xx, bad JSON), as opposed to an answer from EcoFlow itself (a code, a 4xx). */
-function transient(err: unknown): boolean {
+export function transient(err: unknown): boolean {
   if (err instanceof NetworkError) return true;
   return err instanceof EcoflowApiError && (err.code === 'timeout' || err.code === 'bad-json' || /^http-5\d\d$/.test(err.code));
 }
@@ -87,8 +91,8 @@ export class EcoflowAppSource implements ActualStateSource {
   private stallRetried = false;
   /** Connects in a row that ended before a CONNACK. */
   private failedConnects = 0;
-  /** The broker refused the credentials twice: the 30 min pause is on. */
-  private authPaused = false;
+  /** The broker refused the fresh credentials too: a pause of this length (30, 60, then 120 min) is on. */
+  private authPauseMs: number | undefined;
   private readonly reconnect = new ReconnectPacer();
   private retryTimer: Timer | undefined;
   private getTimer: Timer | undefined;
@@ -280,9 +284,12 @@ export class EcoflowAppSource implements ActualStateSource {
     this.evaluate();
   }
 
-  /** A snapshot answers our own request, so it proves no session (R12); only a change in it is fresh (R§3.6). */
+  /**
+   * A snapshot answers our own request, so it proves no session (R12); only a change in it is fresh (R§3.6). A reply
+   * with neither data nor an offline flag tells nothing of the station.
+   */
   private applyReply(r: { online: boolean; quota: Record<string, unknown> | null }): void {
-    this.heard = true;
+    if (r.quota || !r.online) this.heard = true;
     this.online = r.online;
     if (r.quota && this.quotas.snapshot(r.quota, this.now())) this.freshData();
     this.evaluate();
@@ -317,19 +324,19 @@ export class EcoflowAppSource implements ActualStateSource {
     if (wasConnected) this.deps.log.warn('ecoflow-app: mqtt closed');
     if (err?.code !== undefined && AUTH_REFUSED.has(err.code)) {
       // A refusal is an answer: the broker is reachable. Only a new login can renew the certificate: once, then a
-      // pause (R§7).
+      // pause (R§7) that climbs until a session proves itself, so a lasting refusal never logs in every 30 min.
       this.failedConnects = 0;
       this.link = undefined;
       if (this.reconnect.takeAuthRetry()) {
         this.deps.log.warn('ecoflow-app: mqtt not authorized, signing in again');
         void this.connectMqtt();
       } else {
-        this.deps.log.warn('ecoflow-app: mqtt not authorized again, pausing 30 min');
-        this.authPaused = true;
+        const pause = this.authPauseMs = this.reconnect.nextAuthPause(LOGIN_RETRY_MS);
+        this.deps.log.warn(`ecoflow-app: mqtt not authorized again, pausing ${pause / 60_000} min`);
         this.retryTimer = setTimeout(() => {
-          this.authPaused = false;
+          this.authPauseMs = undefined;
           void this.connectMqtt();
-        }, MQTT_AUTH_PAUSE_MS);
+        }, pause);
         this.evaluate();
       }
       return;
@@ -356,7 +363,7 @@ export class EcoflowAppSource implements ActualStateSource {
 
   private reading(now: number): ActualReading {
     if (this.signInError !== undefined) return unknownReading(now, this.safe(errorReason(this.signInError)));
-    if (this.authPaused) return unknownReading(now, APP_AUTH_PAUSE_REASON);
+    if (this.authPauseMs !== undefined) return unknownReading(now, appAuthPauseReason(this.authPauseMs / 60_000));
     if (this.failedConnects >= FAILED_CONNECTS_SHOWN) return unknownReading(now, NO_LINK_REASON);
     if (this.silentStall && !this.heard) return unknownReading(now, APP_NO_DATA_REASON);
     // A stray binary frame next to real grid data changes nothing.

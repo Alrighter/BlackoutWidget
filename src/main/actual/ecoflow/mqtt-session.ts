@@ -32,11 +32,13 @@ type Timer = ReturnType<typeof setTimeout>;
 
 /**
  * The reconnect pacing both sources share: the MQTT_BACKOFF_MS ladder and the one fresh-credentials retry after a
- * refused CONNACK. Ruling R12: only a proven session (a live push, or SESSION_PROOF_MS connected) starts both over.
+ * refused CONNACK, plus the climbing pause after it for a source that asks. Ruling R12: only a proven session (a live
+ * push, or SESSION_PROOF_MS connected) starts them over.
  */
 export class ReconnectPacer {
   private attempts = 0;
   private authRetried = false;
+  private authPauses = 0;
   private proofTimer: Timer | undefined;
 
   /** The delay before the next reconnect, one step further up the ladder each time. */
@@ -56,6 +58,7 @@ export class ReconnectPacer {
     clearTimeout(this.proofTimer);
     this.attempts = 0;
     this.authRetried = false;
+    this.authPauses = 0;
   }
 
   /** The connection is gone, or the source stopped: a pending proof no longer counts. */
@@ -68,6 +71,11 @@ export class ReconnectPacer {
     if (this.authRetried) return false;
     this.authRetried = true;
     return true;
+  }
+
+  /** The pause once the fresh credentials were refused too: one step further up `schedule` each time, then its last. */
+  nextAuthPause(schedule: readonly number[]): number {
+    return schedule[Math.min(this.authPauses++, schedule.length - 1)];
   }
 }
 

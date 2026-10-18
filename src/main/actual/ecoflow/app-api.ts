@@ -1,5 +1,6 @@
 import type { EcoflowRegion } from '../../../shared/types';
 import { NetworkError } from '../../providers/types';
+import { scrubSecrets } from '../secrets';
 import { ECOFLOW_HOSTS, EcoflowApiError, type EcoflowDevice, type FetchLike, type MqttCertificate } from './api';
 
 export interface AppAccount { email: string; password: string }
@@ -28,7 +29,7 @@ export class EcoflowAppApi implements EcoflowAppApiLike {
   async login(): Promise<AppSession> {
     const body = JSON.stringify({
       email: this.account.email,
-      password: Buffer.from(this.account.password, 'utf8').toString('base64'),
+      password: this.base64Password(),
       scene: 'IOT_APP',
       userType: 'ECOFLOW',
     });
@@ -54,10 +55,17 @@ export class EcoflowAppApi implements EcoflowAppApiLike {
   }
 
   private authed(path: string, s: AppSession): Promise<unknown> {
-    return this.request(path, { method: 'GET', headers: { ...APP_HEADERS, authorization: `Bearer ${s.token}` } });
+    return this.request(path, { method: 'GET', headers: { ...APP_HEADERS, authorization: `Bearer ${s.token}` } }, s);
   }
 
-  private async request(path: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }): Promise<unknown> {
+  private base64Password(): string {
+    return Buffer.from(this.account.password, 'utf8').toString('base64');
+  }
+
+  /** `session`: the one an authenticated call sends, so a server echo of it is hidden as well. */
+  private async request(
+    path: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }, session?: AppSession,
+  ): Promise<unknown> {
     const ctrl = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, this.timeoutMs);
@@ -74,7 +82,11 @@ export class EcoflowAppApi implements EcoflowAppApiLike {
       let body: any;
       try { body = JSON.parse(text); } catch { throw new EcoflowApiError('bad-json'); }
       if (body === null || typeof body !== 'object') throw new EcoflowApiError('bad-json');
-      if (String(body.code) !== '0') throw new EcoflowApiError(String(body.code), String(body.message ?? ''));
+      if (String(body.code) !== '0') {
+        // A server text can echo what the request carried; every reader downstream (UI, logs) then sees `…` only.
+        const secrets = [this.account.email, this.account.password, this.base64Password(), ...(session ? [session.token, session.userId] : [])];
+        throw new EcoflowApiError(scrubSecrets(String(body.code), secrets), scrubSecrets(String(body.message ?? ''), secrets));
+      }
       return body.data;
     } finally {
       clearTimeout(timer);

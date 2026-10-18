@@ -1,8 +1,9 @@
 import {
-  ACCOUNT_MISSING_REASON, createActualActions, createActualRestart, KEYS_MISSING_REASON, makeClientId, type ActualActionsDeps, type ActualRestartDeps,
+  ACCOUNT_MISSING_REASON, createActualActions, createActualRestart, KEYS_MISSING_REASON, makeClientId,
+  type ActualActions, type ActualActionsDeps, type ActualRestartDeps,
 } from '../../../src/main/actual/actions';
-import { EcoflowApiError, type EcoflowApiLike, type EcoflowDevice } from '../../../src/main/actual/ecoflow/api';
-import type { AppSession, EcoflowAppApiLike } from '../../../src/main/actual/ecoflow/app-api';
+import { EcoflowApiError, type EcoflowApiLike, type EcoflowDevice, type FetchLike } from '../../../src/main/actual/ecoflow/api';
+import { EcoflowAppApi, type AppSession, type EcoflowAppApiLike } from '../../../src/main/actual/ecoflow/app-api';
 import { AFTER_SAVE_REASON, PREVIEW_WAIT_MS } from '../../../src/main/actual/ecoflow/index';
 import type { MqttClientLike } from '../../../src/main/actual/ecoflow/mqtt-session';
 import { SecretsUnavailableError } from '../../../src/main/actual/secrets';
@@ -17,6 +18,7 @@ const DEVICE = { sn: 'SN1', label: 'RIVER 2' };
 const BAD_INPUT = 'Перевірте введені дані';
 const CONNECT_FAILED = 'Не вдалося зв’язатися з EcoFlow';
 const SAVE_FAILED = 'Не вдалося безпечно зберегти ключі на цьому комп’ютері';
+const ACCOUNT_SAVE_FAILED = 'Не вдалося безпечно зберегти дані входу на цьому комп’ютері';
 const KEY_8521 = 'EcoFlow не прийняв підпис запиту (8521). Перевірте Secret Key і час на комп’ютері.';
 const CLIENT_ID = /^BlackoutWidget-[a-z0-9]{8}$/;
 const RIVER: EcoflowDevice = { sn: 'SN1', online: true, productName: 'RIVER 2' };
@@ -125,7 +127,8 @@ test('invalid input → «Перевірте введені дані»', async (
     expect(await actions.preview(i, 'SN1')).toEqual({ ok: false, error: BAD_INPUT });
     expect(await actions.save(i, DEVICE)).toEqual({ ok: false, error: BAD_INPUT });
   }
-  for (const sn of ['x'.repeat(500), 'x'.repeat(65), '', 42, null]) {
+  // Letters and digits only: `#`, `+` and `/` would change the meaning of an MQTT topic.
+  for (const sn of ['x'.repeat(500), 'x'.repeat(65), '', 42, null, 'SN#1', 'SN+', 'R601/SN1', 'SN 1', 'SN-1', 'SN1\n', 'СН1']) {
     expect(await actions.preview(KEYS, sn)).toEqual({ ok: false, error: BAD_INPUT });
     expect(await actions.save(KEYS, { sn, label: 'RIVER 2' })).toEqual({ ok: false, error: BAD_INPUT });
   }
@@ -311,7 +314,7 @@ describe('account mode', () => {
 
   test('save: failing secrets or settings leave the other mode untouched', async () => {
     const a = setup({ saveSecrets: () => { throw new SecretsUnavailableError(); } });
-    expect(await a.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: SAVE_FAILED });
+    expect(await a.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: ACCOUNT_SAVE_FAILED });
     const b = setup({ saveSettings: () => { throw new Error(`EBUSY ${PASSWORD}`); } });
     expect(await b.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: 'Не вдалося зберегти налаштування. Спробуйте ще раз.' });
     for (const s of [a, b]) {
@@ -332,6 +335,10 @@ describe('account mode', () => {
       expect(await actions.test(i)).toEqual({ ok: false, error: BAD_INPUT });
       expect(await actions.preview(i, 'SN1')).toEqual({ ok: false, error: BAD_INPUT });
       expect(await actions.save(i, DEV)).toEqual({ ok: false, error: BAD_INPUT });
+    }
+    for (const sn of ['SN#1', 'R601/+', '#', 'SN 1']) {
+      expect(await actions.preview(ACCOUNT, sn)).toEqual({ ok: false, error: BAD_INPUT });
+      expect(await actions.save(ACCOUNT, { sn, label: 'RIVER 2' })).toEqual({ ok: false, error: BAD_INPUT });
     }
     expect(deps.makeAppApi).not.toHaveBeenCalled();
     expect(deps.secrets.save).not.toHaveBeenCalled();
@@ -367,7 +374,7 @@ describe('account mode', () => {
     expect(JSON.stringify(await net.actions.preview(ACCOUNT, 'SN1'))).not.toContain(PASSWORD);
 
     const saveFail = setup({ saveSecrets: () => { throw new Error(echo); } });
-    expect(await saveFail.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: SAVE_FAILED });
+    expect(await saveFail.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: ACCOUNT_SAVE_FAILED });
     for (const secret of [EMAIL, PASSWORD, PASSWORD_B64]) expect(JSON.stringify(saveFail.deps.log.error.mock.calls)).not.toContain(secret);
   });
 
@@ -393,10 +400,101 @@ describe('account mode', () => {
     expect(JSON.stringify(res)).not.toContain(PASSWORD);
   });
 
+  test('a server echo of the token or the userId never reaches the IPC result', async () => {
+    const TOKEN = 'jwt-token-abc', USER_ID = '1234567890123456789';
+    const fetch = vi.fn<FetchLike>(async url => {
+      const body = url.includes('/auth/login')
+        ? { code: '0', data: { token: TOKEN, user: { userId: USER_ID } } }
+        : { code: `E-${USER_ID}`, message: `token=${TOKEN} user=${USER_ID}` };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    });
+    const { actions } = setup({ appApi: new EcoflowAppApi('eu', { email: EMAIL, password: PASSWORD }, { fetch }) });
+    const echoed = { ok: false, error: 'Помилка EcoFlow E-…: token=… user=…' };
+    expect(await actions.test(ACCOUNT)).toEqual(echoed); // the device list echoes
+    expect(await actions.preview(ACCOUNT, 'SN1')).toEqual(echoed); // the certification echoes
+    expect(fetch.mock.calls.map(([url]) => new URL(url).pathname)).toEqual([
+      '/auth/login', '/iot-service/user/device', '/auth/login', '/iot-auth/app/certification',
+    ]);
+  });
+
   test('disconnect removes the secrets of both sources', async () => {
     const { actions, deps } = setup({ settings: { actualSource: APP_CONFIG } });
     await actions.disconnect();
     expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow', 'ecoflow-app']);
+  });
+});
+
+describe('account mode: the session of the check', () => {
+  const MIN = 60_000;
+  const NO_REPLY = { ok: true, online: true, power: 'unknown', reason: AFTER_SAVE_REASON, unsupported: false };
+  beforeEach(() => vi.useFakeTimers({ now: Date.parse('2026-10-18T10:00:00Z') }));
+  afterEach(() => vi.useRealTimers());
+
+  /** The silent broker never answers: the preview ends after PREVIEW_WAIT_MS. */
+  async function previewNow(actions: ActualActions, i: unknown, sn = 'SN1') {
+    const pending = actions.preview(i, sn);
+    await vi.advanceTimersByTimeAsync(PREVIEW_WAIT_MS);
+    return pending;
+  }
+
+  test('test, then the previews of two stations: one login in all', async () => {
+    const { actions, appApi, broker } = setup();
+    expect(await actions.test(ACCOUNT)).toMatchObject({ ok: true });
+    expect(await previewNow(actions, ACCOUNT, 'SN1')).toEqual(NO_REPLY);
+    expect(await previewNow(actions, ACCOUNT, 'SN2')).toEqual(NO_REPLY);
+    expect(appApi.login).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(appApi.getCertification).mock.calls).toEqual([[SESSION], [SESSION]]);
+    expect(broker.connect).toHaveBeenCalledTimes(2);
+  });
+
+  test('the session is kept for 10 minutes', async () => {
+    const a = setup();
+    await a.actions.test(ACCOUNT);
+    await vi.advanceTimersByTimeAsync(10 * MIN - 1);
+    await previewNow(a.actions, ACCOUNT);
+    expect(a.appApi.login).toHaveBeenCalledTimes(1);
+
+    const b = setup();
+    await b.actions.test(ACCOUNT);
+    await vi.advanceTimersByTimeAsync(10 * MIN);
+    await previewNow(b.actions, ACCOUNT);
+    expect(b.appApi.login).toHaveBeenCalledTimes(2);
+  });
+
+  test('another region, email or password logs in again', async () => {
+    for (const other of [{ ...ACCOUNT, region: 'us' }, { ...ACCOUNT, email: 'other@dully.io' }, { ...ACCOUNT, password: `${PASSWORD} ` }]) {
+      const { actions, appApi } = setup();
+      await actions.test(ACCOUNT);
+      await previewNow(actions, other);
+      expect(appApi.login).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  test('a refused certification of the kept session: one fresh login, the preview goes on, the new session is kept', async () => {
+    const fresh: AppSession = { token: 'TOKEN2', userId: 'USER1' };
+    let logins = 0;
+    const appApi = {
+      login: vi.fn(() => Promise.resolve(++logins === 1 ? SESSION : fresh)),
+      getCertification: vi.fn((s: AppSession) => (s === SESSION
+        ? Promise.reject(new EcoflowApiError('http-401'))
+        : Promise.resolve({ account: 'a', password: 'b', host: 'h', port: 8883 }))),
+      listDevices: vi.fn((_s: AppSession) => Promise.resolve([RIVER])),
+    } satisfies EcoflowAppApiLike;
+    const { actions, broker } = setup({ appApi });
+    await actions.test(ACCOUNT);
+    expect(await previewNow(actions, ACCOUNT, 'SN1')).toEqual(NO_REPLY);
+    expect(await previewNow(actions, ACCOUNT, 'SN2')).toEqual(NO_REPLY);
+    expect(appApi.login).toHaveBeenCalledTimes(2);
+    expect(appApi.getCertification.mock.calls).toEqual([[SESSION], [fresh], [fresh]]);
+    expect(broker.connect).toHaveBeenCalledTimes(2);
+  });
+
+  test('a certification that failed on the way costs no login: its error comes back', async () => {
+    const { actions, appApi, broker } = setup({ appApi: fakeAppApi({ cert: new NetworkError('Немає з’єднання з EcoFlow') }) });
+    await actions.test(ACCOUNT);
+    expect(await previewNow(actions, ACCOUNT)).toEqual({ ok: false, error: 'Немає з’єднання з EcoFlow' });
+    expect(appApi.login).toHaveBeenCalledTimes(1);
+    expect(broker.connect).not.toHaveBeenCalled();
   });
 });
 

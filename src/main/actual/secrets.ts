@@ -29,8 +29,9 @@ export function scrubSecrets(text: string, secrets: readonly string[]): string {
 export interface Encryptor { isEncryptionAvailable(): boolean; encryptString(s: string): Buffer; decryptString(b: Buffer): string }
 
 export class SecretsUnavailableError extends Error {
-  constructor() {
-    super('Не вдалося безпечно зберегти ключі на цьому комп’ютері');
+  /** `what`: the keys of the developer API, or the account's sign-in data. */
+  constructor(what: 'keys' | 'account' = 'keys') {
+    super(`Не вдалося безпечно зберегти ${what === 'keys' ? 'ключі' : 'дані входу'} на цьому комп’ютері`);
     this.name = 'SecretsUnavailableError';
   }
 }
