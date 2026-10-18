@@ -69,3 +69,18 @@ test('old settings.json without actualSource reads as null', () => {
   expect(s.actualSource).toBeNull();
   expect(DEFAULT_SETTINGS.actualSource).toBeNull();
 });
+
+test('an ecoflow-app source and its uuid round-trip; an old ecoflow source loads unchanged', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bw-'));
+  const app = { id: 'ecoflow-app' as const, region: 'eu' as const, deviceSn: 'SN1', deviceName: 'RIVER 2', accountHint: 'r…@dully.io' };
+  new AppStore(dir).updateSettings({ actualSource: app, ecoflowAppClientUuid: 'A'.repeat(32) });
+  const loaded = new AppStore(dir).getSettings();
+  expect(loaded.actualSource).toEqual(app);
+  expect(loaded.ecoflowAppClientUuid).toBe('A'.repeat(32));
+
+  const old = { id: 'ecoflow', region: 'us', deviceSn: 'SN2', deviceName: 'Delta', accessKeyHint: 'AKEY…' };
+  writeFileSync(join(dir, 'settings.json'), JSON.stringify({ actualSource: old, ecoflowClientId: 'BlackoutWidget-abc12345' }));
+  const legacy = new AppStore(dir).getSettings();
+  expect(legacy.actualSource).toEqual(old);
+  expect(legacy.ecoflowClientId).toBe('BlackoutWidget-abc12345');
+});

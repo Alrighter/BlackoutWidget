@@ -324,7 +324,7 @@ describe('account mode', () => {
   test('invalid input → «Перевірте введені дані»', async () => {
     const { actions, deps } = setup();
     const bad: unknown[] = [
-      { ...ACCOUNT, email: 'roman.dully.io' }, { ...ACCOUNT, email: '   ' }, { ...ACCOUNT, password: '' }, { ...ACCOUNT, password: 7 },
+      { ...ACCOUNT, email: 'roman.dully.io' }, { ...ACCOUNT, email: '   ' }, { ...ACCOUNT, email: '@x' }, { ...ACCOUNT, email: 'x@' }, { ...ACCOUNT, password: '' }, { ...ACCOUNT, password: 7 },
       { ...ACCOUNT, email: `${'a'.repeat(200)}@x.io` }, { ...ACCOUNT, password: 'p'.repeat(201) }, { ...ACCOUNT, region: 'xx' },
       { ...ACCOUNT, mode: 'oauth' }, { ...ACCOUNT, mode: 1 }, { mode: 'account', region: 'eu', email: EMAIL },
     ];

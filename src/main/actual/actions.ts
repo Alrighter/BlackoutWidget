@@ -86,7 +86,7 @@ function readInput(i: unknown): Input | null {
   }
   if (i.mode !== 'account') return null;
   const email = readKey(i.email), password = readPassword(i.password);
-  return email && email.includes('@') && password ? { mode: 'account', region, account: { email, password } } : null;
+  return email && email.indexOf('@') > 0 && email.indexOf('@') < email.length - 1 && password ? { mode: 'account', region, account: { email, password } } : null;
 }
 
 function scrubInput(text: string, input: Input): string {
