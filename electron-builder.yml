@@ -28,3 +28,6 @@ mac:
   # No Apple Developer ID yet: ad-hoc signature so Apple Silicon will run it (Gatekeeper still asks once).
   identity: '-'
   hardenedRuntime: false
+  # Menu-bar app: no Dock icon and no app menu bar.
+  extendInfo:
+    LSUIElement: true
