@@ -1,10 +1,10 @@
 import type { BrowserWindow } from 'electron';
-import koffi from 'koffi';
 import { join } from 'node:path';
-import { createDesktopPinner, NoopPinner } from '../../../src/main/widget/desktop-pin';
+import { createDesktopNative, createDesktopPinner, NoopPinner } from '../../../src/main/widget/desktop-pin';
+import { MacNativeGlass } from '../../../src/main/widget/glass-darwin';
 import { COREGRAPHICS_PATH, LIBOBJC_PATH, loadObjc, type KoffiLike, type ObjcBindings } from '../../../src/main/widget/objc-darwin';
 import {
-  kCGDesktopIconWindowLevelKey, MacDesktopPinner, PIN_COLLECTION_BEHAVIOR, PIN_LEVEL_OFFSET,
+  kCGDesktopIconWindowLevelKey, MacDesktopPinner, PIN_COLLECTION_BEHAVIOR, PIN_HOLD_MS, PIN_LEVEL_OFFSET,
 } from '../../../src/main/widget/pin-darwin';
 import { createPinGuard } from '../../../src/main/widget/pin-guard';
 import { memFs } from '../../helpers/mem-fs';
@@ -44,7 +44,7 @@ function fakeObjc(o: { window?: bigint; throwOn?: string; guarded?: () => boolea
     msgVoidDouble: (obj, sel, d) => { native('msgVoidDouble'); msgs.push(['msgVoidDouble', obj, selNames.get(sel), d]); },
     windowLevelForKey: key => { native('windowLevelForKey'); levelKeys.push(key); return DESKTOP_ICON_LEVEL; },
   };
-  return { objc, msgs, levelKeys, unguarded };
+  return { objc, msgs, levelKeys, unguarded, selNames };
 }
 
 /** Pinner over a real guard (in-memory fs), so "inside guard.run" means "while the marker is on disk". */
@@ -83,7 +83,48 @@ describe('MacDesktopPinner', () => {
     pinner.unpin(win);
     expect(f.unguarded).toEqual([]);
     expect(f.msgs.length).toBeGreaterThan(0);
+    pinner.dispose(); // a good pin holds the marker for its grace period (next test); quitting ends it
     expect(m.files.has(MARKER)).toBe(false);
+  });
+
+  test('a good pin keeps the marker for PIN_HOLD_MS = 10 s (a crash in the next run-loop cycles still counts)', () => {
+    vi.useFakeTimers();
+    try {
+      const { m, pinner } = setup();
+      pinner.pin(fakeWin().win);
+      expect(PIN_HOLD_MS).toBe(10_000);
+      expect(m.files.get(MARKER)).toBe('1.2.3');
+      vi.advanceTimersByTime(PIN_HOLD_MS - 1);
+      expect(m.files.has(MARKER)).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(m.files.has(MARKER)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('dispose (app will-quit) drops a held marker at once', () => {
+    vi.useFakeTimers();
+    try {
+      const { m, pinner } = setup();
+      pinner.pin(fakeWin().win);
+      pinner.dispose();
+      expect(m.files.has(MARKER)).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('selectors are registered once, at construction and under the guard; pin and unpin register none', () => {
+    const { f, pinner } = setup();
+    expect([...f.selNames.values()].sort()).toEqual(['setCollectionBehavior:', 'setLevel:', 'window']);
+    const { win } = fakeWin();
+    pinner.pin(win);
+    pinner.unpin(win);
+    pinner.pin(win);
+    expect(f.selNames.size).toBe(3);
+    expect(f.unguarded).toEqual([]);
   });
 
   test('the NSView pointer is read from the handle as a little-endian u64', () => {
@@ -254,17 +295,7 @@ describe('loadObjc', () => {
     expect(loadObjc(fakeKoffi(() => -2147483603).ffi).windowLevelForKey(18)).toBe(-2147483603);
   });
 
-  test('every declared prototype parses with the real koffi (syntax only; long is 4 bytes on Windows)', () => {
-    const k = fakeKoffi();
-    loadObjc(k.ffi);
-    const tag = `${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-    k.declared.forEach((d, i) => {
-      // koffi.proto registers a named type, so give each a unique name; lib.func itself accepts repeated symbols.
-      const t = koffi.type(koffi.proto(d.def.replace(/(\w+)\(/, `$1_${tag}_${i}(`))) as unknown as
-        { proto: { arguments: { type: { name: string } }[] } };
-      expect(t.proto.arguments.length).toBe((d.def.match(/,/g)?.length ?? 0) + 1);
-    });
-  });
+  // The parse check with the real koffi moved to objc-darwin.smoke.test.ts: this fakes suite never loads the native addon.
 });
 
 describe('createDesktopPinner on macOS', () => {
@@ -339,5 +370,75 @@ describe('createDesktopPinner on macOS', () => {
     expect(log.warn).toHaveBeenCalledTimes(1);
     expect(load).not.toHaveBeenCalled();
     expect(m.ops).toEqual([]);
+  });
+
+  test('a userData that join() rejects is caught like any other failure: NoopPinner, one error, no throw', () => {
+    const log = fakeLog();
+    const bad = { userData: undefined as unknown as string, version: '1.2.3' };
+    expect(createDesktopPinner(log, bad, { platform: 'darwin', fs: memFs().fs, loadObjc: () => fakeObjc().objc }))
+      .toBeInstanceOf(NoopPinner);
+    expect(log.error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createDesktopNative: the pinner and the native glass share one runtime and one crash guard', () => {
+  const opts = { userData: '/data', version: '1.2.3' };
+  const marker = join('/data', 'pin-darwin.pending');
+
+  test('darwin: a MacDesktopPinner and a MacNativeGlass from a single loadObjc, nothing logged', () => {
+    const log = fakeLog();
+    const load = vi.fn(() => fakeObjc().objc);
+    const native = createDesktopNative(log, opts, { platform: 'darwin', fs: memFs().fs, loadObjc: load });
+    expect(native.pinner).toBeInstanceOf(MacDesktopPinner);
+    expect(native.glass).toBeInstanceOf(MacNativeGlass);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(log.error).not.toHaveBeenCalled();
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  test('both under the one guard: a held glass marker is dropped by the pinner\'s dispose at quit', () => {
+    vi.useFakeTimers();
+    try {
+      const m = memFs();
+      const native = createDesktopNative(fakeLog(), opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
+      expect(native.glass?.round(fakeWin().win, 'compact')).toBe(true);
+      expect(m.files.get(marker)).toBe('1.2.3');
+      native.pinner.dispose();
+      expect(m.files.has(marker)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('darwin with a disabled guard: NoopPinner, no glass (the tint), one warning', () => {
+    const log = fakeLog();
+    const native = createDesktopNative(log, opts, { platform: 'darwin', fs: memFs({ [marker]: '1.2.3' }).fs, loadObjc: () => fakeObjc().objc });
+    expect(native.pinner).toBeInstanceOf(NoopPinner);
+    expect(native.glass).toBeNull();
+    expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.error).not.toHaveBeenCalled();
+  });
+
+  test('darwin with a throwing loadObjc: NoopPinner, no glass, one error', () => {
+    const log = fakeLog();
+    const native = createDesktopNative(log, opts, {
+      platform: 'darwin', fs: memFs().fs, loadObjc: () => { throw new Error('dlopen failed'); },
+    });
+    expect(native.pinner).toBeInstanceOf(NoopPinner);
+    expect(native.glass).toBeNull();
+    expect(log.error).toHaveBeenCalledTimes(1);
+  });
+
+  test('darwin with a runtime whose sel throws: NoopPinner, no glass, one error', () => {
+    const log = fakeLog();
+    const broken = fakeObjc({ throwOn: 'sel' }).objc;
+    const native = createDesktopNative(log, opts, { platform: 'darwin', fs: memFs().fs, loadObjc: () => broken });
+    expect(native.pinner).toBeInstanceOf(NoopPinner);
+    expect(native.glass).toBeNull();
+    expect(log.error).toHaveBeenCalledTimes(1);
+  });
+
+  test('other platforms have no native glass', () => {
+    expect(createDesktopNative(fakeLog(), opts, { platform: 'linux', fs: memFs().fs }).glass).toBeNull();
   });
 });

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Widget } from '../../src/renderer/src/widget/Widget';
 import { DayBar } from '../../src/renderer/src/widget/DayBar';
 import { dayCells } from '../../src/shared/day-cells';
@@ -485,5 +487,38 @@ describe('actual state', () => {
   test.each(['compact', 'ring', 'timeline'] as const)('%s: mismatch text fits — caption with «оновлено» still present', style => {
     const { container } = render(<Widget state={st({ actual: act(now), lineChanged: true }, style)} now={now} background={bg} />);
     expect(container.querySelector('.w-cap .w-fixed')).toHaveTextContent(/^оновлено 11:48$/i);
+  });
+});
+
+describe('background kinds', () => {
+  const widgetCss = readFileSync(join(__dirname, '../../src/renderer/src/widget/widget.css'), 'utf8');
+  const card = (c: HTMLElement) => c.querySelector('.w-card')!;
+
+  test.each(['compact', 'ring', 'timeline'] as const)('%s, native (macOS vibrancy): no underlay, no wallpaper layer, the glass stays', style => {
+    const { container } = render(<Widget state={st({}, style)} now={now} background={{ kind: 'native' }} />);
+    expect(card(container)).toHaveClass('w-card', `w-${style}`, 'w-bg-native', 'w-tone-on');
+    expect(card(container)).not.toHaveClass('w-bg-tint');
+    expect(card(container)).not.toHaveClass('w-bg-image');
+    expect(container.querySelector('.w-bg')).toBeNull();
+    expect(container.querySelector('.w-card > .w-glass')).not.toBeNull();
+    expect(screen.getByText('Світло є')).toBeInTheDocument();
+  });
+
+  test('widget.css: .w-bg-native makes --w-underlay transparent; only .w-bg-tint paints the underlay', () => {
+    expect(widgetCss).toMatch(/\.w-bg-native \{ --w-underlay: transparent; \}/);
+    const users = [...widgetCss.matchAll(/([^{}]+)\{[^}]*var\(--w-underlay\)[^}]*\}/g)].map(m => m[1].trim());
+    expect(users).toEqual(['.w-bg-tint']);
+    // The glass layer (mockup glass, edge, tone tint) is drawn for every kind, native included.
+    expect(widgetCss).toMatch(/\n\.w-glass \{/);
+  });
+
+  test('tint and image as before: the tint card carries the underlay class, the image card its wallpaper layer', () => {
+    const tint = render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
+    expect(card(tint.container).className).toBe('w-card w-compact w-bg-tint w-tone-on');
+    expect(tint.container.querySelector('.w-bg')).toBeNull();
+    const image = render(<Widget state={st()} now={now} background={{ kind: 'image', dataUrl: 'data:image/png;base64,AA' }} />);
+    expect(card(image.container).className).toBe('w-card w-compact w-bg-image w-tone-on');
+    expect(image.container.querySelector('.w-card > .w-bg')).toHaveStyle({ backgroundImage: 'url("data:image/png;base64,AA")' });
+    expect(image.container.querySelector('.w-card > .w-glass')).not.toBeNull();
   });
 });

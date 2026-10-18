@@ -6,13 +6,22 @@ import { WIDGET_SIZES } from '../../shared/widget-sizes';
 import { silentLogger, type Logger } from '../log';
 import type { AppStore } from '../store';
 import type { DesktopPinner } from './desktop-pin';
+import type { NativeGlass } from './glass-darwin';
 import { placeWidget } from './position';
 
-export interface WidgetWindowDeps { store: AppStore; pinner: DesktopPinner; preload: string; log?: Logger }
+export interface WidgetWindowDeps {
+  store: AppStore; pinner: DesktopPinner; preload: string; log?: Logger;
+  /** macOS: the window's native glass; absent or null elsewhere (Windows paints the wallpaper crop instead). */
+  glass?: NativeGlass | null;
+}
+
+const NATIVE: WidgetBackground = { kind: 'native' };
+const TINT: WidgetBackground = { kind: 'tint' };
 
 /**
  * The desktop widget: a transparent frameless window pinned to the desktop. It owns its DIP bounds (a pinned
- * child window's own idea of its bounds is not trusted) and saves the position after every drag / move mode.
+ * child window's own idea of its bounds is not trusted) and saves the position after every drag / move mode. On macOS
+ * its glass is native vibrancy, rounded to the card of the current style, and it sends the renderer `native` or `tint`.
  */
 export class WidgetWindow {
   private win: BrowserWindow | null = null;
@@ -45,6 +54,7 @@ export class WidgetWindow {
     if (style === this.style) return;
     this.style = style;
     this.setBounds(this.layout(this.deps.store.getSettings().widgetPosition).rect);
+    if (this.win) this.applyGlass(this.win); // every style change, from the settings or the tray, comes through here
     this.emitMoved();
   }
 
@@ -94,7 +104,7 @@ export class WidgetWindow {
     this.moveMode = false;
     this.dragFrom = null;
     this.commit(this.bounds);
-    win.setAlwaysOnTop(false);
+    win.setAlwaysOnTop(false); // before the pin: on macOS setAlwaysOnTop rewrites the window level the pin sets
     this.deps.pinner.pin(win);
     this.send(IPC.widgetMoveMode, false);
     this.emitMoved();
@@ -148,10 +158,28 @@ export class WidgetWindow {
     this.emitMoved();
   }
 
+  /**
+   * macOS: rounds the native glass to the current card and tells the renderer to draw over it (`native`). If that
+   * fails (the glass logged it), the vibrancy goes too, since unrounded it would show as a blurred rectangle around the
+   * card, and the renderer falls back to the tint glass; the glass stays off, so later windows get no vibrancy.
+   */
+  private applyGlass(win: BrowserWindow): void {
+    const glass = this.deps.glass;
+    if (!glass?.enabled || win.isDestroyed()) return;
+    if (glass.round(win, this.style)) {
+      if (this.background?.kind !== 'native') this.setBackground(NATIVE);
+      return;
+    }
+    win.setVibrancy(null);
+    this.setBackground(TINT);
+  }
+
   private create(): BrowserWindow {
     const win = new BrowserWindow({
       ...this.bounds, show: false,
       frame: false, transparent: true, resizable: false, skipTaskbar: true, focusable: true, hasShadow: false,
+      // macOS: vibrancy with the window kept transparent (clear and non-opaque outside the rounded content); {} elsewhere.
+      ...this.deps.glass?.windowOptions(),
       // No background throttling: a pinned, occluded widget must keep its minute clock running.
       webPreferences: { preload: this.deps.preload, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
@@ -159,7 +187,9 @@ export class WidgetWindow {
       // While still top-level: Electron may create the window a few px off the asked size at fractional scaling,
       // and its first show re-applies its own (screen-coordinate) bounds; both must happen before it becomes a child.
       this.deps.pinner.setBounds(win, this.bounds);
+      this.applyGlass(win); // after the vibrancy (applied at construction) and before the first frame shows
       win.showInactive();
+      // Last: on macOS nothing after the pin may reset the level (no setAlwaysOnTop / setVisibleOnAllWorkspaces).
       this.deps.pinner.pin(win);
     });
     win.on('close', e => { if (!this.quitting) e.preventDefault(); }); // e.g. Alt+F4 must not remove the widget

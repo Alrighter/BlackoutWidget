@@ -20,7 +20,7 @@ import { RefreshScheduler } from './scheduler';
 import { AppStore } from './store';
 import { AppTray } from './tray';
 import { buildWidgetMenu, type TrayActions } from './tray-menu';
-import { createDesktopPinner } from './widget/desktop-pin';
+import { createDesktopNative } from './widget/desktop-pin';
 import { startGlassUpdater } from './widget/glass-updater';
 import { WidgetWindow } from './widget/widget-window';
 
@@ -70,8 +70,8 @@ async function bootstrap(log: Logger): Promise<void> {
   const actualSources = createActualSources({ fetch: electronFetch, connect: mqttConnect });
   const preload = join(__dirname, '../preload/index.js');
   const mainWindow = new MainWindow(preload);
-  const pinner = createDesktopPinner(log, { userData, version: app.getVersion() });
-  const widget = new WidgetWindow({ store, pinner, preload, log });
+  const { pinner, glass } = createDesktopNative(log, { userData, version: app.getVersion() });
+  const widget = new WidgetWindow({ store, pinner, glass, preload, log });
 
   app.on('second-instance', () => mainWindow.open());
 
@@ -164,10 +164,12 @@ async function bootstrap(log: Logger): Promise<void> {
   publish();
   scheduler.start();
   widget.show();
+  // Windows: the glass shows the wallpaper crop under the widget. macOS: the window's own vibrancy blurs it, and the
+  // widget sends the renderer `native` (or `tint` if the native glass is off), so no updater runs there.
   const stopGlass = process.platform === 'win32' ? startGlassUpdater(widget) : () => {};
   app.on('will-quit', () => {
     stopGlass();
-    pinner.dispose();
+    pinner.dispose(); // macOS: also drops the crash marker still held after the last native call
     stopActualUpdates();
     actualService.stop(); // closes the journal with a gap and ends the MQTT session
   });

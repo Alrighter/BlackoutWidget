@@ -24,7 +24,7 @@ const DEFAULTS = {
   target: 'widget', style: 'compact', scenario: 'on', theme: 'dark', view: 'schedule',
   out: '.superpowers/design-refresh/captures', wallpaper: 'auto', delay: '300', scale: '1',
 };
-const WALLPAPERS = ['auto', 'light', 'dark', 'busy', 'none'];
+const WALLPAPERS = ['auto', 'light', 'dark', 'busy', 'none', 'native'];
 const FLAGS = new Set(['move-mode']);
 const JOB_TIMEOUT_MS = 30_000;
 
@@ -136,7 +136,8 @@ async function capture(job, opts) {
   try {
     configs.set(wc.id, {
       nowMs, state, stubs, moveMode: opts['move-mode'] === true,
-      wallpaper: { kind: opts.wallpaper === 'auto' ? job.theme : opts.wallpaper, width, height },
+      // `theme`: the wallpaper the `native` stand-in blurs.
+      wallpaper: { kind: opts.wallpaper === 'auto' ? job.theme : opts.wallpaper, theme: job.theme, width, height },
     });
     wc.on('console-message', e => { if (e.level === 'error') errors.push(e.message); });
     const failed = new Promise((_, reject) => {

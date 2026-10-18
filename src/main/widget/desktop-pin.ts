@@ -2,6 +2,7 @@ import type { BrowserWindow, Rectangle } from 'electron';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Logger } from '../log';
+import { MacNativeGlass, type NativeGlass } from './glass-darwin';
 import { loadObjc, type ObjcBindings } from './objc-darwin';
 import { MacDesktopPinner } from './pin-darwin';
 import { createPinGuard, PIN_GUARD_FILE, type PinGuardFs } from './pin-guard';
@@ -44,8 +45,23 @@ export interface DesktopPinnerEnv {
 
 const nodeFs: PinGuardFs = { existsSync, readFileSync, rmSync, writeFileSync };
 
-export function createDesktopPinner(log: Logger, opts: DesktopPinnerOptions, env: Partial<DesktopPinnerEnv> = {}): DesktopPinner {
+/** The widget window's native side: the desktop pinner and, on macOS, the native glass (null: the tint glass). */
+export interface DesktopNative {
+  pinner: DesktopPinner;
+  glass: NativeGlass | null;
+}
+
+export function createDesktopNative(log: Logger, opts: DesktopPinnerOptions, env: Partial<DesktopPinnerEnv> = {}): DesktopNative {
   const platform = env.platform ?? process.platform;
+  if (platform === 'darwin') return createMacNative(log, opts, env.fs ?? nodeFs, env.loadObjc ?? (() => loadObjc()));
+  return { pinner: createOtherPinner(log, platform), glass: null };
+}
+
+export function createDesktopPinner(log: Logger, opts: DesktopPinnerOptions, env: Partial<DesktopPinnerEnv> = {}): DesktopPinner {
+  return createDesktopNative(log, opts, env).pinner;
+}
+
+function createOtherPinner(log: Logger, platform: NodeJS.Platform): DesktopPinner {
   if (platform === 'win32') {
     try {
       return new Win32DesktopPinner();
@@ -55,28 +71,30 @@ export function createDesktopPinner(log: Logger, opts: DesktopPinnerOptions, env
       return new NoopPinner();
     }
   }
-  if (platform === 'darwin') return createMacPinner(log, opts, env.fs ?? nodeFs, env.loadObjc ?? (() => loadObjc()));
   log.warn(`no desktop pinner for platform ${platform}, using NoopPinner (widget not pinned)`);
   return new NoopPinner();
 }
 
 /**
- * A wrong FFI call kills the process instead of throwing, so the native side runs behind a crash guard: if the
- * previous run of this version died inside it, pinning stays off. Each fallback logs one line.
+ * A wrong FFI call kills the process instead of throwing, so the native side runs behind one crash guard, shared by
+ * the pinner and the glass: if the previous run of this version died inside it, both stay off. Each fallback logs one
+ * line.
  */
-function createMacPinner(log: Logger, opts: DesktopPinnerOptions, fs: PinGuardFs, load: () => ObjcBindings): DesktopPinner {
-  const marker = join(opts.userData, PIN_GUARD_FILE);
+function createMacNative(log: Logger, opts: DesktopPinnerOptions, fs: PinGuardFs, load: () => ObjcBindings): DesktopNative {
   try {
-    const guard = createPinGuard(fs, marker, opts.version);
+    const marker = join(opts.userData, PIN_GUARD_FILE);
+    const guard = createPinGuard(fs, marker, opts.version, log);
     if (guard.disabled) {
-      log.warn(`macOS desktop pinning crashed Blackout Widget ${opts.version} before; using NoopPinner (widget not pinned). ` +
-        `Delete ${marker} to try again`);
-      return new NoopPinner();
+      log.warn(`macOS native window calls crashed Blackout Widget ${opts.version} before; using NoopPinner (widget not ` +
+        `pinned) and the tint glass. Delete ${marker} to try again`);
+      return { pinner: new NoopPinner(), glass: null };
     }
     // Loading runs under the guard too: a native crash loading koffi or the dylibs must not become a crash loop.
-    return new MacDesktopPinner(guard.run(load), guard, log);
+    const objc = guard.run(load);
+    return { pinner: new MacDesktopPinner(objc, guard, log), glass: new MacNativeGlass(objc, guard, log) };
   } catch (err) {
-    log.error('macOS desktop pinning unavailable, falling back to NoopPinner (widget not pinned)', err);
-    return new NoopPinner();
+    log.error('macOS desktop pinning and native glass unavailable, falling back to NoopPinner (widget not pinned) ' +
+      'and the tint glass', err);
+    return { pinner: new NoopPinner(), glass: null };
   }
 }

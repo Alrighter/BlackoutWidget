@@ -21,16 +21,28 @@ export const NSWindowCollectionBehaviorStationary = 1 << 4;
 export const NSWindowCollectionBehaviorIgnoresCycle = 1 << 6;
 export const PIN_COLLECTION_BEHAVIOR =
   NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorStationary | NSWindowCollectionBehaviorIgnoresCycle;
+/**
+ * How long the crash marker stays after a good pin (and after the native glass's corner calls): AppKit acts on a new
+ * level in the run-loop cycles after setLevel:, so a crash there still turns native calls off. App quit ends it early.
+ */
+export const PIN_HOLD_MS = 10_000;
 
 /**
  * macOS: the widget stays an ordinary frameless window, but its NSWindow goes just above the desktop icons (under
  * every normal window), on every Space and stationary in Mission Control / «Show Desktop» (spec §7.2). Every native
- * call runs inside the crash guard; a JS-level failure is logged and leaves the widget an ordinary window.
+ * call runs inside the crash guard; a JS-level failure is logged and leaves the widget an ordinary window. Nothing may
+ * call Electron's setAlwaysOnTop / setVisibleOnAllWorkspaces while pinned: they rewrite the level or the behaviour.
  */
 export class MacDesktopPinner implements DesktopPinner {
   private isPinned = false;
+  private readonly sel: { window: ObjcPtr; setLevel: ObjcPtr; setCollectionBehavior: ObjcPtr };
 
-  constructor(private readonly objc: ObjcBindings, private readonly guard: PinGuard, private readonly log: Logger = silentLogger) {}
+  constructor(private readonly objc: ObjcBindings, private readonly guard: PinGuard, private readonly log: Logger = silentLogger) {
+    // sel_registerName is native too: every selector is registered once, here, under the guard.
+    this.sel = guard.run(() => ({
+      window: objc.sel('window'), setLevel: objc.sel('setLevel:'), setCollectionBehavior: objc.sel('setCollectionBehavior:'),
+    }));
+  }
 
   /** Whether the last pin succeeded (and no unpin came after it). */
   get pinned(): boolean { return this.isPinned; }
@@ -42,7 +54,7 @@ export class MacDesktopPinner implements DesktopPinner {
       this.guard.run(() => {
         const level = this.objc.windowLevelForKey(kCGDesktopIconWindowLevelKey) + PIN_LEVEL_OFFSET;
         this.apply(win, level, PIN_COLLECTION_BEHAVIOR);
-      });
+      }, { holdMs: PIN_HOLD_MS });
       this.isPinned = true;
     } catch (err) {
       this.log.error('pinning the widget to the macOS desktop failed; it stays an ordinary window', err);
@@ -64,14 +76,17 @@ export class MacDesktopPinner implements DesktopPinner {
     if (!win.isDestroyed()) win.setBounds(rect);
   }
 
-  dispose(): void {}
+  /** App will-quit: a clean exit, so the crash marker still held after the last pin (or corner call) goes now. */
+  dispose(): void {
+    this.guard.release();
+  }
 
   private apply(win: BrowserWindow, level: number, behavior: number): void {
     const view: ObjcPtr = win.getNativeWindowHandle().readBigUInt64LE(0); // NSView* on macOS
-    const nswin = this.objc.msgId(view, this.objc.sel('window')); // -[NSView window]
+    const nswin = this.objc.msgId(view, this.sel.window); // -[NSView window]
     // Messaging nil does nothing and returns 0: without this check a failed lookup would look like a pin.
     if (!nswin) throw new Error('the widget NSView has no NSWindow');
-    this.objc.msgVoidLong(nswin, this.objc.sel('setLevel:'), level); // -[NSWindow setLevel:(NSWindowLevel = NSInteger)]
-    this.objc.msgVoidULong(nswin, this.objc.sel('setCollectionBehavior:'), behavior); // NSWindowCollectionBehavior = NSUInteger
+    this.objc.msgVoidLong(nswin, this.sel.setLevel, level); // -[NSWindow setLevel:(NSWindowLevel = NSInteger)]
+    this.objc.msgVoidULong(nswin, this.sel.setCollectionBehavior, behavior); // NSWindowCollectionBehavior = NSUInteger
   }
 }
