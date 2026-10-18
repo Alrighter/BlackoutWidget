@@ -25,9 +25,8 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s: line changed + stale ke
   expect(screen.getByText('Схема підключення змінилась — перевірте лінію')).toBeInTheDocument();
   expect(screen.getByText(/оновлено 11:48/i)).toHaveClass('w-fixed');
   expect(screen.getByText('дані застаріли')).toHaveClass('w-stale');
-  // Compact and ring give the warning a row of its own above the caption (mockup); timeline keeps it in the footer.
-  if (style === 'timeline') expect(container.querySelector('.w-foot')).toHaveClass('w-foot-changed');
-  else expect(container.querySelector('.w-foot .w-cap-warn')).toBeNull();
+  // Every style gives the warning a row of its own (mockups), none puts it in the footer.
+  expect(container.querySelector('.w-foot .w-cap-warn')).toBeNull();
 });
 test.each(['compact', 'ring', 'timeline'] as const)('%s: the updated time never sits in the shrinking part', style => {
   const { container } = render(<Widget state={st({}, style)} now={new Date('2026-10-17T09:40:00Z')} background={{ kind: 'tint' }} />);
@@ -36,8 +35,12 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s: the updated time never 
   expect(cap.querySelector('.w-ellipsis')?.textContent ?? '').not.toMatch(/оновлено/i);
 });
 test('timeline: tomorrow not published', () => {
-  render(<Widget state={st({}, 'timeline')} now={now} background={{ kind: 'tint' }} />);
-  expect(screen.getByText('ще не опубліковано')).toBeInTheDocument(); expect(screen.getByText('Завтра 18.10')).toBeInTheDocument();
+  const { container } = render(<Widget state={st({}, 'timeline')} now={now} background={{ kind: 'tint' }} />);
+  expect(screen.getByText('ще не опубліковано')).toBeInTheDocument();
+  const row = container.querySelectorAll('.w-tl-row')[1];
+  expect(row.querySelector('.w-tl-label')).toHaveTextContent(/^Завтра 18\.10$/);
+  expect(row.querySelector('.w-bar-empty')).toHaveTextContent(/^ще не опубліковано$/);
+  expect(row.querySelector('[data-slot]')).toBeNull();
 });
 test('DayBar renders 48 halves with off at 12..16', () => {
   const { container } = render(<DayBar day={fixtureSnapshot().days[0]} />);
@@ -119,11 +122,11 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s: overflow protection on 
   const { container, rerender } = render(<Widget state={st({}, style)} now={stale} background={{ kind: 'tint' }} />);
   const cap = container.querySelector('.w-cap')!;
   expect(cap).toHaveAttribute('title', expect.stringContaining('дані застаріли'));
-  if (style !== 'timeline') expect(cap.querySelector('.w-ellipsis')).not.toBeNull(); // timeline has no label here
+  expect(cap.querySelector('.w-ellipsis')).not.toBeNull();
   expect(cap.querySelector('.w-stale')).toHaveTextContent('дані застаріли');
   rerender(<Widget state={st({ lineChanged: true }, style)} now={now} background={{ kind: 'tint' }} />);
   expect(container.querySelector('.w-cap-warn')).toHaveAttribute('title', 'Схема підключення змінилась — перевірте лінію');
-  if (style === 'compact') expect(container.querySelector('.w-cap-warn .w-ellipsis')).toHaveTextContent('Схема підключення змінилась — перевірте лінію');
+  expect(container.querySelector('.w-cap-warn .w-ellipsis')).toHaveTextContent('Схема підключення змінилась — перевірте лінію');
 });
 test('compact next line is ellipsized with full title', () => {
   const { container } = render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
@@ -243,6 +246,73 @@ describe('ring', () => {
   });
 });
 
+describe('timeline', () => {
+  const bg = { kind: 'tint' } as const;
+  const tl = (p: Partial<AppState> = {}, at = now) => render(<Widget state={st(p, 'timeline')} now={at} background={bg} />);
+  const DTEK = 'ДТЕК Київські регіональні електромережі';
+
+  test('head: the status row and the next change under it; the big countdown and its caption on the right', () => {
+    const { container } = tl();
+    expect(container.querySelector('.w-tl-head .w-tl-main .w-status .w-title')).toHaveTextContent(/^Світло є$/);
+    const line = container.querySelector('.w-tl-main .w-status + .w-tl-line')!;
+    expect(line).toHaveTextContent(/^Вимкнення о 15:00 · через 3 год 10 хв$/);
+    expect(line).toHaveClass('w-ellipsis'); expect(line).toHaveAttribute('title', 'Вимкнення о 15:00 · через 3 год 10 хв');
+    expect(container.querySelector('.w-tl-main + .w-tl-count .w-tl-big')).toHaveTextContent(/^3:10$/);
+    const cl = container.querySelector('.w-tl-count .w-tl-cl')!;
+    expect(cl).toHaveTextContent(/^до вимкнення о 15:00$/);
+    expect(cl).toHaveClass('w-ellipsis'); expect(cl).toHaveAttribute('title', 'до вимкнення о 15:00');
+  });
+  test('no countdown: no count block; the next text still sits under the status', () => {
+    const { container } = tl({ snapshot: fixtureSnapshot({ extraDays: [] }) }, new Date('2026-10-19T08:50:00Z'));
+    expect(container.querySelector('.w-tl-count')).toBeNull();
+    expect(container.querySelector('.w-title')).toHaveTextContent(/^Немає даних$/);
+    expect(container.querySelector('.w-tl-line')).toHaveTextContent(/^Графік на сьогодні ще не отримано$/);
+  });
+  test('emergency: the badge in the status row, «≈» before the countdown', () => {
+    const outage = { kind: 'emergency' as const, text: 'Аварійне відключення', start: '13:30 17.10.2026', end: '17:00 17.10.2026' };
+    const { container } = tl({ snapshot: fixtureSnapshot({ currentOutage: outage }) }, new Date('2026-10-17T11:20:00Z')); // 14:20 Kyiv
+    expect(container.querySelector('.w-status .w-badge')).toHaveTextContent(/^Аварійне$/);
+    expect(container.querySelector('.w-tl-big')).toHaveTextContent(/^≈2:40$/);
+    expect(container.querySelector('.w-tl-cl')).toHaveTextContent(/^до орієнтовного увімкнення$/);
+    expect(container.querySelector('.w-tl-line')).toHaveTextContent(/^Аварійне · орієнтовно до 17:00$/);
+  });
+  test('line changed: the warning is a row of its own under the head, above the day rows', () => {
+    const { container } = tl({ lineChanged: true });
+    const warn = container.querySelector('.w-tl-head + .w-warnline')!;
+    expect(warn).toHaveTextContent('Схема підключення змінилась — перевірте лінію');
+    expect(container.querySelector('.w-foot .w-cap-warn')).toBeNull();
+    expect(container.querySelectorAll('.w-warnline')).toHaveLength(1);
+  });
+  test('day rows: «Сьогодні 17.10» with the now marker, «Завтра 18.10» without; one tick scale under both', () => {
+    const tomorrow = { date: '2026-10-18', slots: fixtureSnapshot().days[0].slots };
+    const { container } = tl({ snapshot: fixtureSnapshot({ extraDays: [tomorrow] }) });
+    const rows = [...container.querySelectorAll('.w-tl-row')];
+    expect(rows.map(r => r.querySelector('.w-tl-label')!.textContent)).toEqual(['Сьогодні 17.10', 'Завтра 18.10']);
+    expect(rows.map(r => r.querySelector('.w-tl-day')!.textContent)).toEqual(['Сьогодні', 'Завтра']);
+    expect(rows.map(r => r.querySelector('.w-tl-date')!.textContent)).toEqual(['17.10', '18.10']);
+    expect(rows.map(r => r.querySelectorAll('.w-tl-label + .w-strip [data-slot]').length)).toEqual([48, 48]);
+    expect(rows.map(r => r.querySelectorAll('.w-now').length)).toEqual([1, 0]);
+    expect(container.querySelector('.w-bar-empty')).toBeNull();
+    expect([...container.querySelectorAll('.w-tl-row + .w-tl-row + .w-ticks span')].map(t => t.textContent)).toEqual(['00', '06', '12', '18', '24']);
+  });
+  test('caption: the line and the provider name ellipsize, «оновлено» never does', () => {
+    const { container } = tl();
+    const cap = container.querySelector('.w-tl-row + .w-tl-row + .w-ticks + .w-foot .w-cap')!;
+    expect(cap.querySelector('.w-ellipsis')).toHaveTextContent(`Лінія 1 · черга 1.2 · ${DTEK}`);
+    expect(cap.querySelector('.w-fixed')).toHaveTextContent(/^оновлено 11:48$/);
+    expect(cap).toHaveAttribute('title', `Лінія 1 · черга 1.2 · ${DTEK} · оновлено 11:48`);
+  });
+  test('caption: the name comes from the snapshot’s provider; an unknown id is shown as is', () => {
+    const { container } = tl({ snapshot: { ...fixtureSnapshot(), providerId: 'other-grid' } });
+    expect(container.querySelector('.w-cap .w-ellipsis')).toHaveTextContent(/^Лінія 1 · черга 1\.2 · other-grid$/);
+  });
+  test('before the first schedule: no caption', () => {
+    const { container } = tl({ snapshot: null });
+    expect(container.querySelector('.w-cap')).toBeNull();
+    expect(container.querySelector('.w-title')).toHaveTextContent(/^Немає даних$/);
+  });
+});
+
 describe('actual state', () => {
   const bg = { kind: 'tint' } as const;
   const act = (n: Date, over: Partial<ActualStatus> = {}): ActualStatus => ({
@@ -305,11 +375,6 @@ describe('actual state', () => {
     fireEvent.pointerEnter(container.querySelector('[data-actual="live"]')!);
     expect(screen.getByRole('tooltip')).toHaveClass('w-tip-above');
   });
-  test('compact: the tooltip keeps opening below the bolt', () => {
-    const { container } = render(<Widget state={st({ actual: act(now) })} now={now} background={bg} />);
-    fireEvent.pointerEnter(container.querySelector('[data-actual="live"]')!);
-    expect(screen.getByRole('tooltip')).not.toHaveClass('w-tip-above');
-  });
   test('unknown source shows muted mark with reason tooltip', () => {
     const a = act(now, { power: 'unknown', reason: 'станція не в мережі' });
     const { container } = render(<Widget state={st({ actual: a })} now={now} background={bg} />);
@@ -354,10 +419,20 @@ describe('actual state', () => {
     expect(container.querySelector('.w-strip > .w-cells + .w-actual-line')).not.toBeNull();
     expect(container.querySelector('.w-strip > .w-now')).not.toBeNull();
   });
-  test('timeline: «з HH:MM» under the status when actual matches', () => {
+  test('timeline: «з HH:MM» in the status row when actual matches; on a mismatch only the next line carries it', () => {
     const offNow = new Date('2026-10-17T13:00:00Z');
     const { container } = render(<Widget state={st({ actual: act(offNow) }, 'timeline')} now={offNow} background={bg} />);
-    expect(container.querySelector('.w-tl-sub')).toHaveTextContent('з 10:10');
+    expect(container.querySelector('.w-status .w-since')).toHaveTextContent(/^з 10:10$/);
+    expect(container.querySelector('.w-tl-line')).toHaveTextContent(/^Увімкнуть о 19:00 · через 3 год$/);
+    const mm = render(<Widget state={st({ actual: act(now) }, 'timeline')} now={now} background={bg} />);
+    expect(mm.container.querySelector('.w-tl-line')).toHaveTextContent(/^Не за графіком · з 10:10$/);
+    expect(mm.container.querySelector('.w-since')).toBeNull();
+    expect(mm.container.querySelector('.w-tl-count')).toBeNull();
+  });
+  test.each(['compact', 'timeline'] as const)('%s: the tooltip opens below the bolt (the window ends just above it)', style => {
+    const { container } = render(<Widget state={st({ actual: act(now) }, style)} now={now} background={bg} />);
+    fireEvent.pointerEnter(container.querySelector('[data-actual="live"]')!);
+    expect(screen.getByRole('tooltip')).not.toHaveClass('w-tip-above');
   });
   test.each(['compact', 'ring', 'timeline'] as const)('%s: mismatch text fits — caption with «оновлено» still present', style => {
     const { container } = render(<Widget state={st({ actual: act(now), lineChanged: true }, style)} now={now} background={bg} />);

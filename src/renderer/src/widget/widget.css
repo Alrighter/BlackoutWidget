@@ -44,7 +44,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 /* Paddings include the 1 px edge drawn by .w-glass. */
 .w-compact .w-content { display: flex; flex-direction: column; padding: 14px 17px 13px; }
 .w-ring .w-content { display: flex; flex-direction: column; align-items: center; padding: 13px 15px; }
-.w-timeline .w-content { padding: 17px 19px 15px; }
+.w-timeline .w-content { display: flex; flex-direction: column; padding: 15px 17px 13px; }
 
 /* Status row: dot, title, badge, EcoFlow bolt, «з HH:MM». */
 .w-status { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0;
@@ -91,9 +91,11 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-ap.on { background: rgb(from var(--bw-on) r g b / 0.7); }
 .w-ap.off { background: var(--bw-off-dot); }
 .w-ap.unknown { background: repeating-linear-gradient(90deg, rgb(from var(--bw-unknown) r g b / 0.95) 0 2px, transparent 2px 4px); }
-.w-bar-empty { display: flex; align-items: center; justify-content: center; height: 12px; border-radius: var(--bw-r-cell-end);
-  background: repeating-linear-gradient(135deg, rgb(from var(--bw-unknown) r g b / 0.3) 0 2px, rgb(from var(--bw-unknown) r g b / 0.1) 2px 4px);
-  font-size: 9.5px; color: var(--bw-ink-2); }
+/* A day not published yet: a hatched bar with the text on a pill. */
+.w-bar-empty { display: flex; align-items: center; justify-content: center; height: 14px; border-radius: var(--bw-r-cell-end);
+  background: repeating-linear-gradient(135deg, rgb(from var(--bw-unknown) r g b / 0.4) 0 2px, rgb(from var(--bw-unknown) r g b / 0.1) 2px 5px); }
+.w-bar-empty span { font-size: 9.5px; line-height: 12px; font-weight: 600; padding: 0 7px; border-radius: var(--bw-r-pill);
+  background: var(--bw-pill); color: var(--bw-ink-2); }
 .w-ticks { display: flex; justify-content: space-between; margin-top: 3px;
   font-size: 9.5px; line-height: 11px; font-variant-numeric: tabular-nums; color: var(--bw-ink-3); }
 
@@ -109,27 +111,32 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 /* Single lines ellipsize so everything fits the fixed window. */
 .w-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
-/* Timeline: its own layout until its restyle; it shares the parts above. */
-.w-muted { color: var(--bw-ink-3); font-size: 12px; line-height: 1.25; }
-.w-warn { color: var(--bw-warn-ink); }
-.w-big { font-size: 22px; font-weight: 650; line-height: 1.25; }
-.w-timeline .w-status.w-long { font-size: 19px; }
-
-.w-tl-head { display: flex; justify-content: space-between; align-items: flex-start; }
-.w-tl-head > div:first-child { flex-shrink: 0; }
-.w-tl-count { text-align: right; min-width: 0; margin-left: 10px; }
-.w-tl-text { max-width: 200px; }
+/*
+ * Timeline (widget-timeline.html): the status and the next change with the big countdown beside them, the warning
+ * row, then at the bottom today's and tomorrow's strips under one tick scale, and the caption.
+ */
+.w-card.w-timeline { border-radius: var(--bw-r-timeline); }
+.w-timeline .w-glass {
+  background: radial-gradient(110% 120% at 0% 0%, rgb(from var(--bw-state) r g b / var(--bw-tint-a)) 0%, transparent 55%), var(--bw-glass);
+}
+.w-tl-head { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.w-tl-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.w-timeline .w-status { font-size: 19px; }
+.w-tl-line { font-size: 12.5px; line-height: 17px; font-variant-numeric: tabular-nums; color: var(--bw-ink-2); }
+.w-tl-count { flex: none; display: flex; flex-direction: column; align-items: flex-end; max-width: 150px; }
+.w-tl-big { font-family: var(--bw-font-display); font-size: 34px; line-height: 36px; font-weight: 600; letter-spacing: -0.8px;
+  font-variant-numeric: tabular-nums; }
+.w-tl-cl { max-width: 150px; font-size: 10.5px; line-height: 13px; color: var(--bw-ink-2); }
+.w-timeline .w-warnline { margin-top: 6px; }
 .w-tl-row { display: flex; align-items: center; gap: 8px; }
-.w-tl-row > .w-ticks { flex: 1; margin-top: 4px; }
-.w-tl-row > .w-strip, .w-tl-bar { flex: 1; min-width: 0; }
-.w-row-label { font-size: 11px; color: var(--bw-ink-3); width: 74px; flex-shrink: 0; }
-.w-timeline .w-content > .w-foot { margin-top: 6px; }
-.w-tl-sub { max-width: 190px; }
-.w-tl-text.w-ellipsis { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-
-/* The line-changed warning in the footer (timeline). */
-.w-foot .w-cap-warn { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.w-foot-changed .w-cap { margin-top: 1px; }
+.w-tl-row > .w-strip { flex: 1 1 auto; min-width: 0; }
+.w-tl-tomorrow { margin-top: 7px; }
+.w-tl-label { flex: none; width: 86px; font-size: 11px; line-height: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.w-tl-day { font-weight: 600; }
+.w-tl-date { color: var(--bw-ink-3); }
+/* Under the strips only: the 86 px label plus the 8 px gap. */
+.w-timeline .w-ticks { margin-left: 94px; }
+.w-timeline .w-foot { margin-top: 7px; }
 
 /*
  * Ring (widget-ring.html): a 24-hour dial, 00 at the top, clockwise. Its own tint geometry and radius; the dial, then

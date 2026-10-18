@@ -35,6 +35,8 @@ describe('design tokens', () => {
     expect(THEMES.light.badge).toBe('#d12b25');
     expect(THEMES.dark.glass).toBe('rgba(18, 20, 28, 0.62)');
     expect(THEMES.light.glass).toBe('rgba(248, 249, 252, 0.66)');
+    expect(THEMES.dark.pill).toBe('rgba(22, 24, 32, 0.9)');
+    expect(THEMES.light.pill).toBe('rgba(248, 249, 252, 0.92)');
     expect(THEMES.light.tintA).toBe(0.14);
     expect(THEMES.dark.tintA).toBe(0.18);
   });

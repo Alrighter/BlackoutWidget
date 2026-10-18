@@ -25,6 +25,7 @@
   --bw-glass-blur: blur(30px) saturate(180%);
   --bw-shadow: 0 0 0 0.5px rgba(17, 19, 26, 0.12), 0 14px 34px rgba(18, 22, 36, 0.22), 0 2px 6px rgba(18, 22, 36, 0.10);
   --bw-hair: rgba(17, 19, 26, 0.10);
+  --bw-pill: rgba(248, 249, 252, 0.92);
   --bw-tint-a: 0.14;
   /* «now» marker */
   --bw-now: #11131a;
@@ -77,6 +78,7 @@
     --bw-glass-edge: rgba(255, 255, 255, 0.16);
     --bw-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
     --bw-hair: rgba(255, 255, 255, 0.12);
+    --bw-pill: rgba(22, 24, 32, 0.9);
     --bw-tint-a: 0.18;
     --bw-now: #ffffff;
     --bw-now-ring: rgba(0, 0, 0, 0.55);

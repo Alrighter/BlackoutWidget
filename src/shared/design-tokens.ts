@@ -7,6 +7,8 @@ export interface ThemeTokens {
   on: string; offA: string; offB: string; offDot: string; maybe: string; unknown: string; emergency: string; badge: string;
   ink: string; ink2: string; ink3: string;
   glass: string; glassEdge: string; shadow: string; hair: string;
+  /** Pill behind a label laid over a hatch («ще не опубліковано»). */
+  pill: string;
   warnInk: string; warnBg: string;
   now: string; nowRing: string;
   tipBg: string; tipInk: string; tipEdge: string;
@@ -21,7 +23,7 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     ink: '#11131a', ink2: 'rgba(17, 19, 26, 0.74)', ink3: 'rgba(17, 19, 26, 0.62)',
     glass: 'rgba(248, 249, 252, 0.66)', glassEdge: 'rgba(255, 255, 255, 0.8)',
     shadow: '0 0 0 0.5px rgba(17, 19, 26, 0.12), 0 14px 34px rgba(18, 22, 36, 0.22), 0 2px 6px rgba(18, 22, 36, 0.10)',
-    hair: 'rgba(17, 19, 26, 0.10)',
+    hair: 'rgba(17, 19, 26, 0.10)', pill: 'rgba(248, 249, 252, 0.92)',
     warnInk: '#8a5800', warnBg: 'rgba(226, 160, 0, 0.2)',
     now: '#11131a', nowRing: 'rgba(255, 255, 255, 0.9)',
     tipBg: 'rgba(252, 252, 254, 0.97)', tipInk: '#11131a', tipEdge: 'rgba(17, 19, 26, 0.12)',
@@ -33,7 +35,7 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     ink: '#f5f7fc', ink2: 'rgba(245, 247, 252, 0.8)', ink3: 'rgba(245, 247, 252, 0.66)',
     glass: 'rgba(18, 20, 28, 0.62)', glassEdge: 'rgba(255, 255, 255, 0.16)',
     shadow: '0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25)',
-    hair: 'rgba(255, 255, 255, 0.12)',
+    hair: 'rgba(255, 255, 255, 0.12)', pill: 'rgba(22, 24, 32, 0.9)',
     warnInk: '#ffd27a', warnBg: 'rgba(255, 194, 61, 0.18)',
     now: '#ffffff', nowRing: 'rgba(0, 0, 0, 0.55)',
     tipBg: 'rgba(30, 32, 40, 0.97)', tipInk: '#f5f7fc', tipEdge: 'rgba(255, 255, 255, 0.14)',

@@ -62,7 +62,7 @@ export function Status({ view, since, inlineBadge = true, tipAbove = false }: {
   view: WidgetView; since?: string; inlineBadge?: boolean; tipAbove?: boolean;
 }) {
   return (
-    <div className={`w-status${view.title.length > 14 ? ' w-long' : ''}`}>
+    <div className="w-status">
       <StateDot state={view.state} />
       <span className="w-title w-ellipsis" title={view.title} data-capture="status">{view.title}</span>
       {inlineBadge && view.outageBadge && <OutageBadge text={view.outageBadge} />}
@@ -86,26 +86,26 @@ export function WarnLine() {
   );
 }
 
+/** The big countdown; «≈» marks the estimated end of an emergency outage. */
+export function countdownText(view: WidgetView): string | undefined {
+  if (!view.countdownShort) return undefined;
+  return view.state === 'emergency' ? `≈${view.countdownShort}` : view.countdownShort;
+}
+
 /**
- * Footer, always kept inside the fixed window: «оновлено HH:MM» and the stale pill never shrink, only the optional label
- * before them ellipsizes. With `footWarning` the line-changed warning takes a line of its own above it (ring, timeline).
+ * Footer, one row always kept inside the fixed window: «оновлено HH:MM» and the stale pill never shrink, only the
+ * optional label before them ellipsizes.
  */
-export function Caption({ view, label, updated, footWarning = false }: {
-  view: WidgetView; label?: string; updated: string; footWarning?: boolean;
-}) {
-  if (!updated && !footWarning) return null;
+export function Caption({ view, label, updated }: { view: WidgetView; label?: string; updated: string }) {
+  if (!updated) return null;
   const title = [label, updated, view.stale ? 'дані застаріли' : ''].filter(Boolean).join(' · ');
   return (
-    <div className={footWarning ? 'w-foot w-foot-changed' : 'w-foot'}>
-      {footWarning && <div className="w-muted w-warn w-cap-warn" title={WARNING}>{WARNING}</div>}
-      {updated && (
-        <div className="w-cap" title={title} data-capture="caption">
-          {label && <><span className="w-ellipsis">{label}</span><span className="w-sep"> · </span></>}
-          <span className="w-fixed" data-capture="updated">{updated}</span>
-          {/* The space lets a wrapping caption (ring) break before the pill; a flex row drops it. */}
-          {view.stale && <>{' '}<span className="w-stale" data-capture="stale">дані застаріли</span></>}
-        </div>
-      )}
+    <div className="w-foot">
+      <div className="w-cap" title={title} data-capture="caption">
+        {label && <><span className="w-ellipsis" data-capture="label">{label}</span><span className="w-sep"> · </span></>}
+        <span className="w-fixed" data-capture="updated">{updated}</span>
+        {view.stale && <span className="w-stale" data-capture="stale">дані застаріли</span>}
+      </div>
     </div>
   );
 }

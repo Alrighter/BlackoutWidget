@@ -1,3 +1,4 @@
+import { providerDisplayName } from '../../../shared/providers';
 import type { AppState, WidgetBackground } from '../../../shared/types';
 import { kyivDateKey, kyivMinutesOfDay } from '../../../shared/time';
 import { computeWidgetView, type WidgetView } from '../../../shared/widget-state';
@@ -24,7 +25,11 @@ export function Widget({ state, now, background }: { state: AppState; now: Date;
     body = <div className="w-status"><span>Налаштуйте адресу</span></div>;
   } else {
     const props = { view, lineChanged: state.lineChanged };
-    body = style === 'ring' ? <RingWidget {...props} /> : style === 'timeline' ? <TimelineWidget {...props} /> : <CompactWidget {...props} />;
+    // From the snapshot the line label comes from; before the first one there is no caption.
+    const provider = state.snapshot ? providerDisplayName(state.snapshot.providerId) : '';
+    body = style === 'ring' ? <RingWidget {...props} />
+      : style === 'timeline' ? <TimelineWidget {...props} provider={provider} />
+      : <CompactWidget {...props} />;
   }
   return (
     <div className={`w-card w-${style} w-bg-${background.kind} w-tone-${view?.state ?? 'unknown'}`}>

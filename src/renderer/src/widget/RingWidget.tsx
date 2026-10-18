@@ -3,7 +3,7 @@ import type { StripPart } from '../../../shared/actual-view';
 import type { WidgetView } from '../../../shared/widget-state';
 import { dayCells, type DayCell } from './DayBar';
 import { OutageBadge } from './OutageBadge';
-import { Caption, EcoBolt, StateDot, Status, WarnLine } from './parts';
+import { Caption, countdownText, EcoBolt, StateDot, Status, WarnLine } from './parts';
 
 /** Ring diameter; under the line-changed warning row it shrinks to make room (widget-ring.html). */
 const RING = 208;
@@ -89,7 +89,7 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
   // On a mismatch the caption already carries «з HH:MM».
   const since = view.actual && !view.actual.mismatch ? view.actual.sinceText : undefined;
   const badge = view.outageBadge && <OutageBadge text={view.outageBadge} />;
-  const count = view.countdownShort && (view.state === 'emergency' ? `≈${view.countdownShort}` : view.countdownShort);
+  const count = countdownText(view);
   return (
     <>
       <div className={lineChanged ? 'w-dial w-dial-small' : 'w-dial'} style={{ width: size, height: size }} data-capture="dial">
