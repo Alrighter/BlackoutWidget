@@ -1,95 +1,130 @@
-import type { Slot } from '../../../shared/types';
-import { slotRuns, type WidgetView } from '../../../shared/widget-state';
-import { Caption } from './parts';
+import type { CSSProperties } from 'react';
+import type { StripPart } from '../../../shared/actual-view';
+import type { WidgetView } from '../../../shared/widget-state';
+import { dayCells, type DayCell } from './DayBar';
+import { OutageBadge } from './OutageBadge';
+import { Caption, EcoBolt, StateDot, Status, WarnLine } from './parts';
 
-const R = 80;
-const C = 2 * Math.PI * R; // 502.65
-const DOT: Record<WidgetView['state'], string> = { on: '#5dffa8', off: '#ff6b5b', 'maybe-off': '#ffc23d', unknown: '#9aa0b4', emergency: '#ff4d4d' };
+/** Ring diameter; under the line-changed warning row it shrinks to make room (widget-ring.html). */
+const RING = 208;
+const RING_SMALL = 184;
+/** Empty ring at each end of a half hour (7.5°). */
+const GAP = 0.7;
+const STRIPE = (7.5 - 2 * GAP) / 4;
 
-function Arc({ start, end, slot }: { start: number; end: number; slot: Slot }) {
-  const len = ((end - start) / 48) * C;
-  const rot = (start / 48) * 360 - 90;
-  return (
-    <circle cx="100" cy="100" r={R} fill="none" strokeWidth="14" strokeLinecap="round"
-      stroke={slot === 'off' ? 'url(#w-og)' : 'rgba(255,194,61,0.5)'}
-      strokeDasharray={`${len} ${C}`}
-      transform={`rotate(${rot} 100 100)`} data-arc={slot} />
-  );
+const round = (n: number, places: number): number => Math.round(n * 10 ** places) / 10 ** places;
+const deg = (d: number): string => `${round(d, 2)}deg`;
+/** A colour at an alpha: a half hour that is over keeps 0.4 of it. */
+const alpha = (color: string, a: number): string => (a === 1 ? color : `rgb(from ${color} r g b / ${round(a, 3)})`);
+const offMix = (f: number): string => `color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) ${round(f * 100, 3)}%)`;
+
+export interface SegmentPaint { stripes: boolean; c0: string; c1: string }
+
+/** How a half hour is painted: a gradient c0 → c1 along it, or (maybe, unknown) four bands c0 / c1 / c0 / c1. */
+export function segmentPaint(cell: DayCell): SegmentPaint {
+  const a = cell.past ? 0.4 : 1;
+  const solid = (color: string): SegmentPaint => ({ stripes: false, c0: alpha(color, a), c1: alpha(color, a) });
+  if (cell.emergency) return solid('var(--bw-emergency)');
+  switch (cell.slot) {
+    case 'on': return solid('var(--bw-on)');
+    case 'off': return { stripes: false, c0: alpha(offMix(cell.offFrom ?? 0), a), c1: alpha(offMix(cell.offTo ?? 1), a) };
+    case 'maybe-off': return { stripes: true, c0: alpha('var(--bw-maybe)', a), c1: alpha('var(--bw-maybe)', 0.28 * a) };
+    default: return { stripes: true, c0: alpha('var(--bw-unknown)', 0.85 * a), c1: alpha('var(--bw-unknown)', 0.22 * a) };
+  }
 }
 
-/** Estimated text width vs the room inside the ring: squeeze with textLength instead of overlapping the stroke. */
-function fit(text: string, size: number, maxW: number): { textLength?: number; lengthAdjust?: 'spacingAndGlyphs' } {
-  return text.length * size * 0.52 > maxW ? { textLength: maxW, lengthAdjust: 'spacingAndGlyphs' } : {};
+/** The day's 48 half hours as one conic gradient: 00 at the top, clockwise. */
+export function ringGradient(cells: DayCell[]): string {
+  const stops: string[] = [];
+  cells.forEach((cell, i) => {
+    const from = i * 7.5, to = from + 7.5, p = segmentPaint(cell);
+    stops.push(`transparent ${deg(from)} ${deg(from + GAP)}`);
+    if (p.stripes) {
+      for (let k = 0; k < 4; k++) {
+        const x = from + GAP + k * STRIPE;
+        stops.push(`${k % 2 ? p.c1 : p.c0} ${deg(x)} ${deg(x + STRIPE)}`);
+      }
+    } else {
+      stops.push(`${p.c0} ${deg(from + GAP)}`, `${p.c1} ${deg(to - GAP)}`);
+    }
+    stops.push(`transparent ${deg(to - GAP)} ${deg(to)}`);
+  });
+  return `conic-gradient(${stops.join(', ')})`;
 }
 
-/** Inner arc for a stretch of the day with actual outage (Kyiv minutes of 0..1440). */
-function ActualArc({ startMin, endMin }: { startMin: number; endMin: number }) {
-  const r = R - 12;
-  const c = 2 * Math.PI * r;
-  return (
-    <circle cx="100" cy="100" r={r} fill="none" stroke="#ff6b5b" strokeWidth="3" strokeLinecap="round"
-      strokeDasharray={`${((endMin - startMin) / 1440) * c} ${c}`}
-      transform={`rotate(${(startMin / 1440) * 360 - 90} 100 100)`} data-actual-arc="off" />
-  );
+/** What the power actually was today, for the inner ring (minutes / 4 = degrees): on, off, unknown dashed. */
+export function actualGradient(parts: StripPart[]): string {
+  const stops: string[] = [];
+  let at = 0;
+  for (const p of parts) {
+    const from = p.startMin / 4, to = p.endMin / 4;
+    if (from > at) stops.push(`transparent ${deg(at)} ${deg(from)}`);
+    if (p.power === 'unknown') {
+      for (let x = from; x < to; x += 3) {
+        const dash = Math.min(x + 1.5, to), gap = Math.min(x + 3, to);
+        stops.push(`rgb(from var(--bw-unknown) r g b / 0.95) ${deg(x)} ${deg(dash)}`);
+        if (gap > dash) stops.push(`transparent ${deg(dash)} ${deg(gap)}`);
+      }
+    } else {
+      stops.push(`${p.power === 'on' ? 'rgb(from var(--bw-on) r g b / 0.75)' : 'var(--bw-off-dot)'} ${deg(from)} ${deg(to)}`);
+    }
+    at = to;
+  }
+  if (at < 360) stops.push(`transparent ${deg(at)} 360deg`);
+  return `conic-gradient(${stops.join(', ')})`;
 }
+
+/** Centre of the «now» dot: on the middle of the 12 px band, at the clock's angle. */
+function nowDot(size: number, nowFraction: number): CSSProperties {
+  const angle = nowFraction * 2 * Math.PI, r = size / 2 - 6;
+  return { left: `${(size / 2 + r * Math.sin(angle)).toFixed(1)}px`, top: `${(size / 2 - r * Math.cos(angle)).toFixed(1)}px` };
+}
+
+const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
 
 export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChanged: boolean }) {
-  const runs = view.today ? slotRuns(view.today.slots).filter(r => r.slot === 'off' || r.slot === 'maybe-off') : [];
-  const a = view.nowFraction * 2 * Math.PI - Math.PI / 2;
-  const nx = 100 + R * Math.cos(a), ny = 100 + R * Math.sin(a);
-  const titleSize = view.title.length > 12 ? 12 : 17;
-  const titleX = 106;
-  const dotX = titleX - (view.title.length * titleSize * 0.52) / 2 - 10;
-  const lines = view.countdownShort ? [] : view.nextText.split(' · ');
-  const badgeY = view.countdownShort ? 139 : 133;
-  const badgeW = view.outageBadge ? view.outageBadge.length * 6.2 + 16 : 0;
+  const size = lineChanged ? RING_SMALL : RING;
+  const cells = dayCells(view.today?.slots ?? null, Math.round(view.nowFraction * 1440), view.emergency);
+  const actual = view.actualStrip?.length ? view.actualStrip : null;
+  // On a mismatch the caption already carries «з HH:MM».
+  const since = view.actual && !view.actual.mismatch ? view.actual.sinceText : undefined;
+  const badge = view.outageBadge && <OutageBadge text={view.outageBadge} />;
+  const count = view.countdownShort && (view.state === 'emergency' ? `≈${view.countdownShort}` : view.countdownShort);
   return (
     <>
-      {/* With the line-changed warning below, the empty margins above/below the ring are trimmed to make room. */}
-      <svg viewBox={lineChanged ? '0 6 200 188' : '0 0 200 200'} width="204" height={lineChanged ? 192 : 204} style={{ display: 'block' }}>
-        <defs>
-          <linearGradient id="w-og" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#ffc23d" /><stop offset="1" stopColor="#ff7a1a" />
-          </linearGradient>
-        </defs>
-        <circle cx="100" cy="100" r={R} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="14" />
-        {runs.map(r => <Arc key={r.start} start={r.start} end={r.end} slot={r.slot} />)}
-        {view.actualStrip?.filter(p => p.power === 'off').map(p => <ActualArc key={p.startMin} startMin={p.startMin} endMin={p.endMin} />)}
-        {view.today && <circle cx={nx} cy={ny} r="6" fill="#fff" style={{ filter: 'drop-shadow(0 0 4px #fff)' }} />}
-        <g fontSize="10" textAnchor="middle" className="w-svg-label">
-          <text x="100" y="42">00</text><text x="160" y="104">06</text><text x="100" y="166">12</text><text x="40" y="104">18</text>
-        </g>
-        <g textAnchor="middle" className="w-svg-main">
-          <circle cx={dotX} cy={88 - titleSize * 0.35} r="4" fill={DOT[view.state]} />
-          <text x={titleX} y="88" fontSize={titleSize} fontWeight="650" {...fit(view.title, titleSize, 112)}>{view.title}</text>
-          {view.countdownShort ? (
-            <>
-              <text x="100" y="116" fontSize="24" fontWeight="650">{view.countdownShort}</text>
-              <text x="100" y="131" fontSize="10" className="w-svg-sub" {...fit(view.countdownCaption ?? '', 10, 124)}>{view.countdownCaption}</text>
-            </>
-          ) : lines.map((l, i) => (
-            <text key={i} x="100" y={114 + i * 14} fontSize="10" className="w-svg-sub" {...fit(l, 10, 124)}>{l}</text>
-          ))}
-        </g>
-        {(view.actual || view.actualUnknownReason !== undefined) && (
-          // Above the title, in the free space inside the ring.
-          <g data-actual={view.actual ? 'live' : 'unknown'} transform="translate(95 55) scale(1)"
-            style={view.actual ? { color: '#5dffa8' } : { color: 'var(--bw-ink-3)', opacity: 0.7 }}>
-            <title>{view.actual ? 'Фактичний стан · EcoFlow' : `EcoFlow: ${view.actualUnknownReason}`}</title>
-            <path d="M6 0 0 8h4l-1 6 7-9H6z" fill="currentColor" />
-          </g>
+      <div className={lineChanged ? 'w-dial w-dial-small' : 'w-dial'} style={{ width: size, height: size }} data-capture="dial">
+        <div className="w-dial-segs" style={{ '--w-segs': ringGradient(cells) } as CSSProperties} />
+        {actual && (
+          <>
+            <div className="w-dial-actual w-dial-track" />
+            <div className="w-dial-actual" data-actual-arc style={{ '--w-actual': actualGradient(actual) } as CSSProperties} />
+          </>
         )}
-        {view.outageBadge && (
-          <g textAnchor="middle">
-            <rect x={100 - badgeW / 2} y={badgeY} width={badgeW} height="17" rx="8.5" fill="rgba(255,77,77,0.85)" />
-            <text x="100" y={badgeY + 12} fontSize="10.5" fontWeight="650" fill="#fff">{view.outageBadge}</text>
-          </g>
+        <span className="w-dial-tick w-at-00" data-capture="tick00">00</span>
+        <span className="w-dial-tick w-at-06">06</span>
+        <span className="w-dial-tick w-at-12" data-capture="tick12">12</span>
+        <span className="w-dial-tick w-at-18">18</span>
+        {/* Not before the first schedule arrives (no «оновлено» yet). */}
+        {view.updatedText !== '' && <div className="w-dial-now" data-capture="now" style={nowDot(size, view.nowFraction)} />}
+        {count ? (
+          <div className="w-dial-center" data-capture="center">
+            {badge}
+            <Status view={view} since={since} inlineBadge={false} tipAbove />
+            <div className={count.length > 5 ? 'w-dial-count w-dial-count-long' : 'w-dial-count'} data-capture="count">{count}</div>
+            <div className="w-dial-cap" title={view.countdownCaption} data-capture="dialcap">{view.countdownCaption}</div>
+          </div>
+        ) : (
+          <div className="w-dial-center w-dial-nocount" data-capture="center">
+            <div className="w-dial-marks"><StateDot state={view.state} /><EcoBolt view={view} tipAbove /></div>
+            {badge}
+            <div className="w-dial-title" title={view.title} data-capture="status">{view.title}</div>
+            <div className="w-dial-cap" title={view.nextText} data-capture="dialcap">{lowerFirst(view.nextText)}</div>
+          </div>
         )}
-      </svg>
-      <div className="w-ring-caption">
-        <Caption view={view} footWarning={lineChanged} updated={view.updatedText}
-          label={lineChanged ? undefined : view.lineLabel.split(' · ')[0]} />
       </div>
+      <div className="w-spacer" />
+      {lineChanged && <WarnLine />}
+      <Caption view={view} label={view.lineLabel} updated={view.updatedText} />
     </>
   );
 }

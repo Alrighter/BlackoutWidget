@@ -10,27 +10,29 @@ export function StateDot({ state }: { state: PowerState }) {
 const BOLT = 'M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z';
 
 /**
- * The tooltip opens below the bolt (the window ends just above it), 14 px left of it as in the mockup, and is kept
- * 8 px inside the card.
+ * Below the bolt (the window ends just above it) the tooltip starts 14 px left of it; above it (ring) it is centred on
+ * it, as in the mockups. Either way it is kept 8 px inside the card.
  */
-function placeTip(bolt: HTMLElement, tip: HTMLElement) {
+function placeTip(bolt: HTMLElement, tip: HTMLElement, above: boolean) {
   const card = (bolt.closest('.w-card') ?? document.documentElement).getBoundingClientRect();
   const b = bolt.getBoundingClientRect();
-  const left = Math.max(card.left + 8, Math.min(b.left - 14, card.right - 8 - tip.getBoundingClientRect().width));
+  const width = tip.getBoundingClientRect().width;
+  const want = above ? b.left + b.width / 2 - width / 2 : b.left - 14;
+  const left = Math.max(card.left + 8, Math.min(want, card.right - 8 - width));
   tip.style.left = `${left - b.left}px`;
 }
 
 /**
  * Which source the state comes from: a bolt when it is the live EcoFlow reading, a hollow muted one when the source is
- * silent. Hover or focus shows the tooltip.
+ * silent. Hover or focus shows the tooltip, below the bolt or, with `tipAbove`, above it.
  */
-export function EcoBolt({ view }: { view: WidgetView }) {
+export function EcoBolt({ view, tipAbove = false }: { view: WidgetView; tipAbove?: boolean }) {
   const [open, setOpen] = useState(false);
   const bolt = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
   // Every render while open: a new title or badge moves the bolt.
   useLayoutEffect(() => {
-    if (open && bolt.current && tip.current) placeTip(bolt.current, tip.current);
+    if (open && bolt.current && tip.current) placeTip(bolt.current, tip.current, tipAbove);
   });
   const unknown = view.actualUnknownReason !== undefined;
   if (!view.actual && !unknown) return null;
@@ -45,19 +47,26 @@ export function EcoBolt({ view }: { view: WidgetView }) {
         onMouseDown={e => e.preventDefault()}>
         <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d={BOLT} /></svg>
       </span>
-      {open && <span ref={tip} className="w-tip" role="tooltip" data-capture="tip">{text}</span>}
+      {open && (
+        <span ref={tip} className={tipAbove ? 'w-tip w-tip-above' : 'w-tip'} role="tooltip" data-capture="tip">{text}</span>
+      )}
     </span>
   );
 }
 
-/** Status row: dot, title, outage badge, EcoFlow bolt and, when given, «з HH:MM». */
-export function Status({ view, since }: { view: WidgetView; since?: string }) {
+/**
+ * Status row: dot, title, outage badge, EcoFlow bolt and, when given, «з HH:MM». The ring sets the badge above the
+ * row itself (`inlineBadge={false}`) and opens the tooltip above the bolt.
+ */
+export function Status({ view, since, inlineBadge = true, tipAbove = false }: {
+  view: WidgetView; since?: string; inlineBadge?: boolean; tipAbove?: boolean;
+}) {
   return (
     <div className={`w-status${view.title.length > 14 ? ' w-long' : ''}`}>
       <StateDot state={view.state} />
       <span className="w-title w-ellipsis" title={view.title} data-capture="status">{view.title}</span>
-      {view.outageBadge && <OutageBadge text={view.outageBadge} />}
-      <EcoBolt view={view} />
+      {inlineBadge && view.outageBadge && <OutageBadge text={view.outageBadge} />}
+      <EcoBolt view={view} tipAbove={tipAbove} />
       {since && <span className="w-since">{since}</span>}
     </div>
   );

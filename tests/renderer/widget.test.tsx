@@ -2,8 +2,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Widget } from '../../src/renderer/src/widget/Widget';
 import { DayBar, dayCells } from '../../src/renderer/src/widget/DayBar';
+import { actualGradient, ringGradient, segmentPaint } from '../../src/renderer/src/widget/RingWidget';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
-import type { ActualStatus, AppState, WidgetStyle } from '../../src/shared/types';
+import type { ActualStatus, AppState, Slot, WidgetStyle } from '../../src/shared/types';
 import { fixtureSnapshot } from '../helpers/snapshot';
 
 const now = new Date('2026-10-17T08:50:00Z');
@@ -24,9 +25,9 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s: line changed + stale ke
   expect(screen.getByText('Схема підключення змінилась — перевірте лінію')).toBeInTheDocument();
   expect(screen.getByText(/оновлено 11:48/i)).toHaveClass('w-fixed');
   expect(screen.getByText('дані застаріли')).toHaveClass('w-stale');
-  // Compact gives the warning a row of its own above the strip (mockup); ring and timeline keep it in the footer.
-  if (style === 'compact') expect(container.querySelector('.w-foot .w-cap-warn')).toBeNull();
-  else expect(container.querySelector('.w-foot')).toHaveClass('w-foot-changed');
+  // Compact and ring give the warning a row of its own above the caption (mockup); timeline keeps it in the footer.
+  if (style === 'timeline') expect(container.querySelector('.w-foot')).toHaveClass('w-foot-changed');
+  else expect(container.querySelector('.w-foot .w-cap-warn')).toBeNull();
 });
 test.each(['compact', 'ring', 'timeline'] as const)('%s: the updated time never sits in the shrinking part', style => {
   const { container } = render(<Widget state={st({}, style)} now={new Date('2026-10-17T09:40:00Z')} background={{ kind: 'tint' }} />);
@@ -131,7 +132,115 @@ test('compact next line is ellipsized with full title', () => {
 });
 test('snapshot null: no caption, no now dot', () => {
   const { container } = render(<Widget state={st({ snapshot: null }, 'ring')} now={now} background={{ kind: 'tint' }} />);
-  expect(container.querySelector('.w-cap')).toBeNull(); expect(container.querySelector('circle[r="6"]')).toBeNull();
+  expect(container.querySelector('.w-cap')).toBeNull(); expect(container.querySelector('.w-dial-now')).toBeNull();
+});
+
+describe('ring', () => {
+  const bg = { kind: 'tint' } as const;
+  const emergencyAt1420 = () => {
+    const s = st({ snapshot: fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення', start: '13:30 17.10.2026', end: '17:00 17.10.2026' } }) }, 'ring');
+    return render(<Widget state={s} now={new Date('2026-10-17T11:20:00Z')} background={bg} />); // 14:20 Kyiv
+  };
+  /** Top-level stops of a CSS gradient (commas inside colour functions don't split). */
+  const stopsOf = (g: string): string[] => {
+    const out: string[] = [];
+    let depth = 0, cur = '';
+    for (const ch of g.slice(g.indexOf('(') + 1, -1)) {
+      if (ch === '(') depth++;
+      if (ch === ')') depth--;
+      if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = ''; } else cur += ch;
+    }
+    return [...out, cur.trim()];
+  };
+  const on = (): Slot[] => Array(48).fill('on');
+
+  test('segmentPaint: on solid, off on its run gradient, maybe and unknown hatched, past at 0.4', () => {
+    const [cOn, cOff] = dayCells(['on', 'off', 'off', 'off', 'off', 'off', ...on().slice(6)]);
+    expect(segmentPaint(cOn)).toEqual({ stripes: false, c0: 'var(--bw-on)', c1: 'var(--bw-on)' });
+    expect(segmentPaint(cOff)).toEqual({ stripes: false,
+      c0: 'color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) 0%)', c1: 'color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) 20%)' });
+    const past = dayCells(['maybe-off', 'unknown', 'off', ...on().slice(3)], 120);
+    expect(segmentPaint(past[0])).toEqual({ stripes: true, c0: 'rgb(from var(--bw-maybe) r g b / 0.4)', c1: 'rgb(from var(--bw-maybe) r g b / 0.112)' });
+    expect(segmentPaint(past[1])).toEqual({ stripes: true, c0: 'rgb(from var(--bw-unknown) r g b / 0.34)', c1: 'rgb(from var(--bw-unknown) r g b / 0.088)' });
+    expect(segmentPaint(past[2]).c0).toBe('rgb(from color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) 0%) r g b / 0.4)');
+    expect(segmentPaint(dayCells(null)[0])).toEqual({ stripes: true, c0: 'rgb(from var(--bw-unknown) r g b / 0.85)', c1: 'rgb(from var(--bw-unknown) r g b / 0.22)' });
+  });
+  test('ringGradient: 48 half hours of 7.5° from 00 clockwise, 0.7° empty at each end, hatches in four bands', () => {
+    const stops = stopsOf(ringGradient(dayCells(on())));
+    expect(stops).toHaveLength(48 * 4);
+    expect(stops.slice(0, 5)).toEqual(['transparent 0deg 0.7deg', 'var(--bw-on) 0.7deg', 'var(--bw-on) 6.8deg', 'transparent 6.8deg 7.5deg', 'transparent 7.5deg 8.2deg']);
+    expect(stops.at(-1)).toBe('transparent 359.3deg 360deg');
+    const hatched = stopsOf(ringGradient(dayCells(['on', 'maybe-off', ...on().slice(2)])));
+    expect(hatched).toHaveLength(48 * 4 + 2);
+    const bands = hatched.slice(5, 9);
+    expect(bands.map(b => b.replace(/ [\d.]+deg [\d.]+deg$/, ''))).toEqual(
+      ['var(--bw-maybe)', 'rgb(from var(--bw-maybe) r g b / 0.28)', 'var(--bw-maybe)', 'rgb(from var(--bw-maybe) r g b / 0.28)']);
+    expect(bands[0]).toMatch(/ 8\.2deg [\d.]+deg$/); expect(bands[3]).toMatch(/ 14\.3deg$/);
+  });
+  test('the segments come from dayCells: the emergency window red, past half hours dimmed', () => {
+    const { container } = emergencyAt1420();
+    const cells = dayCells(fixtureSnapshot().days[0].slots, 860, { startMin: 810, endMin: 1020 });
+    expect(segmentPaint(cells[27]).c0).toBe('rgb(from var(--bw-emergency) r g b / 0.4)'); // 13:30, over
+    expect(segmentPaint(cells[28]).c0).toBe('var(--bw-emergency)');
+    expect((container.querySelector('.w-dial-segs') as HTMLElement).style.getPropertyValue('--w-segs')).toBe(ringGradient(cells));
+  });
+  test('the now dot sits on the ring at the clock’s angle; the ring shrinks under the line-changed warning', () => {
+    const { container, rerender } = render(<Widget state={st({}, 'ring')} now={now} background={bg} />); // 11:50 = 177.5°
+    const dial = () => container.querySelector('.w-dial') as HTMLElement;
+    const dot = () => container.querySelector('.w-dial-now') as HTMLElement;
+    expect([dial().style.width, dial().style.height]).toEqual(['208px', '208px']);
+    expect([dot().style.left, dot().style.top]).toEqual(['108.3px', '201.9px']); // 104 + 98·sin, 104 − 98·cos
+    expect(dial()).not.toHaveClass('w-dial-small');
+    rerender(<Widget state={st({ lineChanged: true }, 'ring')} now={now} background={bg} />);
+    expect(dial().style.width).toBe('184px');
+    expect(dial()).toHaveClass('w-dial-small'); // narrower centre text, clear of the 18 / 06 ticks
+    expect([dot().style.left, dot().style.top]).toEqual(['95.8px', '177.9px']); // 92 ± 86
+  });
+  test('a six-character countdown («≈17:40») is marked long, so the small ring can set it smaller', () => {
+    const outage = { kind: 'emergency' as const, text: 'Аварійне відключення', start: '13:30 17.10.2026', end: '08:00 18.10.2026' };
+    const { container } = render(<Widget state={st({ snapshot: fixtureSnapshot({ currentOutage: outage }) }, 'ring')} now={new Date('2026-10-17T11:20:00Z')} background={bg} />);
+    expect(container.querySelector('.w-dial-count')).toHaveTextContent(/^≈17:40$/);
+    expect(container.querySelector('.w-dial-count')).toHaveClass('w-dial-count-long');
+    const plain = render(<Widget state={st({}, 'ring')} now={now} background={bg} />);
+    expect(plain.container.querySelector('.w-dial-count')).not.toHaveClass('w-dial-count-long');
+  });
+  test('no schedule for today: hatched ring, the now dot still shows the time', () => {
+    const { container } = render(<Widget state={st({ snapshot: fixtureSnapshot({ extraDays: [] }) }, 'ring')} now={new Date('2026-10-19T08:50:00Z')} background={bg} />);
+    expect((container.querySelector('.w-dial-segs') as HTMLElement).style.getPropertyValue('--w-segs')).toBe(ringGradient(dayCells(null, 710)));
+    expect(container.querySelector('.w-dial-now')).not.toBeNull();
+    expect(container.querySelector('.w-dial-title')).toHaveTextContent(/^Немає даних$/);
+    expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^графік на сьогодні ще не отримано$/);
+  });
+  test('count layout: dot + status, big countdown, its caption; 00/06/12/18 around', () => {
+    const { container } = render(<Widget state={st({}, 'ring')} now={now} background={bg} />);
+    expect(container.querySelector('.w-dial-center .w-status .w-dot')).not.toBeNull();
+    expect(container.querySelector('.w-dial-center .w-status .w-title')).toHaveTextContent(/^Світло є$/);
+    expect(container.querySelector('.w-dial-count')).toHaveTextContent(/^3:10$/);
+    expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^до вимкнення о 15:00$/);
+    expect([...container.querySelectorAll('.w-dial-tick')].map(t => t.textContent)).toEqual(['00', '06', '12', '18']);
+  });
+  test('emergency: the badge above the status row, «≈» before the countdown', () => {
+    const { container } = emergencyAt1420();
+    const badge = container.querySelector('.w-dial-center > .w-badge')!;
+    expect(badge).toHaveTextContent('Аварійне');
+    expect(badge.nextElementSibling).toHaveClass('w-status');
+    expect(container.querySelector('.w-status .w-badge')).toBeNull();
+    expect(container.querySelector('.w-dial-count')).toHaveTextContent(/^≈2:40$/);
+    expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^до орієнтовного увімкнення$/);
+  });
+  test('emergency with no known end: no-count layout, the badge between the dot and the status', () => {
+    const s = st({ snapshot: fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення' } }) }, 'ring');
+    const { container } = render(<Widget state={s} now={now} background={bg} />);
+    expect(container.querySelector('.w-dial-count')).toBeNull();
+    expect(container.querySelector('.w-dial-marks + .w-badge + .w-dial-title')).toHaveTextContent(/^Світла немає$/);
+    expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^аварійне відключення · час відновлення невідомий$/);
+  });
+  test('caption: the full line label and «оновлено»; the warning is a row of its own above it', () => {
+    const { container, rerender } = render(<Widget state={st({}, 'ring')} now={now} background={bg} />);
+    expect(container.querySelector('.w-cap')).toHaveTextContent('Лінія 1 · черга 1.2 · оновлено 11:48');
+    rerender(<Widget state={st({ lineChanged: true }, 'ring')} now={now} background={bg} />);
+    expect(container.querySelector('.w-warnline + .w-foot .w-cap')).toHaveTextContent('Лінія 1 · черга 1.2 · оновлено 11:48');
+  });
 });
 
 describe('actual state', () => {
@@ -151,12 +260,9 @@ describe('actual state', () => {
     const { container } = render(<Widget state={st({ actual: act(now) }, style)} now={now} background={bg} />);
     expect(screen.getByText('Світла немає')).toBeInTheDocument();
     const mark = container.querySelector('[data-actual="live"]')!;
-    expect(mark).toHaveTextContent(style === 'ring' ? 'Фактичний стан · EcoFlow' : '');
-    if (style !== 'ring') {
-      expect(mark).toHaveAttribute('aria-label', 'Фактичний стан · EcoFlow');
-      expect(mark).toHaveAttribute('role', 'img');
-      expect(mark).not.toHaveAttribute('title'); // no native tooltip over the custom one
-    }
+    expect(mark).toHaveAttribute('aria-label', 'Фактичний стан · EcoFlow');
+    expect(mark).toHaveAttribute('role', 'img');
+    expect(mark).not.toHaveAttribute('title'); // no native tooltip over the custom one
   });
   test.each(['compact', 'timeline'] as const)('%s: actual line parts rendered for today', style => {
     const { container } = render(<Widget state={st({ actual: withStrip(later) }, style)} now={later} background={bg} />);
@@ -170,11 +276,39 @@ describe('actual state', () => {
     const { container } = render(<Widget state={st({ actual: withStrip(later) }, 'timeline')} now={later} background={bg} />);
     expect(container.querySelectorAll('.w-actual-line')).toHaveLength(1);
   });
-  test('ring: inner arc for actual off', () => {
+  test('ring: inner arc for the actual power, off at 12:10–13:00 then on until now (14:00)', () => {
     const { container } = render(<Widget state={st({ actual: withStrip(later) }, 'ring')} now={later} background={bg} />);
-    const arcs = container.querySelectorAll('[data-actual-arc]');
+    const arcs = container.querySelectorAll<HTMLElement>('[data-actual-arc]');
     expect(arcs).toHaveLength(1);
-    expect(arcs[0]).toHaveAttribute('r', '68');
+    // Minutes / 4 = degrees clockwise from 00: 730 → 182.5°, 780 → 195°, 840 → 210°.
+    expect(arcs[0].style.getPropertyValue('--w-actual')).toBe('conic-gradient(transparent 0deg 182.5deg, '
+      + 'var(--bw-off-dot) 182.5deg 195deg, rgb(from var(--bw-on) r g b / 0.75) 195deg 210deg, transparent 210deg 360deg)');
+    expect(container.querySelector('.w-dial-track')).not.toBeNull();
+  });
+  test('ring: actual unknown is a dashed stretch, 1.5° on / 1.5° off', () => {
+    expect(actualGradient([{ startMin: 0, endMin: 18, power: 'unknown' }])).toBe('conic-gradient('
+      + 'rgb(from var(--bw-unknown) r g b / 0.95) 0deg 1.5deg, transparent 1.5deg 3deg, '
+      + 'rgb(from var(--bw-unknown) r g b / 0.95) 3deg 4.5deg, transparent 4.5deg 360deg)');
+  });
+  test.each([
+    ['matches the schedule: count layout, «з HH:MM» in the status row', new Date('2026-10-17T13:00:00Z'), '.w-dial-center .w-status .w-eco'],
+    ['contradicts it: no-count layout, the bolt next to the dot', now, '.w-dial-marks .w-eco'],
+  ] as const)('ring: actual %s; the tooltip opens above the bolt', (_, at, bolt) => {
+    const { container } = render(<Widget state={st({ actual: act(at) }, 'ring')} now={at} background={bg} />);
+    expect(container.querySelector(bolt)).not.toBeNull();
+    if (at === now) {
+      expect(container.querySelector('.w-since')).toBeNull();
+      expect(container.querySelector('.w-dial-cap')).toHaveTextContent(/^не за графіком · з 10:10$/);
+    } else {
+      expect(container.querySelector('.w-dial-center .w-status .w-since')).toHaveTextContent(/^з 10:10$/);
+    }
+    fireEvent.pointerEnter(container.querySelector('[data-actual="live"]')!);
+    expect(screen.getByRole('tooltip')).toHaveClass('w-tip-above');
+  });
+  test('compact: the tooltip keeps opening below the bolt', () => {
+    const { container } = render(<Widget state={st({ actual: act(now) })} now={now} background={bg} />);
+    fireEvent.pointerEnter(container.querySelector('[data-actual="live"]')!);
+    expect(screen.getByRole('tooltip')).not.toHaveClass('w-tip-above');
   });
   test('unknown source shows muted mark with reason tooltip', () => {
     const a = act(now, { power: 'unknown', reason: 'станція не в мережі' });

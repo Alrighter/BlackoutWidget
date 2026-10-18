@@ -43,7 +43,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-content { position: relative; z-index: 1; height: 100%; box-sizing: border-box; }
 /* Paddings include the 1 px edge drawn by .w-glass. */
 .w-compact .w-content { display: flex; flex-direction: column; padding: 14px 17px 13px; }
-.w-ring .w-content { padding: 13px 15px 9px; }
+.w-ring .w-content { display: flex; flex-direction: column; align-items: center; padding: 13px 15px; }
 .w-timeline .w-content { padding: 17px 19px 15px; }
 
 /* Status row: dot, title, badge, EcoFlow bolt, «з HH:MM». */
@@ -109,7 +109,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 /* Single lines ellipsize so everything fits the fixed window. */
 .w-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
-/* Ring and timeline: their own layout until their restyle; they share the parts above. */
+/* Timeline: its own layout until its restyle; it shares the parts above. */
 .w-muted { color: var(--bw-ink-3); font-size: 12px; line-height: 1.25; }
 .w-warn { color: var(--bw-warn-ink); }
 .w-big { font-size: 22px; font-weight: 650; line-height: 1.25; }
@@ -127,20 +127,65 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-tl-sub { max-width: 190px; }
 .w-tl-text.w-ellipsis { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
-.w-svg-label, .w-svg-main { font-family: var(--bw-font); }
-.w-svg-label { fill: var(--bw-ink-3); }
-.w-svg-main { fill: var(--bw-ink); }
-.w-svg-sub { fill: var(--bw-ink-3); }
-.w-ring-caption { text-align: center; margin-top: 2px; }
-
-/* The line-changed warning in the footer (ring, timeline). */
+/* The line-changed warning in the footer (timeline). */
 .w-foot .w-cap-warn { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .w-foot-changed .w-cap { margin-top: 1px; }
-.w-ring .w-cap-warn { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center; }
-.w-ring .w-foot-changed .w-muted { font-size: 11px; line-height: 1.25; }
-/* Below the warning the caption is one short line («оновлено HH:MM · дані застаріли»): no clamp that could clip it. */
-.w-ring .w-foot-changed .w-cap { display: block; overflow: visible; }
-/* 16 px lines: the stale pill (14 px + 2 px padding) must fit inside the clamp's two lines. */
-.w-ring .w-cap { display: block; text-align: center; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 16px; }
-.w-ring .w-cap .w-ellipsis { display: inline; white-space: normal; overflow: visible; }
-.w-ring .w-cap .w-sep { white-space: normal; }
+
+/*
+ * Ring (widget-ring.html): a 24-hour dial, 00 at the top, clockwise. Its own tint geometry and radius; the dial, then
+ * the warning row and the caption at the bottom, all centred.
+ */
+.w-card.w-ring { border-radius: var(--bw-r-dial); }
+.w-ring .w-glass {
+  background: radial-gradient(120% 90% at 50% 0%, rgb(from var(--bw-state) r g b / var(--bw-tint-a)) 0%, transparent 60%), var(--bw-glass);
+}
+.w-dial { position: relative; flex: none; }
+/* 48 segments (--w-segs, from RingWidget) on a 12 px band; the actual power on a 3 px band 16 px inside it. */
+.w-dial-segs, .w-dial-actual { position: absolute; border-radius: 50%; }
+.w-dial-segs { inset: 0; background: var(--w-segs);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11.5px)); }
+.w-dial-actual { inset: 16px; background: var(--w-actual);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px)); }
+.w-dial-track { background: var(--bw-hair); }
+.w-dial-tick { position: absolute; transform: translate(-50%, -50%);
+  font-size: 9.5px; font-variant-numeric: tabular-nums; color: var(--bw-ink-3); }
+.w-at-00 { left: 50%; top: 17%; }
+.w-at-06 { left: 83%; top: 50%; }
+.w-at-12 { left: 50%; top: 83%; }
+.w-at-18 { left: 17%; top: 50%; }
+/* White with a ring in both themes, unlike the strip's --bw-now marker. */
+.w-dial-now { position: absolute; width: 12px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%);
+  background: #fff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.38), 0 0 0 5px rgba(255, 255, 255, 0.3), 0 2px 6px rgba(0, 0, 0, 0.35); }
+
+.w-dial-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 124px;
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.w-dial-center .w-badge { font-size: 10px; line-height: 14px; padding: 1px 7px; margin-bottom: 2px; }
+.w-dial-center .w-status { justify-content: center; gap: 5px; height: auto; max-width: 100%;
+  font-size: 12px; line-height: 15px; font-weight: 600; letter-spacing: 0; }
+.w-dial-center .w-dot { width: 7px; height: 7px;
+  box-shadow: 0 0 0 3px rgb(from var(--bw-state) r g b / 0.22), 0 0 10px rgb(from var(--bw-state) r g b / 0.55); }
+.w-dial-center .w-bolt svg { width: 11px; height: 11px; stroke-width: 2; }
+.w-dial-center .w-since { font-size: 11px; }
+.w-dial-count { font-family: var(--bw-font-display); font-size: 40px; line-height: 44px; font-weight: 600;
+  letter-spacing: -1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.w-dial-cap { max-width: 116px; font-size: 10.5px; line-height: 13px; text-wrap: balance; color: var(--bw-ink-2);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* No countdown: the dot (and bolt) over the badge, a big status, a caption of up to three lines. */
+.w-dial-marks { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.w-dial-marks .w-dot { width: 9px; height: 9px; }
+.w-dial-marks .w-bolt svg { width: 12px; height: 12px; }
+.w-dial-nocount .w-badge { margin-bottom: 0; letter-spacing: 0; }
+.w-dial-title { max-width: 100%; font-size: 18px; line-height: 22px; font-weight: 650; letter-spacing: -0.2px; text-wrap: balance;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.w-dial-nocount .w-dial-cap { -webkit-line-clamp: 3; }
+/* The small ring (warning row) brings the 18 / 06 ticks 12 px closer: wide centre lines get smaller to clear them. */
+.w-dial-small .w-dial-title { font-size: 16px; line-height: 20px; }
+.w-dial-small .w-dial-count-long { font-size: 34px; }
+/* Inside the ring there is room above the bolt. */
+.w-tip-above { top: auto; bottom: calc(100% + 8px); }
+.w-ring .w-tip { font-size: 11px; line-height: 14px; }
+
+.w-ring .w-warnline { margin: 0 0 5px; gap: 5px; max-width: 100%; font-size: 11px; line-height: 15px; }
+.w-ring .w-warnline svg { width: 12px; height: 12px; }
+.w-ring .w-foot { max-width: 100%; }
+.w-ring .w-cap { justify-content: center; }
