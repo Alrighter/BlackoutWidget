@@ -70,7 +70,7 @@ async function bootstrap(log: Logger): Promise<void> {
   const actualSources = createActualSources({ fetch: electronFetch, connect: mqttConnect });
   const preload = join(__dirname, '../preload/index.js');
   const mainWindow = new MainWindow(preload);
-  const pinner = createDesktopPinner(log);
+  const pinner = createDesktopPinner(log, { userData, version: app.getVersion() });
   const widget = new WidgetWindow({ store, pinner, preload, log });
 
   app.on('second-instance', () => mainWindow.open());
