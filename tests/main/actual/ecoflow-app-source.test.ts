@@ -2,11 +2,11 @@ import { EventEmitter } from 'node:events';
 import { EcoflowApiError, type EcoflowDevice, type FetchLike, type MqttCertificate } from '../../../src/main/actual/ecoflow/api';
 import type { AppSession, EcoflowAppApiLike } from '../../../src/main/actual/ecoflow/app-api';
 import {
-  APP_NO_DATA_REASON, APP_UNSUPPORTED_REASON, EcoflowAppSource, LOGIN_RETRY_MS,
+  APP_AUTH_PAUSE_REASON, APP_NO_DATA_REASON, APP_UNSUPPORTED_REASON, EcoflowAppSource, LOGIN_RETRY_MS, LOGIN_TRANSIENT_RETRY_MS,
 } from '../../../src/main/actual/ecoflow/app-source';
 import { AFTER_SAVE_REASON, ecoflowAppPreview, ecoflowAppTest, PREVIEW_WAIT_MS } from '../../../src/main/actual/ecoflow/index';
 import { FRESH_MS } from '../../../src/main/actual/ecoflow/quota-tracker';
-import { MQTT_AUTH_PAUSE_MS, type MqttClientLike, type MqttConnect } from '../../../src/main/actual/ecoflow/source';
+import { MQTT_AUTH_PAUSE_MS, NO_LINK_REASON, type MqttClientLike, type MqttConnect } from '../../../src/main/actual/ecoflow/source';
 import { createActualSources, findActualSource } from '../../../src/main/actual/registry';
 import type { ActualReading } from '../../../src/main/actual/types';
 import { silentLogger } from '../../../src/main/log';
@@ -105,7 +105,11 @@ const reply = (c: FakeClient, quotaMap: Record<string, unknown>, online = 1, pac
   send(c, REPLY, getReply(quotaMap, online), packet);
 const gets = (c: FakeClient) => c.publish.mock.calls.filter(([topic]) => topic === GET).length;
 const authError = (code = 5) => Object.assign(new Error('Connection refused: Not authorized'), { code });
-const logged = (log: ReturnType<typeof setup>['log']) => JSON.stringify([log.info.mock.calls, log.warn.mock.calls, log.error.mock.calls]);
+/** Every logger call as text; an Error argument counts with its name, message and stack (JSON alone makes it `{}`). */
+const logged = (log: ReturnType<typeof setup>['log']) => JSON.stringify(
+  [log.info.mock.calls, log.warn.mock.calls, log.error.mock.calls],
+  (_k, v: unknown) => (v instanceof Error ? `${v.name}: ${v.message}\n${v.stack}` : v),
+);
 
 /** Drops the current client and returns the delay before the next connect, in seconds. */
 async function nextDelay(mqtt: ReturnType<typeof fakeMqtt>) {
@@ -484,6 +488,58 @@ test.each([5, 4, 134, 135])('CONNACK %i: one full login and certification, then 
   expect(log.warn).toHaveBeenCalledWith('ecoflow-app: mqtt not authorized again, pausing 30 min');
 });
 
+test('the 30 min auth pause shows its reason; it clears when the pause ends', async () => {
+  const { mqtt, begin, last } = setup();
+  await begin();
+  mqtt.last().emit('error', authError());
+  await flush(); // the one immediate re-login: no pause, no reason
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: WAITING });
+  await advance(SEC);
+  mqtt.last().emit('error', authError());
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(SEC), reason: APP_AUTH_PAUSE_REASON });
+  expect(APP_AUTH_PAUSE_REASON).toBe('EcoFlow не пустив до даних станції — наступна спроба приблизно за 30 хв');
+  await advance(MQTT_AUTH_PAUSE_MS - 1);
+  expect(last()).toMatchObject({ reason: APP_AUTH_PAUSE_REASON });
+  await advance(1); // the pause is over: a fresh login and certificate
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(SEC + MQTT_AUTH_PAUSE_MS), reason: WAITING });
+  const c = mqtt.last();
+  c.emit('connect');
+  push(c, ON);
+  expect(last()).toMatchObject({ power: 'on' });
+});
+
+test('three failed connects in a row before any CONNACK → «немає з’єднання з EcoFlow»; the backoff goes on; a CONNACK clears it', async () => {
+  const { mqtt, log, begin, last } = setup();
+  await begin();
+  mqtt.last().emit('error', new Error('connect ETIMEDOUT')); // port 8883 blocked, say
+  expect(last()).toMatchObject({ reason: WAITING });
+  mqtt.connect.mockImplementationOnce(() => { throw new Error('boom'); });
+  await advance(10 * SEC); // the second try throws at once
+  expect(log.warn).toHaveBeenCalledWith('ecoflow-app: mqtt connect failed', 'Error');
+  expect(last()).toMatchObject({ reason: WAITING });
+  await advance(20 * SEC);
+  mqtt.last().emit('close');
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(30 * SEC), reason: NO_LINK });
+  expect(NO_LINK_REASON).toBe(NO_LINK);
+  await advance(40 * SEC);
+  expect(mqtt.connect).toHaveBeenCalledTimes(4);
+  mqtt.last().emit('connect');
+  expect(last()).toEqual({ power: 'unknown', observedAt: t(70 * SEC), reason: WAITING });
+});
+
+test('a refused CONNACK is an answer: it does not count as a failed connect', async () => {
+  const { mqtt, begin, readings } = setup();
+  await begin();
+  mqtt.last().emit('close');
+  await advance(10 * SEC);
+  mqtt.last().emit('close');
+  await advance(20 * SEC);
+  mqtt.last().emit('error', authError()); // the broker answered; the re-login follows
+  await flush();
+  mqtt.last().emit('close');
+  expect(readings.some(r => r.reason === NO_LINK)).toBe(false);
+});
+
 test('the re-login after a refusal is earned back by a proven session', async () => {
   const { api, mqtt, begin } = setup();
   await begin();
@@ -521,17 +577,18 @@ test('login rejected (2026): its message as the reason; retries after 30, 60, th
   expect(log.warn.mock.calls.filter(([m]) => m === 'ecoflow-app: login failed')).toEqual([['ecoflow-app: login failed', '2026']]);
 });
 
-test('login network error: retries on the MQTT backoff with «немає з’єднання з EcoFlow»', async () => {
+test('login network error: «немає з’єднання з EcoFlow»; retries after 1, 2, 5, 10, then 30 min, staying at 30', async () => {
   const net = () => new NetworkError('Немає з’єднання з EcoFlow');
-  const { api, mqtt, begin, last } = setup({ login: [net(), net(), net(), SESSION] });
+  const { api, mqtt, begin, last } = setup({ login: [net(), net(), net(), net(), net(), net(), SESSION] });
   await begin();
   expect(last()).toEqual({ power: 'unknown', observedAt: t(0), reason: NO_LINK });
-  for (const [i, s] of [10, 20, 40].entries()) {
-    await advance(s * SEC - 1);
+  for (const [i, wait] of [1, 2, 5, 10, 30, 30].entries()) {
+    await advance(wait * MIN - 1);
     expect(api.login).toHaveBeenCalledTimes(i + 1);
     await advance(1);
     expect(api.login).toHaveBeenCalledTimes(i + 2);
   }
+  expect(LOGIN_TRANSIENT_RETRY_MS).toEqual([1, 2, 5, 10, 30].map(m => m * MIN));
   expect(mqtt.connect).toHaveBeenCalledTimes(1);
 });
 
@@ -566,11 +623,26 @@ test.each([
   expect([api.login.mock.calls.length, api.getCertification.mock.calls.length]).toEqual([2, 2]);
 });
 
-test.each(['timeout', 'http-500'])('login %s: retried on the MQTT backoff', async code => {
+test.each(['timeout', 'bad-json', 'http-500'])('login %s: the transient schedule, first retry after 1 min', async code => {
   const { api, begin } = setup({ login: [new EcoflowApiError(code), SESSION] });
   await begin();
-  await advance(10 * SEC);
+  await advance(MIN - 1);
+  expect(api.login).toHaveBeenCalledTimes(1);
+  await advance(1);
   expect([api.login.mock.calls.length, api.getCertification.mock.calls.length]).toEqual([2, 1]);
+});
+
+test('transient and rejected logins count separately', async () => {
+  const net = () => new NetworkError('x'), e2026 = () => new EcoflowApiError('2026');
+  const { api, begin } = setup({ login: [net(), e2026(), net(), SESSION] });
+  await begin();
+  await advance(MIN); // the 1st transient waited 1 min; the 1st rejection now waits 30 min
+  await advance(30 * MIN); // the 2nd transient waits 2 min
+  expect(api.login).toHaveBeenCalledTimes(3);
+  await advance(2 * MIN - 1);
+  expect(api.login).toHaveBeenCalledTimes(3);
+  await advance(1);
+  expect(api.login).toHaveBeenCalledTimes(4);
 });
 
 test('no secret reaches a reading or a log line, even when the server echoes them', async () => {
@@ -656,6 +728,14 @@ test('stop() during sign-in or a retry wait never connects', async () => {
   await d.begin();
   d.mqtt.last().emit('close'); // reconnect pending in 10 s
   d.src.stop();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test('stop() from the reading handler during sign-in never connects', async () => {
+  const { mqtt, src } = setup();
+  src.start(() => src.stop()); // the first reading comes from the finished sign-in itself
+  await flush();
+  expect(mqtt.connect).not.toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
 });
 

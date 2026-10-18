@@ -1,5 +1,5 @@
 import {
-  isProtobufPayload, latestQuotasRequest, normalizeQuotaMessage, parseGetReply, parseStatusMessage,
+  latestQuotasRequest, normalizeQuotaMessage, parseGetReply, parseJsonObject, parseStatusMessage,
 } from '../../../src/main/actual/ecoflow/mqtt-message';
 
 test('typeCode envelope', () => expect(normalizeQuotaMessage({ typeCode: 'invStatus', params: { acInVol: 228652, inputWatts: 0 } }))
@@ -70,12 +70,17 @@ test('get_reply: anything but a successful latestQuotas answer → null', () => 
   ]) expect(parseGetReply(m)).toBeNull();
 });
 
-test('isProtobufPayload: anything that is not JSON-object text', () => {
-  expect(isProtobufPayload(Buffer.from('0a141020182070', 'hex'))).toBe(true);
-  expect(isProtobufPayload(Buffer.from('0a141020182070bb8cc9d501ba0107416e64726f6964', 'hex'))).toBe(true);
-  for (const text of ['not json', '[1,2]', '42', 'null', '"x"', '']) expect(isProtobufPayload(Buffer.from(text))).toBe(true);
-  expect(isProtobufPayload(Buffer.from('{"moduleType":"3","params":{"inv.acInVol":227718}}'))).toBe(false);
-  expect(isProtobufPayload(Buffer.from(' {"code":"0"}\n'))).toBe(false);
+test('parseJsonObject: protobuf and anything else but JSON-object text → null', () => {
+  expect(parseJsonObject(Buffer.from('0a141020182070', 'hex'))).toBeNull();
+  expect(parseJsonObject(Buffer.from('0a141020182070bb8cc9d501ba0107416e64726f6964', 'hex'))).toBeNull();
+  for (const text of ['not json', '[1,2]', '42', 'null', '"x"', '']) expect(parseJsonObject(Buffer.from(text))).toBeNull();
+});
+
+test('parseJsonObject: a JSON object comes back parsed, a 19-digit id and all', () => {
+  const push = parseJsonObject(Buffer.from('{"id":1330299626203776316,"moduleType":"3","params":{"inv.acInVol":227718}}'));
+  expect(push).toMatchObject({ moduleType: '3', params: { 'inv.acInVol': 227718 } });
+  expect(normalizeQuotaMessage(push)).toEqual({ 'inv.acInVol': 227718 });
+  expect(parseJsonObject(Buffer.from(' {"code":"0"}\n'))).toEqual({ code: '0' });
 });
 
 test('latestQuotasRequest: the exact request the Android app sends (R§3.6)', () => {

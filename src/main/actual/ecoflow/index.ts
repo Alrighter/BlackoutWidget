@@ -3,7 +3,8 @@ import { EcoflowApi, type EcoflowApiLike, type EcoflowDevice, type FetchLike } f
 import { EcoflowAppApi, type EcoflowAppApiLike } from './app-api';
 import { APP_UNSUPPORTED_REASON, appClientId, appTopics, EcoflowAppSource } from './app-source';
 import { detectGrid, type GridVerdict } from './grid';
-import { isProtobufPayload, latestQuotasRequest, parseGetReply } from './mqtt-message';
+import { latestQuotasRequest, parseGetReply, parseJsonObject } from './mqtt-message';
+import { connectBroker } from './mqtt-session';
 import { OFFLINE_REASON } from './quota-tracker';
 import { EcoflowSource, type MqttConnect } from './source';
 
@@ -71,10 +72,7 @@ export async function ecoflowAppPreview(
   const topics = appTopics(session.userId, sn);
   let uuid = '';
   for (let i = 0; i < 32; i++) uuid += HEX[Math.min(HEX.length - 1, Math.floor(random() * HEX.length))];
-  const client = connect(`mqtts://${cert.host}:${cert.port}`, {
-    clientId: appClientId(uuid, session.userId), username: cert.account, password: cert.password,
-    reconnectPeriod: 0, keepalive: 30, clean: true,
-  });
+  const client = connectBroker(connect, cert, appClientId(uuid, session.userId));
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await new Promise<EcoflowPreview>(resolve => {
@@ -86,11 +84,12 @@ export async function ecoflowAppPreview(
       });
       client.on('message', (topic, payload, packet) => {
         if (topic !== topics.reply || packet?.retain) return;
-        if (isProtobufPayload(payload)) {
+        const msg = parseJsonObject(payload);
+        if (!msg) {
           resolve({ online: true, verdict: { power: 'unknown', reason: APP_UNSUPPORTED_REASON, unsupported: true } });
           return;
         }
-        const r = parseGetReply(JSON.parse(payload.toString('utf8')));
+        const r = parseGetReply(msg);
         if (!r) return;
         resolve(r.online
           ? { online: true, verdict: detectGrid(r.quota ?? {}) }

@@ -40,12 +40,16 @@ export function parseGetReply(msg: unknown): { online: boolean; quota: Record<st
   return { online, quota: online && isObj(msg.data.quotaMap) ? msg.data.quotaMap : null };
 }
 
-/** Not JSON-object text: newer models speak protobuf on the app broker (R§5.3), typically starting with 0x0a. */
-export function isProtobufPayload(buf: Buffer): boolean {
+/**
+ * The payload as a JSON object, else null. On the app broker null means a model this source cannot read: newer models
+ * speak protobuf there (R§5.3), typically starting with 0x0a.
+ */
+export function parseJsonObject(buf: Buffer): Record<string, unknown> | null {
   try {
-    return !isObj(JSON.parse(buf.toString('utf8')));
+    const v: unknown = JSON.parse(buf.toString('utf8'));
+    return isObj(v) ? v : null;
   } catch {
-    return true;
+    return null;
   }
 }
 
