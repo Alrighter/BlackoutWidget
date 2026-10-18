@@ -63,7 +63,7 @@ describe('MacDesktopPinner', () => {
     expect(PIN_COLLECTION_BEHAVIOR).toBe(81);
   });
 
-  test('pin: [view window], then setLevel: icon level + 1, then setCollectionBehavior: 81', () => {
+  test('pin: [view window], then setLevel: icon level + 1, setCollectionBehavior: 81, setCanHide:NO (Cmd+H)', () => {
     const { f, log, pinner } = setup();
     pinner.pin(fakeWin().win);
     expect(f.levelKeys).toEqual([18]);
@@ -71,6 +71,7 @@ describe('MacDesktopPinner', () => {
       ['msgId', VIEW, 'window'],
       ['msgVoidLong', NSWIN, 'setLevel:', DESKTOP_ICON_LEVEL + 1],
       ['msgVoidULong', NSWIN, 'setCollectionBehavior:', 81],
+      ['msgVoidBool', NSWIN, 'setCanHide:', false],
     ]);
     expect(pinner.pinned).toBe(true);
     expect(log.error).not.toHaveBeenCalled();
@@ -118,12 +119,12 @@ describe('MacDesktopPinner', () => {
 
   test('selectors are registered once, at construction and under the guard; pin and unpin register none', () => {
     const { f, pinner } = setup();
-    expect([...f.selNames.values()].sort()).toEqual(['setCollectionBehavior:', 'setLevel:', 'window']);
+    expect([...f.selNames.values()].sort()).toEqual(['setCanHide:', 'setCollectionBehavior:', 'setLevel:', 'window']);
     const { win } = fakeWin();
     pinner.pin(win);
     pinner.unpin(win);
     pinner.pin(win);
-    expect(f.selNames.size).toBe(3);
+    expect(f.selNames.size).toBe(4);
     expect(f.unguarded).toEqual([]);
   });
 
@@ -133,7 +134,7 @@ describe('MacDesktopPinner', () => {
     expect(f.msgs[0]).toEqual(['msgId', 0x1234n, 'window']);
   });
 
-  test('unpin: normal window level 0 and behaviour CanJoinAllSpaces (move mode)', () => {
+  test('unpin: normal window level 0 and behaviour CanJoinAllSpaces (move mode); canHide stays NO', () => {
     const { f, pinner } = setup();
     const { win } = fakeWin();
     pinner.pin(win);
@@ -143,6 +144,7 @@ describe('MacDesktopPinner', () => {
       ['msgId', VIEW, 'window'],
       ['msgVoidLong', NSWIN, 'setLevel:', 0],
       ['msgVoidULong', NSWIN, 'setCollectionBehavior:', 1],
+      ['msgVoidBool', NSWIN, 'setCanHide:', false],
     ]);
     expect(pinner.pinned).toBe(false);
   });
@@ -154,7 +156,7 @@ describe('MacDesktopPinner', () => {
     pinner.unpin(win);
     f.msgs.length = 0;
     pinner.pin(win);
-    expect(f.msgs.at(-2)).toEqual(['msgVoidLong', NSWIN, 'setLevel:', DESKTOP_ICON_LEVEL + 1]);
+    expect(f.msgs.at(-3)).toEqual(['msgVoidLong', NSWIN, 'setLevel:', DESKTOP_ICON_LEVEL + 1]);
     expect(pinner.pinned).toBe(true);
   });
 

@@ -13,6 +13,8 @@ export interface WidgetWindowDeps {
   store: AppStore; pinner: DesktopPinner; preload: string; log?: Logger;
   /** macOS: the window's native glass; absent or null elsewhere (Windows paints the wallpaper crop instead). */
   glass?: NativeGlass | null;
+  /** Test seam; defaults to process.platform. */
+  platform?: NodeJS.Platform;
 }
 
 const NATIVE: WidgetBackground = { kind: 'native' };
@@ -180,6 +182,9 @@ export class WidgetWindow {
       frame: false, transparent: true, resizable: false, skipTaskbar: true, focusable: true, hasShadow: false,
       // macOS: vibrancy with the window kept transparent (clear and non-opaque outside the rounded content); {} elsewhere.
       ...this.deps.glass?.windowOptions(),
+      // macOS, glass or not: the app (LSUIElement) is almost never active, so without acceptFirstMouse the first left
+      // press (open the schedule, start a drag, «Готово») would only activate it; and Cmd+M must not minimize the widget.
+      ...((this.deps.platform ?? process.platform) === 'darwin' ? { acceptFirstMouse: true, minimizable: false } : {}),
       // No background throttling: a pinned, occluded widget must keep its minute clock running.
       webPreferences: { preload: this.deps.preload, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });

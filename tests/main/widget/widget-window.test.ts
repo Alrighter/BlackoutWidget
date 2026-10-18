@@ -80,10 +80,12 @@ function fakeGlass(ok: () => boolean = () => true) {
   return glass;
 }
 
-function setup(o: { glass?: NativeGlass | null; style?: WidgetStyle } = {}) {
-  const log = fakeLog();
+/** Windows unless a glass is given (the glass exists on macOS only) or the platform is named. */
+function setup(o: { glass?: NativeGlass | null; style?: WidgetStyle; platform?: NodeJS.Platform; log?: ReturnType<typeof fakeLog> } = {}) {
+  const log = o.log ?? fakeLog();
   const pinner = fakePinner();
-  const widget = new WidgetWindow({ store: fakeStore(o.style), pinner, preload: '/preload.js', log, glass: o.glass ?? null });
+  const platform = o.platform ?? (o.glass ? 'darwin' : 'win32');
+  const widget = new WidgetWindow({ store: fakeStore(o.style), pinner, preload: '/preload.js', log, glass: o.glass ?? null, platform });
   widget.show();
   const win = h.FakeWin.all.at(-1)!;
   return { widget, win, pinner, log };
@@ -120,7 +122,9 @@ describe('WidgetWindow without a native glass (Windows, or macOS with native cal
 describe('WidgetWindow with the macOS native glass', () => {
   test('the window is created transparent with vibrancy kept active; everything else as on Windows', () => {
     const { win } = setup({ glass: fakeGlass() });
-    expect(win.options).toEqual({ ...WINDOWS_OPTIONS, vibrancy: 'popover', visualEffectState: 'active' });
+    expect(win.options).toEqual({
+      ...WINDOWS_OPTIONS, vibrancy: 'popover', visualEffectState: 'active', acceptFirstMouse: true, minimizable: false,
+    });
   });
 
   test('ready-to-show: bounds, the corners (before the first frame shows), show, pin; then «native» is sent once', () => {
@@ -198,8 +202,22 @@ describe('WidgetWindow with the macOS native glass', () => {
   });
 });
 
+describe('WidgetWindow on macOS: the first click and Cmd+M, with or without the native glass', () => {
+  // The app is LSUIElement and almost never active: without acceptFirstMouse the first left press (open the schedule,
+  // start a drag, «Готово») only activates it. minimizable: false keeps Cmd+M off the widget once it is the key window.
+  test('with the glass: acceptFirstMouse and not minimizable, beside the vibrancy', () => {
+    const { win } = setup({ glass: fakeGlass(), platform: 'darwin' });
+    expect(win.options).toMatchObject({ acceptFirstMouse: true, minimizable: false, vibrancy: 'popover' });
+  });
+
+  test('with the glass or the guard off (glass: null): still acceptFirstMouse and not minimizable, no vibrancy', () => {
+    const { win } = setup({ glass: null, platform: 'darwin' });
+    expect(win.options).toEqual({ ...WINDOWS_OPTIONS, acceptFirstMouse: true, minimizable: false });
+  });
+});
+
 describe('WidgetWindow with the real MacNativeGlass over fake bindings', () => {
-  function fakeObjc() {
+  function fakeObjc(o: { throwOnCornerRadius?: boolean } = {}) {
     const names = new Map<bigint, string>();
     const radii: number[] = [];
     let next = 0x100n;
@@ -210,11 +228,28 @@ describe('WidgetWindow with the real MacNativeGlass over fake bindings', () => {
       msgVoidLong: () => {},
       msgVoidULong: () => {},
       msgVoidBool: () => {},
-      msgVoidDouble: (_obj, sel, d) => { if (names.get(sel) === 'setCornerRadius:') radii.push(d); },
+      msgVoidDouble: (_obj, sel, d) => {
+        if (o.throwOnCornerRadius) throw new Error('setCornerRadius: failed');
+        if (names.get(sel) === 'setCornerRadius:') radii.push(d);
+      },
       windowLevelForKey: () => 0,
     };
     return { objc, radii };
   }
+
+  test('a throwing msgVoidDouble end to end: the widget gets only «tint», the vibrancy goes, exactly one error line', () => {
+    const log = fakeLog();
+    const glass = new MacNativeGlass(fakeObjc({ throwOnCornerRadius: true }).objc,
+      createPinGuard(memFs().fs, '/data/pin-darwin.pending', '1.2.3', log), log);
+    const { widget, win } = setup({ glass, log });
+    win.emit('ready-to-show');
+    widget.setStyle('ring'); // the glass is off now: no second attempt, no second line
+    expect(backgrounds(win)).toEqual([{ kind: 'tint' }]);
+    expect(win.setVibrancy).toHaveBeenCalledTimes(1);
+    expect(win.setVibrancy).toHaveBeenCalledWith(null);
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
 
   test('compact sends 22 at ready-to-show; a style change to ring re-sends 26', () => {
     const f = fakeObjc();

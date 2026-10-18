@@ -37,6 +37,7 @@ const RECEIVERS: Record<string, 'NSView' | 'NSWindow' | 'CALayer'> = {
   'contentView': 'NSWindow',
   'setLevel:': 'NSWindow',
   'setCollectionBehavior:': 'NSWindow',
+  'setCanHide:': 'NSWindow',
   'setWantsLayer:': 'NSView',
   'layer': 'NSView',
   'setCornerRadius:': 'CALayer',

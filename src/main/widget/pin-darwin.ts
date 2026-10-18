@@ -35,12 +35,13 @@ export const PIN_HOLD_MS = 10_000;
  */
 export class MacDesktopPinner implements DesktopPinner {
   private isPinned = false;
-  private readonly sel: { window: ObjcPtr; setLevel: ObjcPtr; setCollectionBehavior: ObjcPtr };
+  private readonly sel: { window: ObjcPtr; setLevel: ObjcPtr; setCollectionBehavior: ObjcPtr; setCanHide: ObjcPtr };
 
   constructor(private readonly objc: ObjcBindings, private readonly guard: PinGuard, private readonly log: Logger = silentLogger) {
     // sel_registerName is native too: every selector is registered once, here, under the guard.
     this.sel = guard.run(() => ({
       window: objc.sel('window'), setLevel: objc.sel('setLevel:'), setCollectionBehavior: objc.sel('setCollectionBehavior:'),
+      setCanHide: objc.sel('setCanHide:'),
     }));
   }
 
@@ -88,5 +89,9 @@ export class MacDesktopPinner implements DesktopPinner {
     if (!nswin) throw new Error('the widget NSView has no NSWindow');
     this.objc.msgVoidLong(nswin, this.sel.setLevel, level); // -[NSWindow setLevel:(NSWindowLevel = NSInteger)]
     this.objc.msgVoidULong(nswin, this.sel.setCollectionBehavior, behavior); // NSWindowCollectionBehavior = NSUInteger
+    // -[NSWindow setCanHide:(BOOL)] NO: Cmd+H (Hide Blackout Widget) must not take the widget off the desktop. Electron
+    // never sets it here (app.dock.hide() runs before the widget exists). Sent by unpin too: move mode needs no hiding,
+    // so it stays NO and is never restored.
+    this.objc.msgVoidBool(nswin, this.sel.setCanHide, false);
   }
 }
