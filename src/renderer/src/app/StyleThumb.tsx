@@ -1,6 +1,6 @@
 import { useId, type ComponentType, type ReactNode } from 'react';
 import type { WidgetStyle } from '../../../shared/types';
-import { STYLES } from './widget-styles';
+import { WIDGET_SIZES } from '../../../shared/widget-sizes';
 
 /*
  * Style thumbnails (D7): static, simplified drawings of the three widgets, not live widgets (the app and widget
@@ -146,7 +146,7 @@ const DRAW: Record<WidgetStyle, ComponentType<{ uid: string }>> = { compact: Com
 /** The thumbnail at `scale` of the widget's size; it shrinks further to fit a narrower box. */
 export function StyleThumb({ style, scale }: { style: WidgetStyle; scale: number }) {
   const uid = `st${useId().replace(/[^\w-]/g, '')}`;
-  const [w, h] = STYLES.find(s => s.id === style)!.size;
+  const { width: w, height: h } = WIDGET_SIZES[style];
   const Draw = DRAW[style];
   return (
     <svg className="st-thumb-art" width={w * scale} height={h * scale} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" data-capture={`thumb-${style}`}>

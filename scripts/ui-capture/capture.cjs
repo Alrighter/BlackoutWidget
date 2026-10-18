@@ -10,7 +10,7 @@ const path = require('node:path');
 const { SCENARIO_NAMES, buildScenario } = require('./scenarios.cjs');
 
 const ROOT = path.resolve(__dirname, '../..');
-/** = WIDGET_SIZES in src/main/widget/position.ts. */
+/** = WIDGET_SIZES in src/shared/widget-sizes.ts (plain CJS can't load the TS module). */
 const WIDGET_SIZES = { compact: [290, 150], ring: [236, 260], timeline: [400, 200] };
 /** Content area of the real 900×640 main window on Windows 11 (frame and title bar taken off). */
 const APP_SIZE = [886, 604];

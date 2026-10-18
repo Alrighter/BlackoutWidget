@@ -2,10 +2,11 @@ import { app, BrowserWindow, Menu, screen, type MenuItemConstructorOptions, type
 import { join } from 'node:path';
 import { IPC } from '../../shared/ipc';
 import type { WidgetBackground, WidgetPosition, WidgetStyle } from '../../shared/types';
+import { WIDGET_SIZES } from '../../shared/widget-sizes';
 import { silentLogger, type Logger } from '../log';
 import type { AppStore } from '../store';
 import type { DesktopPinner } from './desktop-pin';
-import { placeWidget, WIDGET_SIZES } from './position';
+import { placeWidget } from './position';
 
 export interface WidgetWindowDeps { store: AppStore; pinner: DesktopPinner; preload: string; log?: Logger }
 

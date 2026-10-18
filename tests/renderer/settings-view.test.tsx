@@ -39,11 +39,26 @@ test('style cards: three radios with sizes, the saved one checked; a click saves
   render(<SettingsView state={stateOf({ widgetStyle: 'ring' })} api={api} onChangeAddress={() => {}} />);
   const group = screen.getByRole('radiogroup', { name: 'Стиль віджета' });
   const radios = within(group).getAllByRole('radio');
-  expect(radios.map(r => r.getAttribute('aria-label'))).toEqual(['Компакт', 'Циферблат', 'Таймлайн']);
+  const names = ['Компакт', 'Циферблат', 'Таймлайн'], sizes = ['290×150', '236×260', '400×200'];
+  radios.forEach((r, i) => {
+    expect(r).toHaveAccessibleName(names[i]);
+    expect(r).toHaveAccessibleDescription(sizes[i]); // the size is announced too
+  });
   expect(radios.map(r => r.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
-  for (const size of ['290×150', '236×260', '400×200']) expect(within(group).getByText(size)).toBeInTheDocument();
+  for (const size of sizes) expect(within(group).getByText(size)).toBeInTheDocument();
   await userEvent.click(within(group).getByRole('radio', { name: 'Таймлайн' }));
   expect(api.setWidgetStyle).toHaveBeenCalledWith('timeline');
+});
+
+test('each style card shows its thumbnail: a hidden drawing at the widget\'s proportions', () => {
+  render(<SettingsView state={stateOf()} api={mockApi()} onChangeAddress={() => {}} />);
+  const radios = within(screen.getByRole('radiogroup', { name: 'Стиль віджета' })).getAllByRole('radio');
+  expect(radios.map(r => {
+    const svg = r.querySelector('svg.st-thumb-art');
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    expect(svg!.querySelector('rect')).not.toBeNull();
+    return svg!.getAttribute('viewBox');
+  })).toEqual(['0 0 290 150', '0 0 236 260', '0 0 400 200']);
 });
 
 test('the autostart switch is named by its label, shows the setting and flips it', async () => {

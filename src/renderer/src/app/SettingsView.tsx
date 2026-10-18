@@ -2,6 +2,7 @@ import type { RendererApi } from '../../../shared/ipc';
 import { providerDisplayName } from '../../../shared/providers';
 import { formatHM } from '../../../shared/time';
 import type { AppState, WidgetStyle } from '../../../shared/types';
+import { WIDGET_SIZES } from '../../../shared/widget-sizes';
 import { ActualSettings } from './ActualSettings';
 import { StyleThumb } from './StyleThumb';
 import { STYLES } from './widget-styles';
@@ -55,13 +56,15 @@ export function SettingsView({ state, api, ecoflowFormOpen = false, onChangeAddr
           <div className="st-styles" role="radiogroup" aria-label="Стиль віджета">
             {STYLES.map(s => {
               const on = widgetStyle === s.id;
+              const { width, height } = WIDGET_SIZES[s.id];
               return (
-                <button key={s.id} role="radio" aria-checked={on} aria-label={s.name} className="st-style" onClick={() => void api.setWidgetStyle(s.id)}>
+                <button key={s.id} role="radio" aria-checked={on} aria-labelledby={`st-style-${s.id}`} aria-describedby={`st-style-${s.id}-size`}
+                  className="st-style" onClick={() => void api.setWidgetStyle(s.id)}>
                   <span className="st-thumb" data-capture={`thumb-box-${s.id}`}><StyleThumb style={s.id} scale={THUMB_SCALE[s.id]} /></span>
                   <span className="st-style-foot">
                     <span className="st-style-text">
-                      <span className="st-style-name">{s.name}</span>
-                      <span className="st-style-size">{s.size.join('×')}</span>
+                      <span className="st-style-name" id={`st-style-${s.id}`}>{s.name}</span>
+                      <span className="st-style-size" id={`st-style-${s.id}-size`}>{`${width}×${height}`}</span>
                     </span>
                     {on && (
                       <span className="st-check">

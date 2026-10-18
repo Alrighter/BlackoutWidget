@@ -1,4 +1,5 @@
-import { placeWidget, WIDGET_SIZES } from '../../src/main/widget/position';
+import { placeWidget } from '../../src/main/widget/position';
+import { WIDGET_SIZES } from '../../src/shared/widget-sizes';
 
 const primary = { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
 const second = { id: 2, workArea: { x: 1920, y: 0, width: 1280, height: 1000 } };

@@ -25,13 +25,14 @@ export interface ThemeTokens {
   accent: string; primary: string; primaryInk: string;
   /**
    * Settings (TH in main-settings.html, ecoflow-panel.html): ink on the accent, a selected option's background, the
-   * primary button while it works, form fields, the «в мережі» / warning / error inks, and the wallpaper behind the
-   * style thumbnails. The EcoFlow panel mockup is light only, so its dark shades are derived.
+   * primary button while it works, form fields, the «в мережі» / warning / error inks, and the style thumbnails'
+   * wallpaper and shadow (a CSS filter: the widget's shadow at about thumbnail scale). The EcoFlow panel mockup is
+   * light only, so its dark shades are derived.
    */
   accentInk: string; optOn: string; primaryBusy: string;
   field: string; fieldEdge: string;
   onInk: string; warnText: string; dangerInk: string; dangerIcon: string;
-  thumbWp: string;
+  thumbShadow: string; thumbWp: string;
 }
 
 export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
@@ -55,6 +56,7 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     accentInk: '#ffffff', optOn: 'rgba(42, 91, 215, 0.06)', primaryBusy: '#3a3e4a',
     field: '#ffffff', fieldEdge: 'rgba(17, 19, 26, 0.18)',
     onInk: '#0f6b3d', warnText: '#6b4500', dangerInk: '#7a1712', dangerIcon: '#c4241d',
+    thumbShadow: 'drop-shadow(0 5px 12px rgba(18, 22, 36, 0.22))',
     thumbWp: 'radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)',
   },
   dark: {
@@ -77,6 +79,7 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     accentInk: '#10131c', optOn: 'rgba(143, 180, 255, 0.08)', primaryBusy: '#d3d5da',
     field: 'rgba(255, 255, 255, 0.06)', fieldEdge: 'rgba(255, 255, 255, 0.18)',
     onInk: '#5dffa8', warnText: '#ffd27a', dangerInk: '#ffb4ae', dangerIcon: '#ff4d4d',
+    thumbShadow: 'drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45))',
     thumbWp: 'radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)',
   },
 };

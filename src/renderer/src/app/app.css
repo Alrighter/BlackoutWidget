@@ -185,6 +185,7 @@ p { margin: 6px 0; }
 .st-col { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .sv-card.st-card { padding: 16px 18px; gap: 12px; }
 .st-title { margin: 0; font-size: 14px; line-height: 18px; font-weight: 650; letter-spacing: normal; }
+.st-title:focus { outline: none; }
 .st-actions { display: flex; gap: 8px; }
 .st-icon {
   flex: none; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
@@ -215,10 +216,8 @@ p { margin: 6px 0; }
   background: var(--bw-accent); color: var(--bw-accent-ink);
 }
 .st-check svg { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-/* Thumbnail drawings (StyleThumb): the widget's glass, ink and «now» marker; its shadow (--bw-shadow) at about the
-   thumbnail's scale. */
-.st-thumb-art { flex: none; max-width: 100%; height: auto; font-family: var(--bw-font); filter: drop-shadow(0 5px 12px rgba(18, 22, 36, 0.22)); }
-@media (prefers-color-scheme: dark) { .st-thumb-art { filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45)); } }
+/* Thumbnail drawings (StyleThumb): the widget's glass, ink, «now» marker and shadow. */
+.st-thumb-art { flex: none; max-width: 100%; height: auto; font-family: var(--bw-font); filter: var(--bw-thumb-shadow); }
 .st-thumb-glass { fill: var(--bw-glass); stroke: var(--bw-glass-edge); stroke-width: 1; }
 .st-thumb-title { font-size: 22px; font-weight: 650; letter-spacing: -0.2px; fill: var(--bw-ink); }
 .st-thumb-count { font-family: var(--bw-font-display); font-weight: 600; letter-spacing: -1px; fill: var(--bw-ink); }

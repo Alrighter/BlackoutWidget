@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react';
 import type { EcoflowDeviceView, EcoflowKeysInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
@@ -34,10 +34,25 @@ function currentText(actual: AppState['actual']): string | null {
 
 type Preview = { sn: string; text: string; tone: Tone } | { sn: string; pending: true };
 
-function Head({ title, chip }: { title: string; chip?: string }) {
+/**
+ * The card swaps its content under the button just pressed, so the new step's heading takes the focus: whenever `step`
+ * changes, and also on mount with `onMount` (the form, opened by a button that is gone now).
+ */
+function useStepFocus(step: string, onMount = false) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  const shown = useRef<string | null>(onMount ? null : step);
+  useEffect(() => {
+    if (shown.current === step) return;
+    shown.current = step;
+    ref.current?.focus();
+  }, [step]);
+  return ref;
+}
+
+function Head({ title, chip, headRef }: { title: string; chip?: string; headRef: RefObject<HTMLHeadingElement | null> }) {
   return (
     <div className="st-head">
-      <h2 className="st-title">{title}</h2>
+      <h2 className="st-title" ref={headRef} tabIndex={-1}>{title}</h2>
       {chip && (
         <span className="sv-chip st-chip">
           <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d={BOLT} /></svg>{chip}
@@ -90,6 +105,7 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const seq = useRef(0);
+  const headRef = useStepFocus(devices ? 'stations' : 'keys', true);
 
   const keys = (): EcoflowKeysInput => ({ region, accessKey: accessKey.trim(), secretKey: secretKey.trim() });
   const resetResult = () => { seq.current++; setChecking(false); setDevices(null); setTestError(null); setSn(null); setPreview(null); setSaveError(null); };
@@ -125,7 +141,7 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
   if (devices) {
     return (
       <div className="st-panel">
-        <h2 className="st-title">Станції в акаунті</h2>
+        <h2 className="st-title" ref={headRef} tabIndex={-1}>Станції в акаунті</h2>
         {devices.length === 0 ? <p className="st-text">У цьому акаунті немає станцій</p> : (
           <fieldset className="st-stations">
             <legend className="st-sr">Станція</legend>
@@ -152,7 +168,7 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
   const pickRegion = (next: EcoflowRegion) => { setRegion(next); resetResult(); };
   return (
     <div className="st-panel st-form">
-      <h2 className="st-title">Підключення EcoFlow</h2>
+      <h2 className="st-title" ref={headRef} tabIndex={-1}>Підключення EcoFlow</h2>
       {sourcePicker}
       <fieldset className="st-radios">
         <legend>Регіон</legend>
@@ -171,7 +187,7 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
           onChange={e => { setSecretKey(e.target.value); resetResult(); }} />
       </label>
       <p className="st-hint">
-        Ключі створюються в кабінеті розробника EcoFlow для вашого акаунта.{' '}
+        Ключі видає EcoFlow після схвалення заявки розробника на developer-eu.ecoflow.com (зазвичай кілька днів).{' '}
         <button className="st-link" onClick={() => api.openEcoflowHelp()}>Як отримати ключі</button>
       </p>
       {testError && <Alert text={testError} />}
@@ -190,6 +206,7 @@ function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePic
   const source = state.settings.actualSource;
   const [editing, setEditing] = useState(initiallyOpen);
   const [error, setError] = useState<string | null>(null);
+  const headRef = useStepFocus(editing ? 'form' : source ? 'connected' : 'idle');
 
   if (editing) {
     return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} sourcePicker={sourcePicker} onClose={() => setEditing(false)} />;
@@ -197,7 +214,7 @@ function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePic
   if (!source) {
     return (
       <div className="st-panel">
-        <Head title="Фактичний стан світла" chip={sourceName} />
+        <Head title="Фактичний стан світла" chip={sourceName} headRef={headRef} />
         <p className="st-text">Зарядна станція EcoFlow може показувати, чи є світло насправді.</p>
         <div className="st-actions"><button className="sv-primary" onClick={() => setEditing(true)}>Підключити EcoFlow</button></div>
       </div>
@@ -207,7 +224,7 @@ function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePic
   const now = currentText(state.actual);
   return (
     <div className="st-panel">
-      <Head title="Фактичний стан світла" chip={sourceName} />
+      <Head title="Фактичний стан світла" chip={sourceName} headRef={headRef} />
       <div className="st-device">
         <span className="st-icon st-icon-lg">
           <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3" /><path d="M8 6V4h8v2" /><path d="m12.5 9-3 4.5h4l-1 3.5" /></svg>
