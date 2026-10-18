@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { THEMES, themeTokens, type ThemeTokens } from '../../src/shared/design-tokens';
-import { PROVIDER_NAMES, providerDisplayName } from '../../src/shared/providers';
+import { PROVIDER_NAMES, providerDisplayName, providerRegion } from '../../src/shared/providers';
 
 const css = readFileSync(join(__dirname, '../../src/renderer/src/ui/tokens.css'), 'utf8');
+const appCss = readFileSync(join(__dirname, '../../src/renderer/src/app/app.css'), 'utf8');
+const styleThumb = readFileSync(join(__dirname, '../../src/renderer/src/app/StyleThumb.tsx'), 'utf8');
 
 /** `--bw-*` custom properties declared directly inside `block`. */
 function vars(block: string): Record<string, string> {
@@ -51,6 +53,9 @@ describe('design tokens', () => {
     expect([THEMES.light.onInk, THEMES.light.warnText, THEMES.light.dangerInk, THEMES.light.dangerIcon]).toEqual(['#0f6b3d', '#6b4500', '#7a1712', '#c4241d']);
     expect(THEMES.light.thumbWp).toMatch(/^radial-gradient\(55% 70% at 12% 18%, #ffd6bd 0%/);
     expect(THEMES.dark.thumbWp).toMatch(/0 0 \/ 74px 62px, .*linear-gradient\(180deg, #0b0e18 0%, #10131f 100%\)$/);
+    // Setup wizard (setup-wizard.html, light only).
+    expect([THEMES.light.rail, THEMES.light.popShadow]).toEqual(['rgba(255, 255, 255, 0.35)', '0 12px 28px rgba(20, 24, 40, 0.14)']);
+    expect([THEMES.light.disabledInk, THEMES.light.doneInk]).toEqual(['#9ca2b3', '#0f7a45']);
   });
 
   it('picks the theme by the dark flag', () => {
@@ -70,12 +75,31 @@ describe('design tokens', () => {
       }
     }
   });
+
+  it('.bw-dark-thumb redeclares, with the dark values, every token the style thumbnails paint with', () => {
+    const at = css.indexOf('.bw-dark-thumb');
+    expect(at).toBeGreaterThan(-1);
+    const forced = vars(blockAfter(css, at));
+    const dark = Object.fromEntries(Object.entries(THEMES.dark).map(([key, value]) => [cssName(key), String(value)]));
+    for (const [name, value] of Object.entries(forced)) expect([name, value]).toEqual([name, dark[name]]);
+    const thumbRules = [...appCss.matchAll(/\.st-thumb-[\w-]+\s*\{([^}]*)\}/g)].map(m => m[1]).join(' ');
+    const used = new Set([...`${styleThumb} ${thumbRules}`.matchAll(/var\((--bw-[\w-]+)\)/g)].map(m => m[1]));
+    used.delete('--bw-font'); used.delete('--bw-font-display');
+    expect(used.size).toBeGreaterThan(10);
+    for (const name of used) expect([name, forced[name]]).toEqual([name, dark[name]]);
+  });
 });
 
 describe('provider names', () => {
   it('names a known provider', () => {
     expect(providerDisplayName('dtek-krem')).toBe('ДТЕК Київські регіональні електромережі');
     expect(PROVIDER_NAMES['dtek-krem']).toBe('ДТЕК Київські регіональні електромережі');
+  });
+
+  it('names the region a provider serves (D4), none for an unknown one', () => {
+    expect(providerRegion('dtek-krem')).toBe('Київська область');
+    expect(providerRegion('some-new-provider')).toBeUndefined();
+    expect(providerRegion('toString')).toBeUndefined();
   });
 
   it('falls back to the id itself', () => {

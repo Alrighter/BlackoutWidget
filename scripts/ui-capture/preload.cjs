@@ -124,4 +124,5 @@ contextBridge.exposeInMainWorld('api', {
   ecoflowSave: () => reply(stubs.ecoflowSave),
   actualDisconnect: () => done(undefined),
   openEcoflowHelp: noop,
+  openDtekSite: noop,
 });

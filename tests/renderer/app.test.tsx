@@ -28,11 +28,11 @@ test('navigate events switch the in-app view each time', async () => {
   act(() => nav('settings'));
   expect(screen.getByRole('button', { name: 'Оновити зараз' })).toBeInTheDocument();
   act(() => nav('setup'));
-  expect(screen.getByRole('heading', { name: 'Компанія' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Регіон і компанія' })).toBeInTheDocument();
   act(() => nav('schedule'));
   expect(await screen.findByRole('tab', { name: 'Сьогодні 17.10' })).toBeInTheDocument();
   act(() => nav('setup'));
-  expect(screen.getByRole('heading', { name: 'Компанія' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Регіон і компанія' })).toBeInTheDocument();
 });
 
 test('the tab row: «Графік» selected first, ⟳ beside the tabs refreshes now', async () => {

@@ -1,22 +1,6 @@
 @import '../ui/tokens.css';
 
-/* The wizard still uses these (restyled in a later task). */
-:root {
-  color-scheme: light dark;
-  --fg: #1b1b1f; --muted: rgba(27, 27, 31, 0.62);
-  --panel: rgba(255, 255, 255, 0.55); --panel-border: rgba(255, 255, 255, 0.7);
-  --card: rgba(255, 255, 255, 0.5); --card-hover: rgba(255, 255, 255, 0.75);
-  --accent: #0f6cbd; --accent-fg: #fff;
-  --warn-bg: rgba(255, 185, 0, 0.22);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fg: #fff; --muted: rgba(255, 255, 255, 0.68);
-    --panel: rgba(255, 255, 255, 0.08); --panel-border: rgba(255, 255, 255, 0.18);
-    --card: rgba(255, 255, 255, 0.07); --card-hover: rgba(255, 255, 255, 0.14);
-    --accent: #5aa9ff; --accent-fg: #06223f;
-  }
-}
+:root { color-scheme: light dark; }
 
 * { box-sizing: border-box; }
 /* Transparent: Mica shows through. */
@@ -26,7 +10,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { opacity: 0.45; cursor: default; }
 h2 { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 8px; }
 p { margin: 6px 0; }
-.muted { color: var(--muted); font-size: 12px; }
 
 /* Window (main-schedule.html, D9): the tab row with ⟳, then the scrolling body. The title bar is the system's. */
 .app { height: 100%; display: flex; flex-direction: column; }
@@ -47,7 +30,6 @@ p { margin: 6px 0; }
 .app-refresh svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .app-refresh:hover, .sv-btn:hover { background: var(--bw-ctl-on); }
 .app-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
-.app-wizard { max-width: 760px; margin: 0 auto; padding: 16px 4px 8px; display: flex; flex-direction: column; gap: 14px; }
 
 /* «Графік» tab (main-schedule.html). */
 .sv { display: flex; flex-direction: column; gap: 12px; }
@@ -257,7 +239,7 @@ p { margin: 6px 0; }
 .sv-btn.st-ghost { background: transparent; color: var(--bw-app-ink-2); }
 .sv-btn.st-ghost:hover:not(:disabled) { background: var(--bw-ctl); }
 .sv-btn.st-tall { height: 34px; }
-.st .sv-primary:disabled { opacity: 1; background: rgb(from var(--bw-app-ink) r g b / 0.08); color: var(--bw-app-ink-3); }
+.st .sv-primary:disabled, .wz .sv-primary:disabled { opacity: 1; background: rgb(from var(--bw-app-ink) r g b / 0.08); color: var(--bw-app-ink-3); }
 .st .sv-primary.st-busy:disabled { display: flex; align-items: center; gap: 8px; background: var(--bw-primary-busy); color: var(--bw-primary-ink); }
 .st-busy svg { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; animation: st-spin 0.9s linear infinite; }
 @keyframes st-spin { to { transform: rotate(360deg); } }
@@ -283,7 +265,7 @@ p { margin: 6px 0; }
 .st-radios legend { padding: 0; margin-bottom: 4px; }
 .st-radio { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13.5px; }
 .st-radio span { color: var(--bw-app-ink-3); }
-.st-radio input, .st-station input { flex: none; margin: 0; width: 16px; height: 16px; accent-color: var(--bw-accent); }
+.st-radio input, .st-station input, .wz-opt input { flex: none; margin: 0; width: 16px; height: 16px; accent-color: var(--bw-accent); }
 .st-hint { margin: 0; font-size: 12.5px; line-height: 18px; color: var(--bw-app-ink-2); }
 .st-link { padding: 0; border: 0; background: none; font-size: inherit; line-height: inherit; color: var(--bw-accent); text-decoration: underline; }
 .st-alert {
@@ -332,8 +314,6 @@ p { margin: 6px 0; }
   color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) var(--off-to))); }
 .day-cell.maybe { background: repeating-linear-gradient(135deg, var(--bw-maybe) 0 2.5px, rgb(from var(--bw-maybe) r g b / 0.25) 2.5px 5px); }
 .day-cell.unknown { background: repeating-linear-gradient(135deg, rgb(from var(--bw-unknown) r g b / 0.85) 0 2.5px, rgb(from var(--bw-unknown) r g b / 0.2) 2.5px 5px); }
-.card .day-strip { height: 16px; column-gap: 2px; }
-.card .day-hour { border-radius: 3px; }
 
 /* Actual power line under the cells. */
 .actual-strip { position: relative; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bw-app-hair); }
@@ -342,46 +322,129 @@ p { margin: 6px 0; }
 .actual-part.off { background: var(--bw-off-dot); }
 .actual-part.unknown { background: repeating-linear-gradient(90deg, rgb(from var(--bw-unknown) r g b / 0.95) 0 2px, transparent 2px 4px); }
 
-/* Wizard. */
-.panel {
-  background: var(--panel); border: 1px solid var(--panel-border); border-radius: 18px; padding: 20px;
-  backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+/* Setup wizard (setup-wizard.html, D3): the step rail on the left, the step on the right with its buttons at the
+   foot. It fills the main window; the step's body scrolls and the buttons stay. Fields, buttons, chips, the style
+   cards and the switch are the settings' and the schedule tab's. */
+.wz { flex: 1 1 auto; min-height: 0; display: flex; }
+.wz-rail {
+  flex: none; width: 196px; padding: 14px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+  border-right: 1px solid rgb(from var(--bw-app-ink) r g b / 0.08); background: var(--bw-rail);
 }
-
-.banner {
-  display: flex; align-items: center; gap: 12px; justify-content: space-between;
-  padding: 10px 14px; border-radius: 12px; border: 1px solid var(--panel-border); margin: 8px 0;
+.wz-rail-title { font-size: 13px; font-weight: 650; padding: 0 6px 10px; }
+.wz-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.wz-step { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 6px; border-radius: 8px; }
+.wz-step.now { background: rgb(from var(--bw-accent) r g b / 0.08); }
+.wz-step-num {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  border: 1.5px solid rgb(from var(--bw-app-ink) r g b / 0.25); color: var(--bw-app-ink-3);
 }
-.banner.warn { background: var(--warn-bg); }
-.banner button, button.secondary, button.primary, button.link {
-  border-radius: 10px; padding: 7px 16px; border: 1px solid var(--panel-border); background: var(--card);
+.wz-step.done .wz-step-num { background: var(--bw-app-ink); border-color: var(--bw-app-ink); color: var(--bw-primary-ink); }
+.wz-step.now .wz-step-num { background: var(--bw-field); border-color: var(--bw-accent); color: var(--bw-accent); }
+.wz-step-num svg { fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+.wz-step-text { min-width: 0; display: flex; flex-direction: column; }
+.wz-step-label { font-size: 13px; line-height: 17px; color: var(--bw-app-ink-2); }
+.wz-step.done .wz-step-label { color: var(--bw-app-ink); }
+.wz-step.now .wz-step-label { font-weight: 650; color: var(--bw-app-ink); }
+.wz-step-sub { font-size: 11px; line-height: 14px; color: var(--bw-app-ink-3); }
+
+.wz-main { flex: 1 1 auto; min-width: 0; padding: 18px 24px 16px; display: flex; flex-direction: column; }
+.wz-count { font-size: 12px; color: var(--bw-app-ink-3); font-variant-numeric: tabular-nums; }
+.wz-title { margin: 2px 0 0; font-size: 20px; line-height: 26px; font-weight: 700; letter-spacing: -0.2px; }
+.wz-desc { margin: 2px 0 14px; font-size: 13px; line-height: 19px; text-wrap: pretty; color: var(--bw-app-ink-2); }
+/* Out to the column's padding, so focus rings and the list's shadow are not cut at the sides. */
+.wz-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -24px; padding: 0 24px; display: flex; flex-direction: column; }
+.wz-nav { flex: none; display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
+.wz-nav .sv-btn { padding: 0 16px; }
+.wz-nav .sv-btn:disabled { opacity: 1; color: var(--bw-disabled-ink); }
+.wz-cancel { margin-right: auto; }
+.sv-primary.wz-next { min-width: 96px; padding: 0 18px; }
+.wz-muted { margin: 0; font-size: 13px; color: var(--bw-app-ink-3); }
+.sv-banner.wz-note { flex: none; margin-top: 10px; }
+.wz-body > .wz-note:first-child { margin-top: 0; }
+.wz-note-text { flex: 1 1 auto; min-width: 0; font-size: 13px; line-height: 18px; }
+
+/* Region and line cards. */
+.wz-opts { flex: none; min-width: 0; margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
+.wz-opt {
+  display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 12px; border-radius: 10px;
+  background: var(--bw-field); border: 1px solid rgb(from var(--bw-app-ink) r g b / 0.10);
 }
-.banner button:hover:not(:disabled), button.secondary:hover:not(:disabled) { background: var(--card-hover); }
-button.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
-button.link { background: transparent; border-color: transparent; align-self: flex-start; color: var(--muted); }
-
-.steps { display: flex; flex-wrap: wrap; gap: 6px 14px; list-style: none; padding: 0; margin: 0 0 14px; color: var(--muted); font-size: 12px; }
-.steps li.current { color: var(--fg); font-weight: 650; }
-.steps li.past { color: var(--accent); }
-.nav { display: flex; justify-content: space-between; margin-top: 18px; }
-
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
-.card {
-  display: flex; flex-direction: column; gap: 8px; align-items: stretch; text-align: left;
-  background: var(--card); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px;
+.wz-opt:has(input:checked) { background: var(--bw-opt-on); border-color: var(--bw-accent); }
+.wz-opt-text { min-width: 0; display: flex; flex-direction: column; }
+.wz-opt-name { font-size: 13.5px; font-weight: 600; }
+.wz-opt-sub { font-size: 12px; color: var(--bw-app-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wz-opts.wz-lines { gap: 8px; }
+.wz-opt.wz-line { flex-direction: column; align-items: stretch; gap: 8px; min-height: 0; padding: 10px 12px; cursor: pointer; }
+.wz-line-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wz-line-pick { flex: none; display: flex; align-items: center; gap: 10px; }
+.wz-line-sum {
+  min-width: 0; margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bw-app-ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.card:hover { background: var(--card-hover); }
-.card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+/* Today's mini strip: 48 even cells 1 px apart. */
+.wz-line .day-strip { height: 12px; column-gap: 1px; }
+.wz-line .day-hour { gap: 1px; border-radius: 0; overflow: visible; }
+.wz-line .day-cell { border-radius: var(--bw-r-cell); }
+.wz-line .day-cell.maybe { background: repeating-linear-gradient(135deg, var(--bw-maybe) 0 2px, rgb(from var(--bw-maybe) r g b / 0.28) 2px 4px); }
+.wz-line .day-cell.unknown { background: repeating-linear-gradient(135deg, var(--bw-unknown) 0 2px, rgb(from var(--bw-unknown) r g b / 0.22) 2px 4px); }
+.wz-hours { display: flex; justify-content: space-between; font-size: 9.5px; font-variant-numeric: tabular-nums; color: var(--bw-app-ink-3); }
+.st-link.wz-link { flex: none; align-self: flex-start; margin-top: 10px; font-size: 12.5px; }
 
-.autocomplete input {
-  width: 100%; font: inherit; color: inherit; padding: 9px 12px; border-radius: 10px;
-  border: 1px solid var(--panel-border); background: var(--card); outline: none;
+/* City and street: the field and its suggestions. */
+.wz-chips { flex: none; display: flex; gap: 6px; min-width: 0; margin-bottom: 10px; }
+.wz-chips.wz-chips-house { margin-bottom: 12px; }
+.sv-chip.wz-chip { display: block; flex: 0 1 auto; min-width: 0; height: auto; padding: 3px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-label.wz-label { flex: none; margin-bottom: 6px; }
+.st-input.wz-input { flex: none; height: 36px; padding: 0 12px; font-size: 14px; }
+.wz-list {
+  flex: 0 1 auto; min-height: 0; overflow-y: auto; margin-top: 6px; padding: 4px; border-radius: 10px; display: flex; flex-direction: column;
+  background: var(--bw-field); border: 1px solid rgb(from var(--bw-app-ink) r g b / 0.10); box-shadow: var(--bw-pop-shadow);
 }
-.autocomplete input:focus { border-color: var(--accent); }
-.options { margin-top: 8px; max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.option { text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 7px 10px; }
-.option:hover { background: var(--card-hover); }
-.option.selected { background: var(--accent); color: var(--accent-fg); }
-.empty { color: var(--muted); padding: 8px 10px; }
+.wz-option {
+  flex: none; min-height: 40px; padding: 0 10px; border: 0; border-radius: 7px; display: flex; align-items: center;
+  text-align: left; font-size: 13.5px; background: transparent;
+}
+.wz-option:hover, .wz-option[aria-selected='true'] { background: rgb(from var(--bw-accent) r g b / 0.08); }
+.wz-empty { padding: 10px; font-size: 13px; color: var(--bw-app-ink-3); }
 
+/* House numbers: they scroll, so the notes under them stay in view. The padding keeps focus rings inside; the
+   margin takes it back on all sides but the bottom, where it would overflow the body. */
+.wz-houses {
+  flex: 0 1 auto; min-height: 0; overflow-y: auto; margin: -3px -3px 0; padding: 3px;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 44px; gap: 6px;
+}
+.wz-house {
+  min-width: 0; padding: 0 4px; border-radius: 9px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--bw-field); border: 1px solid rgb(from var(--bw-app-ink) r g b / 0.12); color: var(--bw-app-ink);
+}
+.wz-house[aria-checked='true'] { background: var(--bw-primary); border-color: var(--bw-primary); color: var(--bw-primary-ink); }
+
+/* Style: the settings' cards at the wizard's size, the thumbnails always dark on a fixed backdrop. */
+.wz-styles { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.st-style.wz-style { padding: 7px; gap: 7px; }
+.wz-thumb {
+  height: 86px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #0b0e18 0%, #1a2142 100%);
+}
+.wz-style-name { font-size: 13px; font-weight: 600; padding: 0 2px; }
+
+/* The last step. */
+.wz-card {
+  flex: none; display: flex; align-items: center; border-radius: 12px;
+  background: var(--bw-field); border: 1px solid rgb(from var(--bw-app-ink) r g b / 0.08);
+}
+.wz-summary { gap: 14px; padding: 14px 16px; }
+.wz-done {
+  flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: rgb(from var(--bw-on) r g b / 0.14); color: var(--bw-done-ink);
+}
+.wz-done svg { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.wz-summary-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wz-summary-main, .wz-summary-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wz-summary-main { font-size: 14px; font-weight: 600; }
+.wz-summary-sub { font-size: 12.5px; color: var(--bw-app-ink-2); }
+.wz-auto { justify-content: space-between; gap: 12px; margin-top: 12px; min-height: 48px; padding: 0 16px; }
+.wz-auto-label { font-size: 13.5px; font-weight: 600; }
+.st-hint.wz-hint { flex: none; margin-top: 12px; }

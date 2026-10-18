@@ -13,6 +13,7 @@ import { broadcastState, registerIpc } from './ipc';
 import { consoleLogger, type Logger } from './log';
 import { MainWindow } from './main-window';
 import { BrowserSession } from './providers/browser-session';
+import { DTEK_URL } from './providers/dtek-krem/page-scripts';
 import { createProviders, findProvider } from './providers/registry';
 import { RefreshService } from './refresh';
 import { RefreshScheduler } from './scheduler';
@@ -145,6 +146,9 @@ async function bootstrap(log: Logger): Promise<void> {
     endMoveMode: () => widget.endMoveMode(),
     openEcoflowHelp: () => {
       shell.openExternal(ECOFLOW_HELP_URL).catch(err => log.error('opening the EcoFlow developer site failed', err));
+    },
+    openDtekSite: () => {
+      shell.openExternal(DTEK_URL).catch(err => log.error('opening the DTEK site failed', err));
     },
   });
 

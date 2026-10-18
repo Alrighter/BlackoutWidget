@@ -34,14 +34,12 @@ export function App({ api, view }: { api: RendererApi; view: MainView }) {
   const hasAddress = !!state.settings.address;
 
   if (!hasAddress || wizard) {
+    // D3: the wizard fills the window, without the tab row.
     return (
       <div className="app">
-        <main className="app-body">
-          <div className="app-wizard">
-            <SetupWizard api={api} onDone={() => { setWizard(false); show('schedule'); }} />
-            {hasAddress && <button className="link" onClick={() => setWizard(false)}>Скасувати</button>}
-          </div>
-        </main>
+        <SetupWizard api={api} autostart={state.settings.autostart}
+          onDone={() => { setWizard(false); show('schedule'); }}
+          onCancel={hasAddress ? () => setWizard(false) : undefined} />
       </div>
     );
   }

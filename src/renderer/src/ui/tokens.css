@@ -64,6 +64,11 @@
   --bw-danger-icon: #c4241d;
   --bw-thumb-shadow: drop-shadow(0 5px 12px rgba(18, 22, 36, 0.22));
   --bw-thumb-wp: radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%);
+  /* setup wizard (setup-wizard.html) */
+  --bw-rail: rgba(255, 255, 255, 0.35);
+  --bw-pop-shadow: 0 12px 28px rgba(20, 24, 40, 0.14);
+  --bw-disabled-ink: #9ca2b3;
+  --bw-done-ink: #0f7a45;
 
   /* radii */
   --bw-r-compact: 22px;
@@ -143,7 +148,32 @@
     --bw-danger-icon: #ff4d4d;
     --bw-thumb-shadow: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
     --bw-thumb-wp: radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%);
+    /* The wizard mockup is light only: derived. */
+    --bw-rail: rgba(255, 255, 255, 0.03);
+    --bw-pop-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+    --bw-disabled-ink: #757b8b;
+    --bw-done-ink: #5dffa8;
   }
+}
+
+/* The setup wizard's style thumbnails are dark in either theme (setup-wizard.html): the dark values of every token
+   StyleThumb paints with. tests/shared/design-tokens.test.ts checks them against THEMES.dark. */
+.bw-dark-thumb {
+  --bw-on: #5dffa8;
+  --bw-off-a: #ffc23d;
+  --bw-off-b: #ff7a1a;
+  --bw-off-dot: #ff6b5b;
+  --bw-maybe: #ffc23d;
+  --bw-unknown: #9aa0b4;
+  --bw-ink: #f5f7fc;
+  --bw-ink-3: rgba(245, 247, 252, 0.66);
+  --bw-glass: rgba(18, 20, 28, 0.62);
+  --bw-glass-edge: rgba(255, 255, 255, 0.16);
+  --bw-hair: rgba(255, 255, 255, 0.12);
+  --bw-pill: rgba(22, 24, 32, 0.9);
+  --bw-tint-a: 0.18;
+  --bw-now: #ffffff;
+  --bw-thumb-shadow: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
 }
 
 /* Hatching of the day-strip cells: 135°, 2 px stripe / 2 px gap (alphas as the widget mockup's cells). */
