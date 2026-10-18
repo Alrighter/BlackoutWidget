@@ -1,6 +1,9 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, nativeTheme } from 'electron';
 import { join } from 'node:path';
 import { IPC, type MainView } from '../shared/ipc';
+
+// The page is transparent so Mica shows through on Windows; elsewhere the window paints the mockup's window colour.
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#1e2028' : '#eef0f5');
 
 export class MainWindow {
   private win: BrowserWindow | null = null;
@@ -39,9 +42,14 @@ export class MainWindow {
   private create(): BrowserWindow {
     const win = new BrowserWindow({
       width: 900, height: 640, minWidth: 760, minHeight: 560, title: 'Blackout Widget',
-      ...(process.platform === 'win32' ? { backgroundMaterial: 'mica' as const } : {}),
+      ...(process.platform === 'win32' ? { backgroundMaterial: 'mica' as const } : { backgroundColor: windowBackground() }),
       webPreferences: { preload: this.preload, contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
+    if (process.platform !== 'win32') {
+      const repaint = () => { if (!win.isDestroyed()) win.setBackgroundColor(windowBackground()); };
+      nativeTheme.on('updated', repaint);
+      win.on('closed', () => nativeTheme.off('updated', repaint));
+    }
     win.setMenuBarVisibility(false);
     win.on('page-title-updated', e => e.preventDefault()); // keep the fixed window title
     // Closing hides the window; the app lives in the tray.

@@ -1,0 +1,26 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [macos-build]
+
+jobs:
+  dmg:
+    runs-on: macos-14 # Apple Silicon (arm64)
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run dist:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blackout-widget-mac-arm64
+          path: dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14

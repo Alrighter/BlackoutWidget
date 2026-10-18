@@ -19,3 +19,12 @@ win:
 nsis:
   oneClick: true
   perMachine: false
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  category: public.app-category.utilities
+  # No Apple Developer ID yet: ad-hoc signature so Apple Silicon will run it (Gatekeeper still asks once).
+  identity: '-'
+  hardenedRuntime: false
