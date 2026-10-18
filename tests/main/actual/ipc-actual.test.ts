@@ -1,7 +1,10 @@
 import {
-  createActualActions, createActualRestart, KEYS_MISSING_REASON, makeClientId, type ActualActionsDeps, type ActualRestartDeps,
+  ACCOUNT_MISSING_REASON, createActualActions, createActualRestart, KEYS_MISSING_REASON, makeClientId, type ActualActionsDeps, type ActualRestartDeps,
 } from '../../../src/main/actual/actions';
 import { EcoflowApiError, type EcoflowApiLike, type EcoflowDevice } from '../../../src/main/actual/ecoflow/api';
+import type { AppSession, EcoflowAppApiLike } from '../../../src/main/actual/ecoflow/app-api';
+import { AFTER_SAVE_REASON, PREVIEW_WAIT_MS } from '../../../src/main/actual/ecoflow/index';
+import type { MqttClientLike } from '../../../src/main/actual/ecoflow/mqtt-session';
 import { SecretsUnavailableError } from '../../../src/main/actual/secrets';
 import type { ActualReading, ActualSourceFactory, ActualStateSource } from '../../../src/main/actual/types';
 import { NetworkError } from '../../../src/main/providers/types';
@@ -18,6 +21,12 @@ const KEY_8521 = 'EcoFlow не прийняв підпис запиту (8521). 
 const CLIENT_ID = /^BlackoutWidget-[a-z0-9]{8}$/;
 const RIVER: EcoflowDevice = { sn: 'SN1', online: true, productName: 'RIVER 2' };
 const CONFIG: ActualSourceConfig = { id: 'ecoflow', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accessKeyHint: 'AKEY…' };
+const EMAIL = 'roman@dully.io', PASSWORD = 'p@ss w0rd!';
+const PASSWORD_B64 = Buffer.from(PASSWORD).toString('base64');
+const ACCOUNT = { mode: 'account', region: 'eu', email: EMAIL, password: PASSWORD };
+const APP_CONFIG: ActualSourceConfig = { id: 'ecoflow-app', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accountHint: 'r…@dully.io' };
+const UUID = /^[0-9A-F]{32}$/;
+const SESSION: AppSession = { token: 'TOKEN', userId: 'USER1' };
 
 const settle = <T>(v: T | Error): Promise<T> => (v instanceof Error ? Promise.reject(v) : Promise.resolve(v));
 
@@ -29,16 +38,34 @@ function fakeApi(o: { devices?: EcoflowDevice[] | Error; quota?: Record<string, 
   } satisfies EcoflowApiLike;
 }
 
+function fakeAppApi(o: { devices?: EcoflowDevice[] | Error; cert?: Error } = {}) {
+  return {
+    login: vi.fn(() => Promise.resolve(SESSION)),
+    getCertification: vi.fn((_s: AppSession) => (o.cert ? Promise.reject(o.cert) : Promise.resolve({ account: 'a', password: 'b', host: 'h', port: 8883 }))),
+    listDevices: vi.fn((_s: AppSession) => settle(o.devices ?? [RIVER])),
+  } satisfies EcoflowAppApiLike;
+}
+
+/** A broker that never answers: handlers are collected and left alone. */
+function silentBroker() {
+  const client = { on: vi.fn(), subscribe: vi.fn(), publish: vi.fn(), end: vi.fn() } satisfies MqttClientLike;
+  return { client, connect: vi.fn(() => client) };
+}
+
 const fakeLog = () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
 function setup(o: {
-  api?: EcoflowApiLike; settings?: Partial<Settings>; saveSecrets?: () => void; removeSecrets?: () => void; saveSettings?: () => void;
+  api?: EcoflowApiLike; appApi?: EcoflowAppApiLike; settings?: Partial<Settings>; saveSecrets?: () => void; removeSecrets?: () => void; saveSettings?: () => void;
 } = {}) {
   const order: string[] = [];
   let settings: Settings = { ...DEFAULT_SETTINGS, ...o.settings };
   const api = o.api ?? fakeApi();
+  const appApi = o.appApi ?? fakeAppApi();
+  const broker = silentBroker();
   const deps = {
     makeApi: vi.fn((_region: string, _keys: { accessKey: string; secretKey: string }) => api),
+    makeAppApi: vi.fn((_region: string, _account: { email: string; password: string }) => appApi),
+    connect: broker.connect,
     secrets: {
       save: vi.fn((_id: string, _s: Record<string, string>) => { order.push('secrets.save'); o.saveSecrets?.(); }),
       remove: vi.fn((_id: string) => { order.push('secrets.remove'); o.removeSecrets?.(); }),
@@ -52,7 +79,7 @@ function setup(o: {
     restartActual: vi.fn(() => { order.push('restartActual'); }),
     log: fakeLog(),
   } satisfies ActualActionsDeps;
-  return { deps, actions: createActualActions(deps), order, settings: () => settings };
+  return { deps, actions: createActualActions(deps), order, settings: () => settings, appApi, broker };
 }
 
 test('test: lists devices as views', async () => {
@@ -146,7 +173,8 @@ test('save: encrypts keys, stores hint and stable clientId, restarts', async () 
   const patch = deps.updateSettings.mock.calls[0][0];
   expect(patch.actualSource).toEqual({ id: 'ecoflow', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accessKeyHint: 'AKEY…' });
   expect(patch.ecoflowClientId).toMatch(CLIENT_ID);
-  expect(order).toEqual(['secrets.save', 'updateSettings', 'restartActual']);
+  expect(order).toEqual(['secrets.save', 'updateSettings', 'secrets.remove', 'restartActual']);
+  expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow-app');
   expect(deps.makeApi).not.toHaveBeenCalled();
 
   const clientId = settings().ecoflowClientId;
@@ -202,7 +230,8 @@ test('disconnect: clears settings and secrets, keeps clientId', async () => {
   await actions.disconnect();
   expect(deps.updateSettings).toHaveBeenCalledWith({ actualSource: null });
   expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow');
-  expect(order).toEqual(['updateSettings', 'secrets.remove', 'restartActual']);
+  expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow-app');
+  expect(order).toEqual(['updateSettings', 'secrets.remove', 'secrets.remove', 'restartActual']);
   expect(settings().actualSource).toBeNull();
   expect(settings().ecoflowClientId).toBe('BlackoutWidget-abc12345');
 });
@@ -210,7 +239,7 @@ test('disconnect: clears settings and secrets, keeps clientId', async () => {
 test('disconnect: a secrets file that cannot be rewritten still restarts', async () => {
   const { actions, deps } = setup({ settings: { actualSource: CONFIG }, removeSecrets: () => { throw new Error('EPERM'); } });
   await expect(actions.disconnect()).resolves.toBeUndefined();
-  expect(deps.log.error).toHaveBeenCalledTimes(1);
+  expect(deps.log.error).toHaveBeenCalledTimes(2); // each id is tried on its own
   expect(deps.restartActual).toHaveBeenCalledTimes(1);
 });
 
@@ -244,6 +273,133 @@ test('makeClientId: BlackoutWidget- + 8 characters [a-z0-9]', () => {
   expect(makeClientId()).toMatch(CLIENT_ID);
 });
 
+describe('account mode', () => {
+  const DEV = { sn: 'SN1', label: 'RIVER 2' };
+
+  test('test: logs in and lists the devices', async () => {
+    const { actions, deps, appApi } = setup();
+    expect(await actions.test({ ...ACCOUNT, email: ` ${EMAIL} `, password: PASSWORD }))
+      .toEqual({ ok: true, devices: [{ sn: 'SN1', label: 'RIVER 2', online: true }] });
+    expect(deps.makeAppApi).toHaveBeenCalledWith('eu', { email: EMAIL, password: PASSWORD });
+    expect(appApi.listDevices).toHaveBeenCalledWith(SESSION);
+    expect(deps.makeApi).not.toHaveBeenCalled();
+  });
+
+  test('save: stores the account under ecoflow-app, hints, makes the uuid once, then drops the keys', async () => {
+    const { actions, deps, order, settings } = setup({ settings: { ecoflowClientId: 'BlackoutWidget-abc12345' } });
+    expect(await actions.save(ACCOUNT, DEV)).toEqual({ ok: true });
+    expect(deps.secrets.save).toHaveBeenCalledWith('ecoflow-app', { email: EMAIL, password: PASSWORD });
+    const patch = deps.updateSettings.mock.calls[0][0];
+    expect(patch.actualSource).toEqual({ id: 'ecoflow-app', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accountHint: 'r…@dully.io' });
+    expect(patch.ecoflowAppClientUuid).toMatch(UUID);
+    expect(JSON.stringify(patch)).not.toContain(EMAIL);
+    expect(JSON.stringify(patch)).not.toContain(PASSWORD);
+    expect(order).toEqual(['secrets.save', 'updateSettings', 'secrets.remove', 'restartActual']);
+    expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow');
+
+    const uuid = settings().ecoflowAppClientUuid;
+    expect(await actions.save({ ...ACCOUNT, region: 'us' }, DEV)).toEqual({ ok: true });
+    expect(deps.updateSettings.mock.calls[1][0].ecoflowAppClientUuid).toBe(uuid);
+  });
+
+  test('save: a failed removal of the keys is logged, not fatal', async () => {
+    const { actions, deps } = setup({ removeSecrets: () => { throw new Error('EPERM'); } });
+    expect(await actions.save(ACCOUNT, DEV)).toEqual({ ok: true });
+    expect(deps.log.error).toHaveBeenCalledTimes(1);
+    expect(deps.restartActual).toHaveBeenCalledTimes(1);
+  });
+
+  test('save: failing secrets or settings leave the other mode untouched', async () => {
+    const a = setup({ saveSecrets: () => { throw new SecretsUnavailableError(); } });
+    expect(await a.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: SAVE_FAILED });
+    const b = setup({ saveSettings: () => { throw new Error(`EBUSY ${PASSWORD}`); } });
+    expect(await b.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: 'Не вдалося зберегти налаштування. Спробуйте ще раз.' });
+    for (const s of [a, b]) {
+      expect(s.deps.secrets.remove).not.toHaveBeenCalled();
+      expect(s.deps.restartActual).not.toHaveBeenCalled();
+    }
+    expect(JSON.stringify(b.deps.log.error.mock.calls)).not.toContain(PASSWORD);
+  });
+
+  test('invalid input → «Перевірте введені дані»', async () => {
+    const { actions, deps } = setup();
+    const bad: unknown[] = [
+      { ...ACCOUNT, email: 'roman.dully.io' }, { ...ACCOUNT, email: '   ' }, { ...ACCOUNT, password: '' }, { ...ACCOUNT, password: 7 },
+      { ...ACCOUNT, email: `${'a'.repeat(200)}@x.io` }, { ...ACCOUNT, password: 'p'.repeat(201) }, { ...ACCOUNT, region: 'xx' },
+      { ...ACCOUNT, mode: 'oauth' }, { ...ACCOUNT, mode: 1 }, { mode: 'account', region: 'eu', email: EMAIL },
+    ];
+    for (const i of bad) {
+      expect(await actions.test(i)).toEqual({ ok: false, error: BAD_INPUT });
+      expect(await actions.preview(i, 'SN1')).toEqual({ ok: false, error: BAD_INPUT });
+      expect(await actions.save(i, DEV)).toEqual({ ok: false, error: BAD_INPUT });
+    }
+    expect(deps.makeAppApi).not.toHaveBeenCalled();
+    expect(deps.secrets.save).not.toHaveBeenCalled();
+    expect(deps.updateSettings).not.toHaveBeenCalled();
+  });
+
+  test('the password is not trimmed; 200 characters are accepted', async () => {
+    const { actions, deps } = setup();
+    const password = ` ${'p'.repeat(198)} `;
+    expect(await actions.save({ ...ACCOUNT, password }, DEV)).toEqual({ ok: true });
+    expect(deps.secrets.save).toHaveBeenCalledWith('ecoflow-app', { email: EMAIL, password });
+  });
+
+  test('an explicit mode keys works like no mode', async () => {
+    const { actions, deps } = setup();
+    expect(await actions.test({ mode: 'keys', ...KEYS })).toMatchObject({ ok: true });
+    expect(deps.makeApi).toHaveBeenCalledWith('eu', { accessKey: AKEY, secretKey: SECRET });
+  });
+
+  test('errors come back scrubbed of the email, the password and its base64', async () => {
+    const echo = `bad ${EMAIL} ${PASSWORD} ${PASSWORD_B64}`;
+    const api = fakeAppApi({ devices: new EcoflowApiError('9999', echo) });
+    const s = setup({ appApi: api });
+    const res = await s.actions.test(ACCOUNT);
+    expect(res).toMatchObject({ ok: false });
+    for (const secret of [EMAIL, PASSWORD, PASSWORD_B64]) expect(JSON.stringify(res)).not.toContain(secret);
+
+    const unknown = setup({ appApi: fakeAppApi({ devices: new Error(echo) }) });
+    expect(await unknown.actions.test(ACCOUNT)).toEqual({ ok: false, error: CONNECT_FAILED });
+    for (const secret of [EMAIL, PASSWORD, PASSWORD_B64]) expect(JSON.stringify(unknown.deps.log.error.mock.calls)).not.toContain(secret);
+
+    const net = setup({ appApi: fakeAppApi({ cert: new NetworkError(echo) }) });
+    expect(JSON.stringify(await net.actions.preview(ACCOUNT, 'SN1'))).not.toContain(PASSWORD);
+
+    const saveFail = setup({ saveSecrets: () => { throw new Error(echo); } });
+    expect(await saveFail.actions.save(ACCOUNT, DEV)).toEqual({ ok: false, error: SAVE_FAILED });
+    for (const secret of [EMAIL, PASSWORD, PASSWORD_B64]) expect(JSON.stringify(saveFail.deps.log.error.mock.calls)).not.toContain(secret);
+  });
+
+  test('preview: with no reply the verdict is unknown and the station counts as online', async () => {
+    vi.useFakeTimers();
+    try {
+      const { actions, deps, broker } = setup();
+      const pending = actions.preview(ACCOUNT, 'SN1');
+      await vi.advanceTimersByTimeAsync(PREVIEW_WAIT_MS);
+      expect(await pending).toEqual({ ok: true, online: true, power: 'unknown', reason: AFTER_SAVE_REASON, unsupported: false });
+      expect(deps.makeAppApi).toHaveBeenCalledWith('eu', { email: EMAIL, password: PASSWORD });
+      expect(broker.connect).toHaveBeenCalledTimes(1);
+      expect(deps.makeApi).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('preview: an api error is scrubbed and returned', async () => {
+    const { actions } = setup({ appApi: fakeAppApi({ cert: new EcoflowApiError('9999', `x ${PASSWORD}`) }) });
+    const res = await actions.preview(ACCOUNT, 'SN1');
+    expect(res).toMatchObject({ ok: false });
+    expect(JSON.stringify(res)).not.toContain(PASSWORD);
+  });
+
+  test('disconnect removes the secrets of both sources', async () => {
+    const { actions, deps } = setup({ settings: { actualSource: APP_CONFIG } });
+    await actions.disconnect();
+    expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow', 'ecoflow-app']);
+  });
+});
+
 describe('restartActual', () => {
   const NOW = Date.parse('2026-10-17T10:00:00Z');
 
@@ -256,7 +412,7 @@ describe('restartActual', () => {
       updateSettings: vi.fn((patch: Partial<Settings>) => { settings = { ...settings, ...patch }; }),
       secrets: { load: vi.fn((_id: string) => (o.secrets === undefined ? { accessKey: AKEY, secretKey: SECRET } : o.secrets)) },
       service: { start: vi.fn((_s: ActualStateSource, _label: string) => { o.start?.(); }), stop: vi.fn() },
-      sources: [{ id: 'ecoflow', displayName: 'EcoFlow', create }],
+      sources: [{ id: 'ecoflow', displayName: 'EcoFlow', create }, { id: 'ecoflow-app', displayName: 'EcoFlow', create }],
       log: fakeLog(),
       now: () => NOW,
     } satisfies ActualRestartDeps;
@@ -305,6 +461,39 @@ describe('restartActual', () => {
       expect(KEYS_MISSING_REASON).toBe('Ключі EcoFlow не знайдено — введіть їх знову в налаштуваннях');
       expect(() => src.stop()).not.toThrow();
     }
+  });
+
+  test('account source: clientId is the persisted uuid, secrets load under ecoflow-app', () => {
+    const uuid = 'A'.repeat(32);
+    const secrets = { email: EMAIL, password: PASSWORD };
+    const { deps, restart, create, source } = restartSetup({ settings: { actualSource: APP_CONFIG, ecoflowAppClientUuid: uuid }, secrets });
+    expect(restart()).toBe(true);
+    expect(deps.secrets.load).toHaveBeenCalledWith('ecoflow-app');
+    expect(create).toHaveBeenCalledWith(APP_CONFIG, secrets, { clientId: uuid, log: deps.log });
+    expect(deps.service.start).toHaveBeenCalledWith(source, 'EcoFlow · RIVER 2');
+    expect(deps.updateSettings).not.toHaveBeenCalled();
+  });
+
+  test('account source: a missing uuid is generated once and saved', () => {
+    const { deps, restart, create, settings } = restartSetup({ settings: { actualSource: APP_CONFIG }, secrets: { email: EMAIL, password: PASSWORD } });
+    restart();
+    restart();
+    expect(deps.updateSettings).toHaveBeenCalledTimes(1);
+    expect(settings().ecoflowAppClientUuid).toMatch(UUID);
+    expect(settings().ecoflowClientId).toBeUndefined();
+    expect(create.mock.calls[1][2].clientId).toBe(settings().ecoflowAppClientUuid);
+  });
+
+  test('account source: missing or partial secrets → unknown with the account reason', () => {
+    for (const secrets of [null, { email: EMAIL }, { accessKey: AKEY, secretKey: SECRET }] as (Record<string, string> | null)[]) {
+      const { deps, restart, create } = restartSetup({ settings: { actualSource: APP_CONFIG, ecoflowAppClientUuid: 'A'.repeat(32) }, secrets });
+      expect(restart()).toBe(true);
+      expect(create).not.toHaveBeenCalled();
+      const readings: ActualReading[] = [];
+      deps.service.start.mock.calls[0][0].start(r => readings.push(r));
+      expect(readings).toEqual([{ power: 'unknown', observedAt: '2026-10-17T10:00:00.000Z', reason: ACCOUNT_MISSING_REASON }]);
+    }
+    expect(ACCOUNT_MISSING_REASON).toBe('Дані входу EcoFlow не знайдено — увійдіть знову в налаштуваннях');
   });
 
   test('a failing start (locked journal) is logged, never thrown', () => {

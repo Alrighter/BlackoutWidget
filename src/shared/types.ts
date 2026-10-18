@@ -18,6 +18,8 @@ export interface WidgetPosition { x: number; y: number; displayId: number }
 export interface Settings {
   address: Address | null; widgetStyle: WidgetStyle; autostart: boolean; widgetPosition: WidgetPosition | null;
   actualSource: ActualSourceConfig | null; ecoflowClientId?: string;
+  /** 32 upper-case hex characters, made once on the first account save; the middle of the app MQTT clientId. */
+  ecoflowAppClientUuid?: string;
 }
 export type RefreshPhase = 'idle' | 'refreshing' | 'ok' | 'error' | 'captcha';
 export interface AppState { settings: Settings; snapshot: ScheduleSnapshot | null; phase: RefreshPhase; lastError?: string; lineChanged: boolean; actual?: ActualStatus | null }
@@ -31,4 +33,6 @@ export interface ActualStatus {
   /** Segments of the last 7 days in time order; the last one is open (no `end`). */
   history: ActualSegment[];
 }
-export interface ActualSourceConfig { id: 'ecoflow'; region: EcoflowRegion; deviceSn: string; deviceName: string; accessKeyHint: string }
+export type ActualSourceConfig =
+  | { id: 'ecoflow'; region: EcoflowRegion; deviceSn: string; deviceName: string; accessKeyHint: string }
+  | { id: 'ecoflow-app'; region: EcoflowRegion; deviceSn: string; deviceName: string; accountHint: string };

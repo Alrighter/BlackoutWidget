@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react';
-import type { EcoflowDeviceView, EcoflowKeysInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
+import type { EcoflowDeviceView, EcoflowInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
 
@@ -107,10 +107,10 @@ function EcoflowForm({ api, initialRegion, sourcePicker, onClose }: {
   const seq = useRef(0);
   const headRef = useStepFocus(devices ? 'stations' : 'keys', true);
 
-  const keys = (): EcoflowKeysInput => ({ region, accessKey: accessKey.trim(), secretKey: secretKey.trim() });
+  const keys = (): EcoflowInput => ({ mode: 'keys', region, accessKey: accessKey.trim(), secretKey: secretKey.trim() });
   const resetResult = () => { seq.current++; setChecking(false); setDevices(null); setTestError(null); setSn(null); setPreview(null); setSaveError(null); };
 
-  async function choose(next: string, k: EcoflowKeysInput) {
+  async function choose(next: string, k: EcoflowInput) {
     const mine = ++seq.current;
     setSn(next); setPreview({ sn: next, pending: true }); setSaveError(null);
     let view: { text: string; tone: Tone };
@@ -220,7 +220,7 @@ function EcoflowPanel({ state, api, initiallyOpen = false, sourceName, sourcePic
       </div>
     );
   }
-  const name = `EcoFlow · ${source.deviceName} · ключ ${source.accessKeyHint}`;
+  const name = `EcoFlow · ${source.deviceName} · ${'accountHint' in source ? `акаунт ${source.accountHint}` : `ключ ${source.accessKeyHint}`}`;
   const now = currentText(state.actual);
   return (
     <div className="st-panel">

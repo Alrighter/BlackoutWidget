@@ -18,8 +18,10 @@ export const CAPTCHA_MARKER = 'CAPTCHA_REQUIRED';
 
 export type MainView = 'schedule' | 'settings' | 'setup';
 
-/** Keys travel renderer → main only in these calls; no result ever carries them back. */
-export interface EcoflowKeysInput { region: EcoflowRegion; accessKey: string; secretKey: string }
+/** Keys or the account travel renderer → main only in these calls; no result ever carries them back. */
+export type EcoflowInput =
+  | { mode: 'keys'; region: EcoflowRegion; accessKey: string; secretKey: string }
+  | { mode: 'account'; region: EcoflowRegion; email: string; password: string };
 export interface EcoflowDeviceView { sn: string; label: string; online: boolean }
 export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[] } | { ok: false; error: string };
 export type EcoflowPreviewResult =
@@ -50,10 +52,10 @@ export interface RendererApi {
   onMoveMode(cb: (on: boolean) => void): () => void;
   /** The widget's «Готово» button: save the position and pin the widget again. */
   endMoveMode(): void;
-  ecoflowTest(i: EcoflowKeysInput): Promise<EcoflowTestResult>;
+  ecoflowTest(i: EcoflowInput): Promise<EcoflowTestResult>;
   /** HTTP only: never opens MQTT, so it spends none of the account's daily clientIds. */
-  ecoflowPreview(i: EcoflowKeysInput, sn: string): Promise<EcoflowPreviewResult>;
-  ecoflowSave(i: EcoflowKeysInput, device: { sn: string; label: string }): Promise<ActionResult>;
+  ecoflowPreview(i: EcoflowInput, sn: string): Promise<EcoflowPreviewResult>;
+  ecoflowSave(i: EcoflowInput, device: { sn: string; label: string }): Promise<ActionResult>;
   /** Forgets the source and its keys; the history and the clientId stay. */
   actualDisconnect(): Promise<void>;
   /** Opens the EcoFlow developer site (a fixed address) in the browser. */

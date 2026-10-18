@@ -50,12 +50,12 @@ test('check lists stations; single station preselected; preview text', async () 
   const user = userEvent.setup(); const api = mockApi();
   render(<ActualSettings state={stateOf()} api={api} />);
   await openAndCheck(user);
-  expect(api.ecoflowTest).toHaveBeenCalledWith({ region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' });
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ mode: 'keys', region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' });
   expect(await screen.findByText('Станції в акаунті')).toBeInTheDocument();
   expect(screen.getByRole('radio', { name: /Delta 2 · …1234/ })).toBeChecked();
   expect(screen.getByText('в мережі')).toBeInTheDocument();
   expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
-  expect(api.ecoflowPreview).toHaveBeenCalledWith({ region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' }, 'R331ZEB4ZEA01234');
+  expect(api.ecoflowPreview).toHaveBeenCalledWith({ mode: 'keys', region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' }, 'R331ZEB4ZEA01234');
   expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
 });
 
@@ -112,7 +112,7 @@ test('save sends keys once and clears the form', async () => {
   await openAndCheck(user);
   await user.click(await screen.findByRole('button', { name: 'Зберегти' }));
   expect(api.ecoflowSave).toHaveBeenCalledTimes(1);
-  expect(api.ecoflowSave).toHaveBeenCalledWith({ region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' }, { sn: 'R331ZEB4ZEA01234', label: 'Delta 2' });
+  expect(api.ecoflowSave).toHaveBeenCalledWith({ mode: 'keys', region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' }, { sn: 'R331ZEB4ZEA01234', label: 'Delta 2' });
   expect(await screen.findByRole('button', { name: 'Підключити EcoFlow' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
   expect(screen.getByLabelText('Access Key')).toHaveValue('');
@@ -192,7 +192,7 @@ test('«Змінити» opens a form with empty keys and the configured region'
   await user.type(screen.getByLabelText('Access Key'), 'AK-123');
   await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
-  expect(api.ecoflowTest).toHaveBeenCalledWith({ region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ mode: 'keys', region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
 });
 
 test('the region radios pick the API region', async () => {
@@ -204,7 +204,7 @@ test('the region radios pick the API region', async () => {
   await user.type(screen.getByLabelText('Access Key'), 'AK-123');
   await user.type(screen.getByLabelText('Secret Key'), 'SK-456');
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
-  expect(api.ecoflowTest).toHaveBeenCalledWith({ region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ mode: 'keys', region: 'us', accessKey: 'AK-123', secretKey: 'SK-456' });
 });
 
 test('focus follows the card when its step changes (the pressed button is gone)', async () => {
