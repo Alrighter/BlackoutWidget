@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Widget } from '../../src/renderer/src/widget/Widget';
-import { DayBar } from '../../src/renderer/src/widget/DayBar';
+import { DayBar, dayCells } from '../../src/renderer/src/widget/DayBar';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
 import type { ActualStatus, AppState, WidgetStyle } from '../../src/shared/types';
 import { fixtureSnapshot } from '../helpers/snapshot';
@@ -50,6 +50,25 @@ test('DayBar dims the past cells and marks now (11:50 → 23 cells past)', () =>
     if (i <= 22) expect(c).toHaveClass('bw-cell--past'); else expect(c).not.toHaveClass('bw-cell--past');
   });
   expect(parseFloat((container.querySelector('.w-now') as HTMLElement).style.left)).toBeCloseTo(49.31, 1);
+});
+test('dayCells: the 13:30–17:00 emergency window marks cells 27–33; the planned run after it keeps its own gradient', () => {
+  const cells = dayCells(fixtureSnapshot().days[0].slots, undefined, { startMin: 810, endMin: 1020 });
+  expect(cells.flatMap((c, i) => (c.emergency ? [i] : []))).toEqual([27, 28, 29, 30, 31, 32, 33]);
+  // Fixture off 30..37: 30..33 are emergency (solid, no gradient), 34..37 form a run of their own.
+  expect(cells.slice(30, 34).every(c => c.offFrom === undefined)).toBe(true);
+  expect(cells.slice(34, 38).map(c => [c.offFrom, c.offTo])).toEqual([[0, 0.25], [0.25, 0.5], [0.5, 0.75], [0.75, 1]]);
+  expect(cells[12].offFrom).toBe(0); expect(cells[16].offTo).toBe(1); // the morning run is untouched
+});
+test.each(['compact', 'timeline'] as const)('%s: the emergency outage is painted in the strip, past cells still dimmed', style => {
+  const s = st({ snapshot: fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення', start: '13:30 17.10.2026', end: '17:00 17.10.2026' } }) }, style);
+  const { container } = render(<Widget state={s} now={new Date('2026-10-17T11:20:00Z')} background={{ kind: 'tint' }} />); // 14:20 Kyiv
+  const cells = [...container.querySelectorAll('[data-slot]')];
+  expect(cells.flatMap((c, i) => (c.classList.contains('emergency') ? [i] : []))).toEqual([27, 28, 29, 30, 31, 32, 33]);
+  expect(cells[27]).toHaveClass('bw-cell--past'); expect(cells[28]).not.toHaveClass('bw-cell--past');
+});
+test('compact without a snapshot yet: the now marker is at the clock’s Kyiv minute', () => {
+  const { container } = render(<Widget state={st({ snapshot: null })} now={now} background={{ kind: 'tint' }} />); // 11:50 Kyiv
+  expect(parseFloat((container.querySelector('.w-now') as HTMLElement).style.left)).toBeCloseTo((710 / 1440) * 100, 2);
 });
 test('DayBar without now (tomorrow) dims nothing and has no marker', () => {
   const { container } = render(<DayBar day={fixtureSnapshot().days[0]} />);
@@ -133,7 +152,11 @@ describe('actual state', () => {
     expect(screen.getByText('Світла немає')).toBeInTheDocument();
     const mark = container.querySelector('[data-actual="live"]')!;
     expect(mark).toHaveTextContent(style === 'ring' ? 'Фактичний стан · EcoFlow' : '');
-    if (style !== 'ring') expect(mark).toHaveAttribute('title', 'Фактичний стан · EcoFlow');
+    if (style !== 'ring') {
+      expect(mark).toHaveAttribute('aria-label', 'Фактичний стан · EcoFlow');
+      expect(mark).toHaveAttribute('role', 'img');
+      expect(mark).not.toHaveAttribute('title'); // no native tooltip over the custom one
+    }
   });
   test.each(['compact', 'timeline'] as const)('%s: actual line parts rendered for today', style => {
     const { container } = render(<Widget state={st({ actual: withStrip(later) }, style)} now={later} background={bg} />);
@@ -157,7 +180,7 @@ describe('actual state', () => {
     const a = act(now, { power: 'unknown', reason: 'станція не в мережі' });
     const { container } = render(<Widget state={st({ actual: a })} now={now} background={bg} />);
     expect(container.querySelector('[data-actual="live"]')).toBeNull();
-    expect(container.querySelector('[data-actual="unknown"]')).toHaveAttribute('title', 'EcoFlow: станція не в мережі');
+    expect(container.querySelector('[data-actual="unknown"]')).toHaveAttribute('aria-label', 'EcoFlow: станція не в мережі');
     expect(screen.getByText('Світло є')).toBeInTheDocument();
   });
   test.each(['compact', 'ring', 'timeline'] as const)('%s: no actual configured → no mark, no line', style => {

@@ -79,6 +79,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-cell:first-child { border-radius: var(--bw-r-cell-end) var(--bw-r-cell) var(--bw-r-cell) var(--bw-r-cell-end); }
 .w-cell:last-child { border-radius: var(--bw-r-cell) var(--bw-r-cell-end) var(--bw-r-cell-end) var(--bw-r-cell); }
 .w-cell.on { background: var(--bw-on); }
+.w-cell.emergency { background: var(--bw-emergency); }
 /* An off run is one off-a → off-b gradient along its length; each cell paints its own stretch of it. */
 .w-cell.off { background: linear-gradient(90deg,
   color-mix(in srgb, var(--bw-off-a), var(--bw-off-b) var(--off-from)),
@@ -139,6 +140,7 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-ring .w-foot-changed .w-muted { font-size: 11px; line-height: 1.25; }
 /* Below the warning the caption is one short line («оновлено HH:MM · дані застаріли»): no clamp that could clip it. */
 .w-ring .w-foot-changed .w-cap { display: block; overflow: visible; }
-.w-ring .w-cap { display: block; text-align: center; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* 16 px lines: the stale pill (14 px + 2 px padding) must fit inside the clamp's two lines. */
+.w-ring .w-cap { display: block; text-align: center; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 16px; }
 .w-ring .w-cap .w-ellipsis { display: inline; white-space: normal; overflow: visible; }
 .w-ring .w-cap .w-sep { white-space: normal; }

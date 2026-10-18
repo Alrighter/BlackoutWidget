@@ -40,10 +40,10 @@ export function EcoBolt({ view }: { view: WidgetView }) {
   return (
     <span className="w-eco">
       <span ref={bolt} className={unknown ? 'w-bolt w-bolt-unk' : 'w-bolt'} data-actual={unknown ? 'unknown' : 'live'}
-        title={text} tabIndex={0} onPointerEnter={show} onPointerLeave={hide} onFocus={show} onBlur={hide}
+        role="img" aria-label={text} tabIndex={0} onPointerEnter={show} onPointerLeave={hide} onFocus={show} onBlur={hide}
         // A press (click, drag) must not focus it, or the tooltip would stay open: focus is for the keyboard.
         onMouseDown={e => e.preventDefault()}>
-        <svg width="14" height="14" viewBox="0 0 24 24" role="img" aria-label={text}><path d={BOLT} /></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d={BOLT} /></svg>
       </span>
       {open && <span ref={tip} className="w-tip" role="tooltip" data-capture="tip">{text}</span>}
     </span>

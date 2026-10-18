@@ -29,7 +29,7 @@ export function TimelineWidget({ view, lineChanged }: { view: WidgetView; lineCh
       <div className="w-tl-row" style={{ marginTop: 14 }}>
         <div className="w-row-label">Сьогодні {formatDM(view.todayKey)}</div>
         <div className="w-tl-bar">
-          <DayBar day={view.today} nowFraction={view.nowFraction} actual={view.actualStrip} />
+          <DayBar day={view.today} nowFraction={view.nowFraction} emergency={view.emergency} actual={view.actualStrip} />
         </div>
       </div>
       <div className="w-tl-row" style={{ marginTop: 8 }}>

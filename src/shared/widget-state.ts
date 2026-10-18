@@ -12,6 +12,8 @@ export interface WidgetView {
   lineLabel: string;
   updatedText: string;
   stale: boolean; outageBadge?: OutageBadgeText;
+  /** The active emergency outage within today, in Kyiv minutes (0..1440), for painting the day strip. */
+  emergency?: { startMin: number; endMin: number };
   actual?: WidgetActual; actualUnknownReason?: string; actualStrip?: StripPart[];
 }
 export interface WidgetActual { power: 'on' | 'off'; sinceText?: string; mismatch: boolean }
@@ -59,14 +61,29 @@ function badgeFor(o: CurrentOutage): OutageBadgeText {
  */
 function activeEmergency(
   o: CurrentOutage | undefined, groupId: string, now: Date, stale: boolean,
-): { outage: CurrentOutage; end?: Date } | null {
+): { outage: CurrentOutage; start?: Date; end?: Date } | null {
   if (!o || o.kind !== 'emergency') return null;
   if (o.groups?.length && !o.groups.includes(groupId)) return null;
   const start = o.start ? parseDtekDateTime(o.start) : undefined;
   if (start && start.getTime() > now.getTime()) return null;
   const end = o.end ? parseDtekDateTime(o.end) : undefined;
-  if (end) return end.getTime() > now.getTime() ? { outage: o, end } : null;
-  return stale ? null : { outage: o };
+  if (end) return end.getTime() > now.getTime() ? { outage: o, start, end } : null;
+  return stale ? null : { outage: o, start };
+}
+
+/**
+ * The emergency's stretch of today in Kyiv minutes. Only what is known is claimed: an unreadable start counts from the
+ * current half hour, an unreadable end runs through it — so the current half hour is always inside.
+ */
+function emergencyWindow(
+  start: Date | undefined, end: Date | undefined, todayKey: string, now: Date,
+): { startMin: number; endMin: number } {
+  const dayStart = kyivWallTimeToInstant(todayKey, 0).getTime();
+  const dayEnd = kyivWallTimeToInstant(addDays(todayKey, 1), 0).getTime();
+  const minuteOf = (t: Date): number =>
+    t.getTime() <= dayStart ? 0 : t.getTime() >= dayEnd ? 1440 : kyivMinutesOfDay(t);
+  const cellStart = Math.floor(kyivMinutesOfDay(now) / 30) * 30;
+  return { startMin: start ? minuteOf(start) : cellStart, endMin: end ? minuteOf(end) : cellStart + 30 };
 }
 
 function minutesUntil(at: Date, now: Date): number {
@@ -95,16 +112,17 @@ function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
   if (active) {
     const badge = badgeFor(active.outage);
     const end = active.end;
+    const emergency = emergencyWindow(active.start, end, todayKey, now);
     if (end) {
       const left = minutesUntil(end, now);
       return {
-        ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge,
+        ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge, emergency,
         nextText: `${badge} · орієнтовно до ${formatHM(end)}`,
         countdownShort: formatDurationShort(left), countdownCaption: 'до орієнтовного увімкнення',
       };
     }
     return {
-      ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge,
+      ...base, state: 'emergency', title: TITLES.emergency, outageBadge: badge, emergency,
       nextText: `${badge} відключення · час відновлення невідомий`,
     };
   }

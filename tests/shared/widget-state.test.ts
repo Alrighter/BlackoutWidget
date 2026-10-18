@@ -100,6 +100,24 @@ test('an unreadable fetchedAt counts as stale and does not break the view', () =
   expect(v.stale).toBe(true); expect(v.updatedText).toBe('оновлено --:--'); expect(v.state).toBe('on');
 });
 
+test('emergency window in Kyiv minutes of today, for painting the strip', () => {
+  const o = { kind: 'emergency' as const, text: 'Аварійні ремонтні роботи' };
+  // The capture rig's outage, 13:30–17:00, seen at 14:20 Kyiv.
+  const v = computeWidgetView(fixtureSnapshot({ currentOutage: { ...o, start: '13:30 17.10.2026', end: '17:00 17.10.2026' } }), at('2026-10-17T11:20:00Z'));
+  expect(v.emergency).toEqual({ startMin: 810, endMin: 1020 });
+  expect(v.state).toBe('emergency'); expect(v.nextText).toBe('Аварійне · орієнтовно до 17:00'); // unchanged
+  // Unreadable end: from the start through the now cell (11:30–12:00), so the now cell is never «on».
+  expect(withOutage({ ...o, start: '10:05 17.10.2026', end: 'невідомо' }).emergency).toEqual({ startMin: 605, endMin: 720 });
+  // Clipped to today: started yesterday, ends tomorrow.
+  expect(withOutage({ ...o, start: '22:00 16.10.2026', end: '03:00 18.10.2026' }).emergency).toEqual({ startMin: 0, endMin: 1440 });
+  // Unreadable start: only what is known, from the now cell to the end.
+  expect(withOutage({ ...o, start: 'незабаром', end: '17:00 17.10.2026' }).emergency).toEqual({ startMin: 690, endMin: 1020 });
+});
+test('no emergency window without an active emergency', () => {
+  expect(computeWidgetView(fixtureSnapshot(), NOW).emergency).toBeUndefined();
+  expect(withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: '13:00 17.10.2026', end: '17:00 17.10.2026' }).emergency).toBeUndefined();
+  expect(withOutage({ kind: 'other', text: 'Планові ремонтні роботи', start: '10:00 17.10.2026', end: '17:00 17.10.2026' }).emergency).toBeUndefined();
+});
 test('emergency for other queues does not override the saved queue (GPV1.2)', () => {
   const base = { kind: 'emergency' as const, text: 'Аварійне відключення', end: '17:00 17.10.2026' };
   expect(withOutage({ ...base, groups: ['GPV4.2'] }).state).toBe('on');

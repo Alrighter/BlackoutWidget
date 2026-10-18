@@ -11,7 +11,7 @@ export function CompactWidget({ view, lineChanged }: { view: WidgetView; lineCha
       <div className="w-next w-ellipsis" title={view.nextText} data-capture="next">{view.nextText}</div>
       {lineChanged && <WarnLine />}
       <div className="w-spacer" />
-      <DayBar day={view.today} nowFraction={view.nowFraction} actual={view.actualStrip} />
+      <DayBar day={view.today} nowFraction={view.nowFraction} emergency={view.emergency} actual={view.actualStrip} />
       <DayTicks />
       <Caption view={view} label={view.lineLabel} updated={view.updatedText} />
     </>
