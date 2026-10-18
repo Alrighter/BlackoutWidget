@@ -258,9 +258,11 @@ describe('timeline', () => {
     expect(line).toHaveTextContent(/^Вимкнення о 15:00 · через 3 год 10 хв$/);
     expect(line).toHaveClass('w-ellipsis'); expect(line).toHaveAttribute('title', 'Вимкнення о 15:00 · через 3 год 10 хв');
     expect(container.querySelector('.w-tl-main + .w-tl-count .w-tl-big')).toHaveTextContent(/^3:10$/);
-    const cl = container.querySelector('.w-tl-count .w-tl-cl')!;
+    const cl = container.querySelector('.w-tl-count .w-tl-cap > .w-tl-cl')!;
     expect(cl).toHaveTextContent(/^до вимкнення о 15:00$/);
-    expect(cl).toHaveClass('w-ellipsis'); expect(cl).toHaveAttribute('title', 'до вимкнення о 15:00');
+    expect(cl).toHaveAttribute('title', 'до вимкнення о 15:00');
+    // The block takes its width from a copy of the caption, so the caption may wrap only when the title needs room.
+    expect(container.querySelector('.w-tl-count')).toHaveAttribute('data-cap', 'до вимкнення о 15:00');
   });
   test('no countdown: no count block; the next text still sits under the status', () => {
     const { container } = tl({ snapshot: fixtureSnapshot({ extraDays: [] }) }, new Date('2026-10-19T08:50:00Z'));
@@ -275,9 +277,7 @@ describe('timeline', () => {
     expect(container.querySelector('.w-tl-big')).toHaveTextContent(/^≈2:40$/);
     expect(container.querySelector('.w-tl-cl')).toHaveTextContent(/^до орієнтовного увімкнення$/);
     expect(container.querySelector('.w-tl-line')).toHaveTextContent(/^Аварійне · орієнтовно до 17:00$/);
-    // With the badge the row is at its widest: the count caption may narrow and wrap so the title stays whole.
-    expect(container.querySelector('.w-tl-head')).toHaveClass('w-tl-badged');
-    expect(tl().container.querySelector('.w-tl-head')).not.toHaveClass('w-tl-badged');
+    expect(container.querySelector('.w-tl-count')).toHaveAttribute('data-cap', 'до орієнтовного увімкнення');
   });
   test('line changed: the warning is a row of its own under the head, above the day rows', () => {
     const { container } = tl({ lineChanged: true });

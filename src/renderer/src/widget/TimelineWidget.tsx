@@ -20,15 +20,18 @@ export function TimelineWidget({ view, lineChanged, provider }: { view: WidgetVi
   const label = [view.lineLabel, provider].filter(Boolean).join(' · ');
   return (
     <>
-      <div className={view.outageBadge ? 'w-tl-head w-tl-badged' : 'w-tl-head'}>
+      <div className="w-tl-head">
         <div className="w-tl-main">
           <Status view={view} since={since} />
           <div className="w-tl-line w-ellipsis" title={view.nextText} data-capture="next">{view.nextText}</div>
         </div>
         {count && (
-          <div className="w-tl-count">
+          // data-cap: a hidden copy of the caption sizes the block (.w-tl-count::after in widget.css).
+          <div className="w-tl-count" data-cap={view.countdownCaption}>
             <div className="w-tl-big" data-capture="count">{count}</div>
-            <div className="w-tl-cl w-ellipsis" title={view.countdownCaption} data-capture="countcap">{view.countdownCaption}</div>
+            <div className="w-tl-cap">
+              <div className="w-tl-cl" title={view.countdownCaption} data-capture="countcap">{view.countdownCaption}</div>
+            </div>
           </div>
         )}
       </div>

@@ -119,24 +119,30 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-timeline .w-glass {
   background: radial-gradient(110% 120% at 0% 0%, rgb(from var(--bw-state) r g b / var(--bw-tint-a)) 0%, transparent 55%), var(--bw-glass);
 }
+/*
+ * The title outranks the countdown. The left column never gets narrower than the status row (the next line, ellipsized,
+ * adds no width); the count block takes what is left, up to its own width, and narrows when the row needs the room.
+ */
 .w-tl-head { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
-.w-tl-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.w-tl-main { flex: 1 0 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .w-timeline .w-status { font-size: 19px; }
-.w-tl-line { font-size: 12.5px; line-height: 17px; font-variant-numeric: tabular-nums; color: var(--bw-ink-2); }
-.w-tl-count { flex: none; display: flex; flex-direction: column; align-items: flex-end; max-width: 150px; }
+.w-tl-line { contain: inline-size; font-size: 12.5px; line-height: 17px; font-variant-numeric: tabular-nums; color: var(--bw-ink-2); }
+.w-tl-count { flex: 0 1 auto; display: flex; flex-direction: column; align-items: flex-end; max-width: 150px; }
 .w-tl-big { font-family: var(--bw-font-display); font-size: 34px; line-height: 36px; font-weight: 600; letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums; }
-.w-tl-cl { max-width: 150px; font-size: 10.5px; line-height: 13px; color: var(--bw-ink-2); }
 /*
- * With an outage badge the status row is at its widest and the title outranks the count caption: the left column keeps
- * the row's full width (the next line, ellipsized, adds none), and the count block narrows, its caption wrapping to two
- * lines. It never gets narrower than the countdown itself.
+ * The caption is one line cut at 150 px, as in the mockup, but wraps to two lines when the block is narrowed. Its box is
+ * a size container and adds no width; a hidden copy of the text (data-cap) gives the block the caption's width, at most
+ * 150 px. So the box is narrower than 150 px only when the caption is short anyway or the block was narrowed.
  */
-.w-tl-badged .w-tl-main { flex: 1 0 auto; }
-.w-tl-badged .w-tl-line { contain: inline-size; }
-.w-tl-badged .w-tl-count { flex: 0 1 auto; }
-.w-tl-badged .w-tl-cl { white-space: normal; text-align: right;
+.w-tl-count::after { content: attr(data-cap); max-width: 150px; height: 0; overflow: hidden; visibility: hidden;
+  font-size: 10.5px; line-height: 13px; }
+.w-tl-cap { align-self: stretch; container-type: inline-size; }
+.w-tl-cl { font-size: 10.5px; line-height: 13px; color: var(--bw-ink-2); text-align: right; overflow: hidden;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+@container (width >= 150px) {
+  .w-tl-cl { display: block; white-space: nowrap; text-overflow: ellipsis; }
+}
 .w-timeline .w-warnline { margin-top: 6px; }
 .w-tl-row { display: flex; align-items: center; gap: 8px; }
 .w-tl-row > .w-strip { flex: 1 1 auto; min-width: 0; }
