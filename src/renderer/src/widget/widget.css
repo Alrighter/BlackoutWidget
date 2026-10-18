@@ -127,6 +127,16 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-tl-big { font-family: var(--bw-font-display); font-size: 34px; line-height: 36px; font-weight: 600; letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums; }
 .w-tl-cl { max-width: 150px; font-size: 10.5px; line-height: 13px; color: var(--bw-ink-2); }
+/*
+ * With an outage badge the status row is at its widest and the title outranks the count caption: the left column keeps
+ * the row's full width (the next line, ellipsized, adds none), and the count block narrows, its caption wrapping to two
+ * lines. It never gets narrower than the countdown itself.
+ */
+.w-tl-badged .w-tl-main { flex: 1 0 auto; }
+.w-tl-badged .w-tl-line { contain: inline-size; }
+.w-tl-badged .w-tl-count { flex: 0 1 auto; }
+.w-tl-badged .w-tl-cl { white-space: normal; text-align: right;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .w-timeline .w-warnline { margin-top: 6px; }
 .w-tl-row { display: flex; align-items: center; gap: 8px; }
 .w-tl-row > .w-strip { flex: 1 1 auto; min-width: 0; }

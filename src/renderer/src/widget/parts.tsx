@@ -55,8 +55,9 @@ export function EcoBolt({ view, tipAbove = false }: { view: WidgetView; tipAbove
 }
 
 /**
- * Status row: dot, title, outage badge, EcoFlow bolt and, when given, «з HH:MM». The ring sets the badge above the
- * row itself (`inlineBadge={false}`) and opens the tooltip above the bolt.
+ * Status row: dot, title, outage badge, EcoFlow bolt and, when given, «з HH:MM». The title outranks the rest, so with
+ * an outage badge «з HH:MM» is left out: the row has no room for both. The ring sets the badge above the row itself
+ * (`inlineBadge={false}`) and opens the tooltip above the bolt.
  */
 export function Status({ view, since, inlineBadge = true, tipAbove = false }: {
   view: WidgetView; since?: string; inlineBadge?: boolean; tipAbove?: boolean;
@@ -67,7 +68,7 @@ export function Status({ view, since, inlineBadge = true, tipAbove = false }: {
       <span className="w-title w-ellipsis" title={view.title} data-capture="status">{view.title}</span>
       {inlineBadge && view.outageBadge && <OutageBadge text={view.outageBadge} />}
       <EcoBolt view={view} tipAbove={tipAbove} />
-      {since && <span className="w-since">{since}</span>}
+      {since && !view.outageBadge && <span className="w-since">{since}</span>}
     </div>
   );
 }

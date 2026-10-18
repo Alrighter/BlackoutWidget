@@ -20,7 +20,7 @@ export function TimelineWidget({ view, lineChanged, provider }: { view: WidgetVi
   const label = [view.lineLabel, provider].filter(Boolean).join(' · ');
   return (
     <>
-      <div className="w-tl-head">
+      <div className={view.outageBadge ? 'w-tl-head w-tl-badged' : 'w-tl-head'}>
         <div className="w-tl-main">
           <Status view={view} since={since} />
           <div className="w-tl-line w-ellipsis" title={view.nextText} data-capture="next">{view.nextText}</div>

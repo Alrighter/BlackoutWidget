@@ -275,6 +275,9 @@ describe('timeline', () => {
     expect(container.querySelector('.w-tl-big')).toHaveTextContent(/^≈2:40$/);
     expect(container.querySelector('.w-tl-cl')).toHaveTextContent(/^до орієнтовного увімкнення$/);
     expect(container.querySelector('.w-tl-line')).toHaveTextContent(/^Аварійне · орієнтовно до 17:00$/);
+    // With the badge the row is at its widest: the count caption may narrow and wrap so the title stays whole.
+    expect(container.querySelector('.w-tl-head')).toHaveClass('w-tl-badged');
+    expect(tl().container.querySelector('.w-tl-head')).not.toHaveClass('w-tl-badged');
   });
   test('line changed: the warning is a row of its own under the head, above the day rows', () => {
     const { container } = tl({ lineChanged: true });
@@ -428,6 +431,19 @@ describe('actual state', () => {
     expect(mm.container.querySelector('.w-tl-line')).toHaveTextContent(/^Не за графіком · з 10:10$/);
     expect(mm.container.querySelector('.w-since')).toBeNull();
     expect(mm.container.querySelector('.w-tl-count')).toBeNull();
+  });
+  test.each(['compact', 'ring', 'timeline'] as const)('%s: «з HH:MM» gives way to an outage badge, so the title stays whole', style => {
+    const outage = { kind: 'emergency' as const, text: 'Аварійне відключення', start: '13:30 17.10.2026', end: '17:00 17.10.2026' };
+    const at = new Date('2026-10-17T12:40:00Z'); // 15:40 Kyiv; EcoFlow off since 10:10 agrees with the outage
+    const { container } = render(<Widget state={st({ snapshot: fixtureSnapshot({ currentOutage: outage }), actual: act(at) }, style)} now={at} background={bg} />);
+    expect(container.querySelector('.w-badge')).toHaveTextContent(/^Аварійне$/);
+    expect(container.querySelector('[data-actual="live"]')).not.toBeNull();
+    expect(container.querySelector('.w-since')).toBeNull();
+    // Without a badge (the schedule's own outage, 16:00 Kyiv) it stays.
+    const plainAt = new Date('2026-10-17T13:00:00Z');
+    const plain = render(<Widget state={st({ actual: act(plainAt) }, style)} now={plainAt} background={bg} />);
+    expect(plain.container.querySelector('.w-badge')).toBeNull();
+    expect(plain.container.querySelector('.w-status .w-since')).toHaveTextContent(/^з 10:10$/);
   });
   test.each(['compact', 'timeline'] as const)('%s: the tooltip opens below the bolt (the window ends just above it)', style => {
     const { container } = render(<Widget state={st({ actual: act(now) }, style)} now={now} background={bg} />);
