@@ -32,6 +32,8 @@ export class MainWindow {
     const w = this.win;
     if (w.isMinimized()) w.restore();
     w.show();
+    // A Dock-less macOS app is not brought forward by showing a window; activate it explicitly.
+    if (process.platform === 'darwin') app.focus({ steal: true });
     w.focus();
   }
 

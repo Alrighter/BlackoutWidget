@@ -57,6 +57,8 @@ async function bootstrap(log: Logger): Promise<void> {
   // The app lives in the tray; closing every window must not quit it.
   app.on('window-all-closed', () => {});
   await app.whenReady();
+  // A menu-bar app on macOS: no Dock icon (the packaged app also sets LSUIElement, so it never flashes there).
+  app.dock?.hide();
   log.info(`Blackout Widget ${app.getVersion()} starting`);
 
   const userData = app.getPath('userData');
