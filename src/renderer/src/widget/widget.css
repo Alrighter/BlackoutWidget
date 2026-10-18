@@ -1,3 +1,5 @@
+@import '../ui/tokens.css';
+
 :root { --fg: #fff; --fg-soft: rgba(255,255,255,0.92); --muted: rgba(255,255,255,0.68); --tick: rgba(255,255,255,0.55);
   --cell: rgba(255,255,255,0.2); --hatch-a: rgba(255,255,255,0.12); --hatch-b: rgba(255,255,255,0.04);
   --border: rgba(255,255,255,0.28); --hl: rgba(255,255,255,0.35);

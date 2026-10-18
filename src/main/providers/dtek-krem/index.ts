@@ -1,3 +1,4 @@
+import { providerDisplayName } from '../../../shared/providers';
 import type { Address, HouseInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import {
@@ -13,7 +14,7 @@ interface FactState { fact: DtekFact; schNames: Record<string, string> }
 
 export class DtekKremProvider implements ScheduleProvider {
   readonly id = 'dtek-krem';
-  readonly displayName = 'ДТЕК Київські регіональні електромережі';
+  readonly displayName = providerDisplayName(this.id);
   private state: FactState | null = null;
 
   constructor(private readonly session: PageSession, private readonly log: Logger = silentLogger) {}
