@@ -9,7 +9,8 @@
     "dist:win": "electron-vite build && electron-builder --win --x64",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "ui:capture": "electron scripts/ui-capture/capture.cjs"
+    "ui:capture": "electron scripts/ui-capture/capture.cjs",
+    "tray:icons": "electron scripts/gen-tray-icons.cjs"
   },
   "keywords": [],
   "author": "",

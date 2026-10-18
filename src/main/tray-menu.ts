@@ -1,6 +1,6 @@
 import type { MenuItemConstructorOptions } from 'electron';
 import type { AppState, WidgetStyle } from '../shared/types';
-import type { WidgetView } from '../shared/widget-state';
+import { computeWidgetView, type WidgetView } from '../shared/widget-state';
 
 export interface TrayActions {
   showWindow(): void; showSchedule(): void; refreshNow(): void; setStyle(s: WidgetStyle): void; moveWidget(): void;
@@ -12,8 +12,29 @@ const STYLES: [WidgetStyle, string][] = [['compact', 'Компакт'], ['ring',
 const styleItems = (current: WidgetStyle, setStyle: (s: WidgetStyle) => void): MenuItemConstructorOptions[] =>
   STYLES.map(([style, label]) => ({ label, type: 'radio', checked: current === style, click: () => setStyle(style) }));
 
-export function buildTrayMenu(state: AppState, a: TrayActions): MenuItemConstructorOptions[] {
+/** What the tray shows (icon, tooltip, macOS header): the schedule's view, or null before the first snapshot. */
+export function trayView(state: AppState, now: Date): WidgetView | null {
+  return state.snapshot ? computeWidgetView(state.snapshot, now, state.actual) : null;
+}
+
+/** The status and the line under it, as the widget words them when there is no schedule yet. */
+function statusLines(state: AppState, now: Date): string[] {
+  const view = trayView(state, now);
+  if (view) return [view.title, view.nextText];
+  return state.settings.address ? ['Немає даних', 'Графік ще не отримано'] : ['Налаштуйте адресу'];
+}
+
+/**
+ * On macOS the menu opens with the status (tray-menu.html, D5): two disabled items rather than a `sublabel`, which
+ * needs macOS 14.4. Windows keeps its menu as it was.
+ */
+export function buildTrayMenu(
+  state: AppState, a: TrayActions, platform: NodeJS.Platform, now = new Date(),
+): MenuItemConstructorOptions[] {
   const menu: MenuItemConstructorOptions[] = [];
+  if (platform === 'darwin') {
+    menu.push(...statusLines(state, now).map(label => ({ label, enabled: false })), { type: 'separator' });
+  }
   if (state.phase === 'captcha') {
     menu.push({ label: 'Пройти перевірку', click: a.solveCaptcha }, { type: 'separator' });
   }

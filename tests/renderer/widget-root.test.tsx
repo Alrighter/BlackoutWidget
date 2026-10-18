@@ -64,6 +64,52 @@ test('move mode shows «Готово»; pressing it ends move mode without openi
   expect(screen.queryByText('Готово')).toBeNull();
 });
 
+test('move mode draws the frame, the move glyph and the hint pill inside the card, for every style', async () => {
+  let setMoving!: (on: boolean) => void;
+  let push!: (s: AppState) => void;
+  const api = {
+    getState: () => Promise.resolve(mk()), onState: (cb: (s: AppState) => void) => { push = cb; return () => {}; },
+    onBackground: () => () => {}, onMoveMode: (cb: (on: boolean) => void) => { setMoving = cb; return () => {}; },
+  } as unknown as RendererApi;
+  pinDate();
+  const { container } = render(<WidgetRoot api={api} />);
+  await screen.findByText('Світло є');
+  expect(screen.queryByText('Перетягніть віджет у потрібне місце')).toBeNull();
+  act(() => setMoving(true));
+  for (const style of ['compact', 'ring', 'timeline'] as const) {
+    act(() => push(mk({ settings: { ...DEFAULT_SETTINGS, address: fixtureSnapshot().address, widgetStyle: style } })));
+    const card = container.querySelector(`.w-card.w-${style}`)!;
+    const pill = screen.getByText('Перетягніть віджет у потрібне місце').closest('.w-move-pill')!;
+    expect(card.contains(pill)).toBe(true);
+    expect(pill).toContainElement(screen.getByRole('button', { name: 'Готово' }));
+    expect(card.querySelector('.w-move-frame')).toHaveAttribute('aria-hidden', 'true');
+    expect(card.querySelector('.w-move-glyph')).toHaveAttribute('aria-hidden', 'true');
+  }
+  act(() => setMoving(false));
+  expect(screen.queryByText('Перетягніть віджет у потрібне місце')).toBeNull();
+  expect(container.querySelector('.w-move-frame, .w-move-glyph')).toBeNull();
+});
+
+test('in move mode a press on the hint pill still drags the widget', async () => {
+  let setMoving!: (on: boolean) => void;
+  const api = {
+    getState: () => Promise.resolve(mk()), onState: () => () => {}, onBackground: () => () => {},
+    onMoveMode: (cb: (on: boolean) => void) => { setMoving = cb; return () => {}; },
+    endMoveMode: vi.fn(), openMainWindow: vi.fn(), widgetDrag: vi.fn(), widgetContextMenu: vi.fn(),
+  };
+  pinDate();
+  render(<WidgetRoot api={api as unknown as RendererApi} />);
+  await screen.findByText('Світло є');
+  act(() => setMoving(true));
+  const hint = screen.getByText('Перетягніть віджет у потрібне місце');
+  fireEvent.pointerDown(hint, { button: 0, screenX: 100, screenY: 100, pointerId: 2 });
+  fireEvent.pointerMove(hint, { screenX: 130, screenY: 90, pointerId: 2 });
+  fireEvent.pointerUp(hint, { button: 0, screenX: 130, screenY: 90, pointerId: 2 });
+  expect(api.widgetDrag.mock.calls).toEqual([['start', 100, 100], ['move', 130, 90], ['end', 130, 90]]);
+  expect(api.openMainWindow).not.toHaveBeenCalled();
+  expect(api.endMoveMode).not.toHaveBeenCalled();
+});
+
 test('a pushed state also refreshes the clock', async () => {
   pinDate();
   let push!: (s: AppState) => void;

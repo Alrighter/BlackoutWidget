@@ -8,14 +8,30 @@ html, body, #root { margin: 0; width: 100%; height: 100%; background: transparen
 body { user-select: none; -webkit-user-select: none; cursor: default; }
 .w-root { position: relative; width: 100%; height: 100%; }
 
-/* Move mode (tray «Перемістити віджет»): highlighted frame and a «Готово» button. */
+/*
+ * Move mode (tray «Перемістити віджет», D6): the mockup's frame, glyph and pill (tray-menu.html), the same in both
+ * themes, drawn inside the card. The frame sits 3 px in, so its outer dark ring shows, concentric with the card. The
+ * glyph sits on the frame's top-right corner: the mockup's bottom-right one would cover «оновлено …» on the ring and
+ * the timeline. The pill is centred: one row on the timeline, the hint on two lines beside «Готово» on the compact,
+ * above it on the ring.
+ */
 .w-moving { cursor: move; }
-.w-moving::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
-  border: 2px solid #4da3ff; border-radius: 22px; box-shadow: 0 0 12px rgba(77,163,255,0.6) inset; }
-.w-done { position: absolute; right: 10px; bottom: 10px; z-index: 3; cursor: pointer;
-  font: 600 12px "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; color: #fff;
-  background: #2f7fe0; border: 0; border-radius: 999px; padding: 5px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-.w-done:hover { background: #3a8cf0; }
+.w-move { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.w-move-frame { position: absolute; inset: 3px; border: 2px dashed #ffffff; border-radius: calc(var(--bw-r-compact) - 3px);
+  box-shadow: 0 0 0 2px rgba(17, 19, 26, 0.55), inset 0 0 0 2px rgba(17, 19, 26, 0.35); }
+.w-timeline .w-move-frame { border-radius: calc(var(--bw-r-timeline) - 3px); }
+.w-ring .w-move-frame { border-radius: calc(var(--bw-r-dial) - 3px); }
+.w-move-glyph { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+.w-move-glyph svg { fill: none; stroke: #11131a; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.w-move-pill { pointer-events: auto; box-sizing: border-box; display: flex; align-items: center; gap: 14px;
+  min-height: 46px; max-width: calc(100% - 24px); padding: 0 6px 0 16px; border-radius: var(--bw-r-pill);
+  background: rgba(18, 20, 28, 0.78); border: 1px solid rgba(255, 255, 255, 0.16); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color: #f5f7fc; font-size: 13px; line-height: 16px; backdrop-filter: blur(24px); }
+.w-move-hint { min-width: 0; text-wrap: balance; }
+.w-done { flex: none; height: 34px; padding: 0 18px; border: 0; border-radius: var(--bw-r-pill); cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 650; background: #f5f7fc; color: #11131a; }
+.w-ring .w-move-pill { flex-direction: column; gap: 8px; padding: 10px 6px 6px; border-radius: 23px; text-align: center; }
 
 /* State colour of the card, dot and tint. */
 .w-tone-on { --bw-state: var(--bw-on); }

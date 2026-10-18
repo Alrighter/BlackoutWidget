@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { providerDisplayName } from '../../../shared/providers';
 import type { AppState, WidgetBackground } from '../../../shared/types';
 import { kyivDateKey, kyivMinutesOfDay } from '../../../shared/time';
@@ -14,9 +15,12 @@ const emptyView = (now: Date): WidgetView => ({
 
 /**
  * Purely presentational; fills its window exactly (the window is transparent, the rounded card is the visible shape).
- * Layers: the blurred wallpaper under the window (or the theme's solid underlay), the glass tinted by the state, content.
+ * Layers: the blurred wallpaper under the window (or the theme's solid underlay), the glass tinted by the state, content,
+ * and `children` over it all (move mode), clipped to the card.
  */
-export function Widget({ state, now, background }: { state: AppState; now: Date; background: WidgetBackground }) {
+export function Widget({ state, now, background, children }: {
+  state: AppState; now: Date; background: WidgetBackground; children?: ReactNode;
+}) {
   const style = state.settings.widgetStyle;
   const view = !state.settings.address ? null : state.snapshot ? computeWidgetView(state.snapshot, now, state.actual) : emptyView(now);
 
@@ -36,6 +40,7 @@ export function Widget({ state, now, background }: { state: AppState; now: Date;
       {background.kind === 'image' && <div className="w-bg" style={{ backgroundImage: `url("${background.dataUrl}")` }} />}
       <div className="w-glass" />
       <div className="w-content">{body}</div>
+      {children}
     </div>
   );
 }
