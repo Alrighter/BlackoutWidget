@@ -10,10 +10,12 @@ export const ECOFLOW_HOSTS: Record<EcoflowRegion, string> = {
 export interface EcoflowKeys { accessKey: string; secretKey: string }
 export interface EcoflowDevice { sn: string; online: boolean; productName?: string; deviceName?: string }
 export interface MqttCertificate { account: string; password: string; host: string; port: number }
-export type FetchLike = (url: string, init: { method: 'GET'; headers: Record<string, string>; signal?: AbortSignal }) =>
+export type FetchLike = (url: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string; signal?: AbortSignal }) =>
   Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
 
 const KEY_CODES = new Set(['8521', '8524', '8513']);
+// The account login's codes: their message text also matches KEY_MESSAGE, but they never mean a bad developer key.
+const ACCOUNT_CODES = new Set(['2026', '1005']);
 const KEY_MESSAGE = /accessKey is invalid|doesn.?t exist|does not exist/i;
 
 export function describeEcoflowError(code: string, apiMessage: string): string {
@@ -22,6 +24,8 @@ export function describeEcoflowError(code: string, apiMessage: string): string {
     case '8521': return 'EcoFlow не прийняв підпис запиту (8521). Перевірте Secret Key і час на комп’ютері.';
     case '8524': return 'EcoFlow не прийняв час запиту (8524). Перевірте, чи правильно виставлено час на комп’ютері.';
     case '8513': return 'Схоже, ключі з іншого регіону (8513). Спробуйте інший регіон.';
+    case '2026': return 'EcoFlow не прийняв вхід. Перевірте email, пароль і регіон. Якщо все правильно — можливо, EcoFlow тимчасово недоступний.';
+    case '1005': return 'EcoFlow не прийняв формат пароля (1005). Це помилка застосунку — повідомте розробника.';
     case 'timeout': return 'EcoFlow не відповідає. Спробуйте пізніше.';
     case 'bad-json': return 'EcoFlow повернув незрозумілу відповідь.';
   }
@@ -39,7 +43,7 @@ export class EcoflowApiError extends Error {
     super(describeEcoflowError(code, apiMessage));
     this.name = 'EcoflowApiError';
     this.code = code;
-    this.keyProblem = KEY_CODES.has(code) || KEY_MESSAGE.test(apiMessage);
+    this.keyProblem = !ACCOUNT_CODES.has(code) && (KEY_CODES.has(code) || KEY_MESSAGE.test(apiMessage));
   }
 }
 

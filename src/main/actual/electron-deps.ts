@@ -10,7 +10,7 @@ import type { Encryptor } from './secrets';
  * Chromium's network stack rather than Node's: the system proxy and certificate store apply. No HTTP cache: a cache
  * validator must never freeze the quota/all body, whose changes are the sign of fresh data.
  */
-export const electronFetch: FetchLike = (url, init) => net.fetch(url, { ...init, cache: 'no-store' });
+export const electronFetch: FetchLike = (url, init) => net.fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: init.signal, cache: 'no-store' });
 
 export const electronEncryptor: Encryptor = {
   isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
