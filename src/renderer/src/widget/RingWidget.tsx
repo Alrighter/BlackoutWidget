@@ -74,7 +74,7 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
         {(view.actual || view.actualUnknownReason !== undefined) && (
           // Above the title, in the free space inside the ring.
           <g data-actual={view.actual ? 'live' : 'unknown'} transform="translate(95 55) scale(1)"
-            style={view.actual ? { color: '#5dffa8' } : { color: 'var(--tick)', opacity: 0.7 }}>
+            style={view.actual ? { color: '#5dffa8' } : { color: 'var(--bw-ink-3)', opacity: 0.7 }}>
             <title>{view.actual ? 'Фактичний стан · EcoFlow' : `EcoFlow: ${view.actualUnknownReason}`}</title>
             <path d="M6 0 0 8h4l-1 6 7-9H6z" fill="currentColor" />
           </g>
@@ -87,7 +87,7 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
         )}
       </svg>
       <div className="w-ring-caption">
-        <Caption view={view} lineChanged={lineChanged} updated={view.updatedText}
+        <Caption view={view} footWarning={lineChanged} updated={view.updatedText}
           label={lineChanged ? undefined : view.lineLabel.split(' · ')[0]} />
       </div>
     </>

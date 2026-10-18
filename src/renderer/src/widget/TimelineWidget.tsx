@@ -1,6 +1,6 @@
 import { addDays, formatDM } from '../../../shared/time';
 import type { WidgetView } from '../../../shared/widget-state';
-import { ActualLine, DayBar, DayTicks } from './DayBar';
+import { DayBar, DayTicks } from './DayBar';
 import { Caption, Status } from './parts';
 
 export function TimelineWidget({ view, lineChanged }: { view: WidgetView; lineChanged: boolean }) {
@@ -29,19 +29,18 @@ export function TimelineWidget({ view, lineChanged }: { view: WidgetView; lineCh
       <div className="w-tl-row" style={{ marginTop: 14 }}>
         <div className="w-row-label">Сьогодні {formatDM(view.todayKey)}</div>
         <div className="w-tl-bar">
-          <DayBar day={view.today} nowFraction={view.nowFraction} />
-          {view.actualStrip?.length ? <ActualLine parts={view.actualStrip} /> : null}
+          <DayBar day={view.today} nowFraction={view.nowFraction} actual={view.actualStrip} />
         </div>
       </div>
       <div className="w-tl-row" style={{ marginTop: 8 }}>
         <div className="w-row-label">Завтра {formatDM(tomorrowKey)}</div>
-        <DayBar day={view.tomorrow} />
+        <DayBar day={view.tomorrow} emptyText="ще не опубліковано" />
       </div>
       <div className="w-tl-row">
         <div className="w-row-label" />
         <DayTicks />
       </div>
-      <Caption view={view} lineChanged={lineChanged} updated={updated} />
+      <Caption view={view} footWarning={lineChanged} updated={updated} />
     </>
   );
 }

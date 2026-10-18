@@ -93,3 +93,5 @@
 .bw-cell--unknown {
   background: repeating-linear-gradient(135deg, rgb(from var(--bw-unknown) r g b / 0.85) 0 2px, rgb(from var(--bw-unknown) r g b / 0.22) 2px 4px);
 }
+/* A half hour that has passed. */
+.bw-cell--past { opacity: 0.4; }

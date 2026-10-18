@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { Widget } from '../../src/renderer/src/widget/Widget';
 import { DayBar } from '../../src/renderer/src/widget/DayBar';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
@@ -24,7 +24,9 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s: line changed + stale ke
   expect(screen.getByText('Схема підключення змінилась — перевірте лінію')).toBeInTheDocument();
   expect(screen.getByText(/оновлено 11:48/i)).toHaveClass('w-fixed');
   expect(screen.getByText('дані застаріли')).toHaveClass('w-stale');
-  expect(container.querySelector('.w-foot')).toHaveClass('w-foot-changed');
+  // Compact gives the warning a row of its own above the strip (mockup); ring and timeline keep it in the footer.
+  if (style === 'compact') expect(container.querySelector('.w-foot .w-cap-warn')).toBeNull();
+  else expect(container.querySelector('.w-foot')).toHaveClass('w-foot-changed');
 });
 test.each(['compact', 'ring', 'timeline'] as const)('%s: the updated time never sits in the shrinking part', style => {
   const { container } = render(<Widget state={st({}, style)} now={new Date('2026-10-17T09:40:00Z')} background={{ kind: 'tint' }} />);
@@ -40,6 +42,43 @@ test('DayBar renders 48 halves with off at 12..16', () => {
   const { container } = render(<DayBar day={fixtureSnapshot().days[0]} />);
   const halves = container.querySelectorAll('[data-slot]'); expect(halves).toHaveLength(48);
   expect(halves[12].getAttribute('data-slot')).toBe('off'); expect(halves[17].getAttribute('data-slot')).toBe('on');
+});
+test('DayBar dims the past cells and marks now (11:50 → 23 cells past)', () => {
+  const { container } = render(<DayBar day={fixtureSnapshot().days[0]} nowFraction={710 / 1440} />);
+  const cells = [...container.querySelectorAll('[data-slot]')];
+  cells.forEach((c, i) => {
+    if (i <= 22) expect(c).toHaveClass('bw-cell--past'); else expect(c).not.toHaveClass('bw-cell--past');
+  });
+  expect(parseFloat((container.querySelector('.w-now') as HTMLElement).style.left)).toBeCloseTo(49.31, 1);
+});
+test('DayBar without now (tomorrow) dims nothing and has no marker', () => {
+  const { container } = render(<DayBar day={fixtureSnapshot().days[0]} />);
+  expect(container.querySelector('.bw-cell--past, .w-now')).toBeNull();
+});
+test('DayBar: an off run is one gradient off-a → off-b along its length', () => {
+  const day = { ...fixtureSnapshot().days[0], slots: fixtureSnapshot().days[0].slots.map((s, i) => (i === 40 ? 'off' : s === 'off' ? 'off' : 'on')) };
+  const { container } = render(<DayBar day={day} />);
+  const cells = [...container.querySelectorAll<HTMLElement>('[data-slot]')];
+  const stops = (i: number) => [cells[i].style.getPropertyValue('--off-from'), cells[i].style.getPropertyValue('--off-to')];
+  // Fixture run 12..16 (5 cells): each cell continues where the previous one stopped.
+  expect([12, 13, 14, 15, 16].map(stops)).toEqual([['0%', '20%'], ['20%', '40%'], ['40%', '60%'], ['60%', '80%'], ['80%', '100%']]);
+  expect(stops(40)).toEqual(['0%', '100%']); // a one-cell run spans the whole gradient
+  expect(stops(17)).toEqual(['', '']); // «on» has none
+});
+test('compact: no schedule today → 48 hatched unknown cells, not the «ще не опубліковано» bar', () => {
+  const { container } = render(<Widget state={st({ snapshot: fixtureSnapshot({ extraDays: [] }) })} now={new Date('2026-10-19T08:50:00Z')} background={{ kind: 'tint' }} />);
+  const cells = container.querySelectorAll('[data-slot]');
+  expect(cells).toHaveLength(48);
+  expect([...cells].every(c => c.getAttribute('data-slot') === 'unknown')).toBe(true);
+  expect(screen.queryByText('ще не опубліковано')).toBeNull();
+});
+test.each([
+  ['on', st()],
+  ['emergency', st({ snapshot: fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення' } }) })],
+  ['unknown', { ...st(), settings: DEFAULT_SETTINGS, snapshot: null }],
+] as const)('card is tinted by the state: %s', (tone, state) => {
+  const { container } = render(<Widget state={state} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('.w-card')).toHaveClass(`w-tone-${tone}`);
 });
 test('emergency badge', () => {
   const s = st({ snapshot: fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення' } }) });
@@ -64,6 +103,7 @@ test.each(['compact', 'ring', 'timeline'] as const)('%s: overflow protection on 
   expect(cap.querySelector('.w-stale')).toHaveTextContent('дані застаріли');
   rerender(<Widget state={st({ lineChanged: true }, style)} now={now} background={{ kind: 'tint' }} />);
   expect(container.querySelector('.w-cap-warn')).toHaveAttribute('title', 'Схема підключення змінилась — перевірте лінію');
+  if (style === 'compact') expect(container.querySelector('.w-cap-warn .w-ellipsis')).toHaveTextContent('Схема підключення змінилась — перевірте лінію');
 });
 test('compact next line is ellipsized with full title', () => {
   const { container } = render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
@@ -124,12 +164,38 @@ describe('actual state', () => {
     const { container } = render(<Widget state={st({}, style)} now={now} background={bg} />);
     expect(container.querySelector('[data-actual], [data-actual-part], [data-actual-arc], .w-actual-line')).toBeNull();
   });
-  test('compact: «з HH:MM» sits in the next line when actual matches the schedule', () => {
+  test('compact: «з HH:MM» sits in the status row when actual matches the schedule', () => {
     const offNow = new Date('2026-10-17T13:00:00Z'); // 16:00 Kyiv, schedule: off
     const { container } = render(<Widget state={st({ actual: act(offNow) })} now={offNow} background={bg} />);
-    expect(container.querySelector('.w-next')).toHaveTextContent('Увімкнуть о 19:00 · через 3 год · з 10:10');
+    expect(container.querySelector('.w-status .w-since')).toHaveTextContent(/^з 10:10$/);
+    expect(container.querySelector('.w-next')).toHaveTextContent(/^Увімкнуть о 19:00 · через 3 год$/);
+    // On a mismatch the next line carries it, and the status row doesn't repeat it.
     const mm = render(<Widget state={st({ actual: act(now) })} now={now} background={bg} />);
     expect(mm.container.querySelector('.w-next')).toHaveTextContent(/^Не за графіком · з 10:10$/);
+    expect(mm.container.querySelector('.w-since')).toBeNull();
+  });
+  test.each([
+    ['live', act(now), 'Фактичний стан · EcoFlow'],
+    ['unknown', act(now, { power: 'unknown', reason: 'станція не в мережі' }), 'EcoFlow: станція не в мережі'],
+  ] as const)('compact: the %s bolt shows its tooltip on hover and on focus', (kind, actual, text) => {
+    const { container } = render(<Widget state={st({ actual })} now={now} background={bg} />);
+    const bolt = container.querySelector(`[data-actual="${kind}"]`) as HTMLElement;
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.pointerEnter(bolt);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(text);
+    fireEvent.pointerLeave(bolt);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.focus(bolt);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(text);
+    fireEvent.blur(bolt);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(bolt).toHaveAttribute('tabindex', '0');
+    expect(fireEvent.mouseDown(bolt)).toBe(false); // a press doesn't focus it (and so doesn't pin the tooltip open)
+  });
+  test('compact: the actual line sits inside the strip, under the cells', () => {
+    const { container } = render(<Widget state={st({ actual: withStrip(later) })} now={later} background={bg} />);
+    expect(container.querySelector('.w-strip > .w-cells + .w-actual-line')).not.toBeNull();
+    expect(container.querySelector('.w-strip > .w-now')).not.toBeNull();
   });
   test('timeline: «з HH:MM» under the status when actual matches', () => {
     const offNow = new Date('2026-10-17T13:00:00Z');
