@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="uk"><head>
+<meta charset="utf-8">
+<title>Токени і компоненти</title>
+<script src="078a25f7-9e6d-4b5b-abad-29de4840302b"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#9cc0ff}a:hover{color:#c7dbff}
+</style>
+</helmet>
+<div style="width: 1600px; min-height: 3300px; box-sizing: border-box; padding: 60px 72px; background: #121419; color: #eef0f6; font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; display: flex; flex-direction: column; gap: 52px; -webkit-font-smoothing: antialiased">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <h1 style="margin: 0; font-size: 44px; line-height: 52px; font-weight: 700; letter-spacing: -1px">Токени і компоненти</h1>
+    <p style="margin: 0; max-width: 980px; font-size: 16px; line-height: 24px; color: #b4b9c7; text-wrap: pretty">Значення для перенесення в CSS. Тема — за системною. Розмиття шпалер під віджетом дає ОС (Windows — Acrylic, macOS — vibrancy); у вебі й у цьому макеті — <code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 14px">backdrop-filter</code>.</p>
+  </div>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700">Кольори станів</h2>
+    <div style="display: grid; grid-template-columns: 220px 230px 230px 230px 1fr; gap: 0 20px; font-size: 13px; color: #9ba1b3; padding: 0 0 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.1)">
+      <span>Стан</span><span>Токен</span><span>Темна тема</span><span>Світла тема</span><span>Зразок у смужці (темна / світла)</span>
+    </div>
+    <sc-for list="{{states}}" as="s" hint-placeholder-count="7">
+      <div style="display: grid; grid-template-columns: 220px 230px 230px 230px 1fr; gap: 0 20px; align-items: center; min-height: 52px; border-bottom: 1px solid rgba(255, 255, 255, 0.06)">
+        <span style="display: flex; flex-direction: column"><span style="font-size: 14.5px; font-weight: 600">{{s.name}}</span><span style="font-size: 12px; color: #9ba1b3">{{s.note}}</span></span>
+        <code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 13px; color: #c9ceda">{{s.token}}</code>
+        <span style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); background: {{s.darkBg}}"></span><code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 13px">{{s.dark}}</code></span>
+        <span style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); background: {{s.lightBg}}"></span><code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 13px">{{s.light}}</code></span>
+        <span style="display: flex; gap: 12px">
+          <span style="display: flex; gap: 1px; width: 150px; height: 12px; padding: 8px; border-radius: 10px; background: rgba(18, 20, 28, 0.9)"><span style="flex: 1 1 0; border-radius: 2px; background: {{s.darkBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.darkBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.darkBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.darkBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.darkBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.darkBg}}"></span></span>
+          <span style="display: flex; gap: 1px; width: 150px; height: 12px; padding: 8px; border-radius: 10px; background: rgba(248, 249, 252, 0.95)"><span style="flex: 1 1 0; border-radius: 2px; background: {{s.lightBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.lightBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.lightBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.lightBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.lightBg}}"></span><span style="flex: 1 1 0; border-radius: 2px; background: {{s.lightBg}}"></span></span>
+        </span>
+      </div>
+    </sc-for>
+    <p style="margin: 4px 0 0; font-size: 13.5px; line-height: 20px; color: #9ba1b3; max-width: 1100px">У світлій темі кольори смужки темніші за базові, щоб клітинки мали контраст не менше 3:1 зі світлим склом. Текст стану завжди основним кольором тексту — колір несуть крапка і смужка. Минуле — той самий колір з альфою 0,4. Відрізок «немає» — градієнт від --bw-off-a до --bw-off-b по всій довжині відрізка.</p>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700">Скло і текст</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+      <sc-for list="{{glass}}" as="g" hint-placeholder-count="2">
+        <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; padding: 20px; border-radius: 18px; background: #1a1c22">
+          <div style="height: 220px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: repeating-linear-gradient(118deg, rgba(255, 255, 255, 0) 0px 16px, rgba(255, 255, 255, 0.6) 16px 19px, rgba(0, 0, 0, 0) 19px 36px, rgba(0, 0, 0, 0.38) 36px 39px), conic-gradient(from 200deg at 38% 46%, #ff4e50, #fc913a, #f9d423, #34e89e, #0f9bff, #8e54e9, #ff4e50)">
+            <div style="width: 230px; box-sizing: border-box; padding: 16px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); background: {{g.glass}}; border: 1px solid {{g.edge}}; box-shadow: {{g.shadow}}">
+              <span style="font-size: 18px; font-weight: 650; color: {{g.ink}}">Основний текст</span>
+              <span style="font-size: 13px; color: {{g.ink2}}">Другорядний · рядок зміни</span>
+              <span style="font-size: 11px; color: {{g.ink3}}">Третинний · підпис «оновлено»</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+            <span style="font-size: 15px; font-weight: 650">{{g.title}}</span>
+            <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="8">
+              <span style="display: grid; grid-template-columns: 150px 1fr; gap: 10px"><code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12.5px; color: #c9ceda">{{r.k}}</code><code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12.5px; color: #9ba1b3">{{r.v}}</code></span>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <p style="margin: 0; font-size: 13.5px; line-height: 20px; color: #9ba1b3; max-width: 1100px">Тонування: радіальний градієнт кольору стану з альфою 0,14 (світла) / 0,18 (темна) від верхнього лівого кута поверх скла. Непрозорість скла 0,62–0,66 — мінімум, за якого основний текст тримає ≥ 7:1, а третинний ≥ 4,5:1 навіть на строкатих шпалерах.</p>
+  </section>
+
+  <section style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #1a1c22">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Радіуси</h2>
+      <sc-for list="{{radii}}" as="r" hint-placeholder-count="8">
+        <div style="display: flex; align-items: center; gap: 14px"><span style="flex: none; width: 40px; height: 28px; border: 1.5px solid #8fb4ff; border-right: 0; border-bottom: 0; border-top-left-radius: {{r.px}}"></span><span style="flex: 1 1 auto; font-size: 13.5px">{{r.k}}</span><code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12.5px; color: #9ba1b3">{{r.v}}</code></div>
+      </sc-for>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #1a1c22">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Тіні</h2>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 14px; border-radius: 12px; background: #e9ecf2">
+        <div style="height: 64px; border-radius: 14px; background: #ffffff; box-shadow: 0 0 0 0.5px rgba(17, 19, 26, 0.12), 0 14px 34px rgba(18, 22, 36, 0.22), 0 2px 6px rgba(18, 22, 36, 0.10); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #474c59">віджет · світла</div>
+        <div style="height: 64px; border-radius: 8px; background: #ffffff; box-shadow: 0 30px 80px rgba(20, 24, 40, 0.28), 0 8px 24px rgba(20, 24, 40, 0.14); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #474c59">вікно</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 14px; border-radius: 12px; background: #2a2e3a">
+        <div style="height: 64px; border-radius: 14px; background: #191b22; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #c4c8d3">віджет · темна</div>
+        <div style="height: 64px; border-radius: 8px; background: #191b22; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #c4c8d3">меню / підказка</div>
+      </div>
+      <code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12px; line-height: 18px; color: #9ba1b3; white-space: pre-wrap">--bw-shadow (віджет), --bw-shadow-window: 0 30px 80px rgba(0,0,0,.38), 0 8px 24px rgba(0,0,0,.22), --bw-shadow-menu: 0 16px 40px rgba(0,0,0,.35)</code>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 22px; border-radius: 18px; background: #1a1c22">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Відступи</h2>
+      <sc-for list="{{space}}" as="s" hint-placeholder-count="9">
+        <div style="display: flex; align-items: center; gap: 12px"><code style="flex: none; width: 70px; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12.5px; color: #c9ceda">{{s.k}}</code><span style="height: 12px; border-radius: 3px; background: #8fb4ff; width: {{s.w}}"></span><span style="font-size: 12.5px; color: #9ba1b3">{{s.v}}</span></div>
+      </sc-for>
+      <p style="margin: 4px 0 0; font-size: 13px; line-height: 19px; color: #9ba1b3">Поля віджетів: Компакт 13 / 16 / 12, Циферблат 12 / 14, Таймлайн 14 / 16 / 12. Вікно: 20 по боках, між картками 12–14.</p>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700">Типографіка</h2>
+    <p style="margin: 0; font-size: 13.5px; line-height: 20px; color: #9ba1b3">Windows — Segoe UI Variable (Text до 20 px, Display від 20 px), macOS — SF Pro через системний стек. Усі часи і відліки — <code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace">font-variant-numeric: tabular-nums</code>, щоб цифри не стрибали щохвилини.</p>
+    <div style="display: flex; flex-direction: column; border-top: 1px solid rgba(255, 255, 255, 0.1)">
+      <sc-for list="{{type}}" as="t" hint-placeholder-count="9">
+        <div style="display: grid; grid-template-columns: 260px 260px 1fr; gap: 20px; align-items: center; min-height: 58px; border-bottom: 1px solid rgba(255, 255, 255, 0.06)">
+          <span style="display: flex; flex-direction: column"><span style="font-size: 14px; font-weight: 600">{{t.name}}</span><span style="font-size: 12px; color: #9ba1b3">{{t.where}}</span></span>
+          <code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12.5px; color: #c9ceda">{{t.spec}}</code>
+          <span style="font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: {{t.fam}}; font-size: {{t.size}}; line-height: {{t.lh}}; font-weight: {{t.fw}}; letter-spacing: {{t.ls}}; color: {{t.color}}">{{t.sample}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700">Компоненти</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #1a1c22">
+        <span style="font-size: 15px; font-weight: 650">Крапка, бейдж, позначки</span>
+        <div style="display: flex; gap: 18px; align-items: center">
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: #5dffa8; box-shadow: 0 0 0 3px rgba(93, 255, 168, 0.22), 0 0 12px rgba(93, 255, 168, 0.55)"></span>
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff6b5b; box-shadow: 0 0 0 3px rgba(255, 107, 91, 0.22), 0 0 12px rgba(255, 107, 91, 0.55)"></span>
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: #ffc23d; box-shadow: 0 0 0 3px rgba(255, 194, 61, 0.22), 0 0 12px rgba(255, 194, 61, 0.55)"></span>
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: #9aa0b4; box-shadow: 0 0 0 3px rgba(154, 160, 180, 0.22)"></span>
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.22), 0 0 12px rgba(255, 77, 77, 0.6)"></span>
+          <span style="font-size: 12px; color: #9ba1b3">10 px + ореол 3 px</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+          <span style="font-size: 11px; line-height: 15px; font-weight: 650; color: #ffffff; background: #d12b25; padding: 2px 8px; border-radius: 999px">Аварійне</span>
+          <span style="font-size: 11px; line-height: 15px; font-weight: 650; color: #ffffff; background: #d12b25; padding: 2px 8px; border-radius: 999px">Екстрене</span>
+          <span style="font-size: 10.5px; line-height: 14px; font-weight: 650; padding: 1px 7px; border-radius: 999px; color: #ffd27a; background: rgba(255, 194, 61, 0.18)">дані застаріли</span>
+          <span style="font-size: 10.5px; line-height: 14px; font-weight: 650; padding: 1px 7px; border-radius: 999px; color: #8a5800; background: #f6e2ae">дані застаріли</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #ffd27a"><svg width="13" height="13" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3 2 20.5h20z"></path><path d="M12 10v4.5"></path><path d="M12 17.6v.1"></path></svg>Схема підключення змінилась — перевірте лінію</div>
+        <div style="display: flex; align-items: center; gap: 22px; padding-top: 22px">
+          <span style="position: relative; display: flex; color: #f5f7fc"><svg width="16" height="16" sc-camel-view-box="0 0 24 24" role="img" aria-label="Фактичний стан · EcoFlow" style="fill: currentColor; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg><span style="position: absolute; bottom: calc(100% + 8px); left: -12px; white-space: nowrap; font-size: 11.5px; padding: 5px 9px; border-radius: 8px; background: rgba(30, 32, 40, 0.97); border: 1px solid rgba(255, 255, 255, 0.14); color: #f5f7fc">Фактичний стан · EcoFlow</span></span>
+          <span style="display: flex; color: rgba(245, 247, 252, 0.66); opacity: 0.5"><svg width="16" height="16" sc-camel-view-box="0 0 24 24" role="img" aria-label="EcoFlow: станція не в мережі" style="fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg></span>
+          <span style="font-size: 12px; color: #9ba1b3">активна · невідоме джерело (контур, 50 %)</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #1a1c22">
+        <span style="font-size: 15px; font-weight: 650">Смужка доби і лінія «Фактично»</span>
+        <div style="padding: 14px 16px; border-radius: 14px; background: rgba(18, 20, 28, 0.9)">
+          <div style="position: relative">
+            <div style="display: flex; gap: 1px; height: 12px">
+              <sc-for list="{{demoCells}}" as="c" hint-placeholder-count="48"><div style="flex: 1 1 0; border-radius: {{c.r}}; background: {{c.bg}}"></div></sc-for>
+            </div>
+            <div style="position: relative; height: 3px; margin-top: 3px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, 0.12)">
+              <sc-for list="{{demoAct}}" as="a" hint-placeholder-count="5"><div style="position: absolute; top: 0; bottom: 0; left: {{a.l}}; width: {{a.w}}; background: {{a.bg}}"></div></sc-for>
+            </div>
+            <div style="position: absolute; top: -3px; bottom: -3px; left: 72%; width: 2px; margin-left: -1px; border-radius: 2px; background: #ffffff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55)"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 3px; font-size: 9.5px; color: rgba(245, 247, 252, 0.66)"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+        </div>
+        <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 19px; color: #c4c8d3">
+          <li>48 клітинок, проміжок 1 px, радіус 1,5 px, крайні — 4 px; висота 12 px.</li>
+          <li>Маркер «зараз»: 2 px, на 3 px виходить за смужку, обведення 1 px контрастним кольором.</li>
+          <li>Лінія «Фактично»: 3 px (у вікні 6 px), точність до хвилини; «немає» — --bw-off-dot, «є» — --bw-on з альфою 0,7, невідомо — штрихи 2/2 px.</li>
+          <li>Циферблат: зовнішнє кільце 12 px з проміжками 0,7°, внутрішня дуга 3 px на відступі 16 px, біла точка 12 px.</li>
+        </ul>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #f1f2f6; color: #11131a">
+        <span style="font-size: 15px; font-weight: 650">Кнопки і поля (вікно, світла)</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <button style="height: 34px; padding: 0 16px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: #1b1e27; color: #ffffff">Основна</button>
+          <button style="height: 34px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: #ffffff; border: 1px solid rgba(17, 19, 26, 0.13); color: #11131a">Другорядна</button>
+          <button style="height: 34px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: transparent; border: 1px solid rgba(17, 19, 26, 0.13); color: #474c59">Тиха</button>
+          <button disabled="disabled" style="height: 34px; padding: 0 16px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: rgba(17, 19, 26, 0.08); color: #686d7c">Недоступна</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px">
+          <button role="switch" aria-checked="true" aria-label="Перемикач увімкнено" style="flex: none; width: 42px; height: 22px; border: 0; border-radius: 999px; padding: 0 3px; display: flex; align-items: center; justify-content: flex-end; background: #2a5bd7"><span style="width: 16px; height: 16px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25)"></span></button>
+          <button role="switch" aria-checked="false" aria-label="Перемикач вимкнено" style="flex: none; width: 42px; height: 22px; border-radius: 999px; padding: 0 3px; display: flex; align-items: center; justify-content: flex-start; background: #ffffff; border: 1px solid rgba(17, 19, 26, 0.35)"><span style="width: 14px; height: 14px; border-radius: 50%; background: #474c59"></span></button>
+          <div style="display: flex; padding: 3px; border-radius: 9px; background: rgba(17, 19, 26, 0.06)"><button style="height: 28px; padding: 0 12px; border: 0; border-radius: 7px; font: inherit; font-size: 13px; font-weight: 600; background: #ffffff; box-shadow: 0 1px 2px rgba(17, 19, 26, 0.14); color: #11131a">Сьогодні</button><button style="height: 28px; padding: 0 12px; border: 0; border-radius: 7px; font: inherit; font-size: 13px; background: transparent; color: #474c59">Завтра</button></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+          <label style="display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600">Фокус<input type="text" value="Fp4S8kQ2" style="box-sizing: border-box; height: 34px; padding: 0 10px; border-radius: 8px; border: 1.5px solid #2a5bd7; box-shadow: 0 0 0 3px rgba(42, 91, 215, 0.18); background: #ffffff; font: inherit; font-weight: 400; font-size: 13px; color: #11131a"></label>
+          <label style="display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600">Помилка<input type="text" value="xxxxxxxx" aria-invalid="true" style="box-sizing: border-box; height: 34px; padding: 0 10px; border-radius: 8px; border: 1.5px solid #d12b25; background: #ffffff; font: inherit; font-weight: 400; font-size: 13px; color: #11131a"></label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: rgba(227, 38, 30, 0.08); border: 1px solid rgba(227, 38, 30, 0.4); font-size: 13px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #e3261e"></span>Банер аварійний</div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: rgba(226, 160, 0, 0.14); border: 1px solid rgba(226, 160, 0, 0.45); font-size: 13px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #e2a000"></span>Банер попередження</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700">CSS-змінні</h2>
+      <pre style="margin: 0; padding: 22px 24px; border-radius: 16px; background: #0b0c10; border: 1px solid rgba(255, 255, 255, 0.08); font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12.5px; line-height: 19px; color: #c9ceda; white-space: pre-wrap">:root {
+  /* стани · темна тема */
+  --bw-on: #5dffa8;
+  --bw-off-a: #ffc23d;   --bw-off-b: #ff7a1a;   --bw-off-dot: #ff6b5b;
+  --bw-maybe: #ffc23d;   --bw-unknown: #9aa0b4;
+  --bw-emergency: #ff4d4d;   --bw-badge: #d12b25;
+  /* текст */
+  --bw-ink: #f5f7fc;
+  --bw-ink-2: rgba(245, 247, 252, .80);
+  --bw-ink-3: rgba(245, 247, 252, .66);
+  --bw-warn-ink: #ffd27a;   --bw-warn-bg: rgba(255, 194, 61, .18);
+  /* скло */
+  --bw-glass: rgba(18, 20, 28, .62);
+  --bw-glass-edge: rgba(255, 255, 255, .16);
+  --bw-glass-blur: blur(30px) saturate(180%);
+  --bw-hair: rgba(255, 255, 255, .12);
+  --bw-tint-alpha: .18;
+  --bw-shadow: 0 0 0 .5px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.25);
+  /* форма */
+  --bw-r-compact: 22px;  --bw-r-timeline: 24px;  --bw-r-dial: 26px;
+  --bw-r-card: 12px;  --bw-r-btn: 8px;  --bw-r-cell: 1.5px;  --bw-r-pill: 999px;
+  --bw-font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --bw-font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bw-on: #1fbf72;  --bw-off-a: #f2a20c;  --bw-off-b: #ef6a10;  --bw-off-dot: #ee4b3c;
+    --bw-maybe: #e2a000;  --bw-unknown: #8a90a6;  --bw-emergency: #e3261e;
+    --bw-ink: #11131a;  --bw-ink-2: rgba(17, 19, 26, .74);  --bw-ink-3: rgba(17, 19, 26, .62);
+    --bw-warn-ink: #8a5800;  --bw-warn-bg: rgba(226, 160, 0, .20);
+    --bw-glass: rgba(248, 249, 252, .66);  --bw-glass-edge: rgba(255, 255, 255, .80);
+    --bw-hair: rgba(17, 19, 26, .10);  --bw-tint-alpha: .14;
+    --bw-shadow: 0 0 0 .5px rgba(17,19,26,.12), 0 14px 34px rgba(18,22,36,.22), 0 2px 6px rgba(18,22,36,.10);
+  }
+}
+.bw-glass {
+  background:
+    radial-gradient(130% 110% at 0 0, rgb(from var(--bw-state) r g b / var(--bw-tint-alpha)), transparent 60%),
+    var(--bw-glass);
+  border: 1px solid var(--bw-glass-edge);
+  box-shadow: var(--bw-shadow);
+  backdrop-filter: var(--bw-glass-blur);
+}
+.bw-cell--maybe   { background: repeating-linear-gradient(135deg, var(--bw-maybe) 0 2px, rgb(from var(--bw-maybe) r g b / .28) 2px 4px); }
+.bw-cell--unknown { background: repeating-linear-gradient(135deg, var(--bw-unknown) 0 2px, rgb(from var(--bw-unknown) r g b / .22) 2px 4px); }
+.bw-cell--past    { opacity: .4; }
+.bw-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bw-num      { font-variant-numeric: tabular-nums; }</pre>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 700">Обмеження</h2>
+      <ul style="margin: 0; padding: 22px 24px 22px 40px; border-radius: 16px; background: #1a1c22; display: flex; flex-direction: column; gap: 12px; font-size: 14px; line-height: 21px; color: #d7dae3">
+        <li>Розміри вікон віджета фіксовані: 290×150, 236×260, 400×200. Рядок попередження стискає кільце Циферблата до 184 px, а не вікно.</li>
+        <li>Довгі тексти — в один рядок із трикрапкою (<code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace">.bw-ellipsis</code>). Обрізається лише ліва частина підпису («Лінія · черга · компанія»).</li>
+        <li>«оновлено …» і «дані застаріли» — <code style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace">flex: none</code>, ніколи не обрізаються.</li>
+        <li>Контраст: основний текст ≥ 7:1, другорядний і підписи ≥ 4,5:1 на склі над будь-якими шпалерами; клітинки смужки ≥ 3:1 до скла.</li>
+        <li>Стани відрізняються не лише кольором: штриховка для «можливо» і «невідомо», бейдж для аварійного, різні гліфи в іконці трею.</li>
+        <li>Коли EcoFlow не збігається з графіком — великий статус фактичний, великий відлік ховається.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:3300}}">
+function hx(h) { h = String(h).replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function rgba(h, a) { var c = hx(h); return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')'; }
+function mixA(h1, h2, t, a) { var p = hx(h1), q = hx(h2); return 'rgba(' + Math.round(p[0] + (q[0] - p[0]) * t) + ', ' + Math.round(p[1] + (q[1] - p[1]) * t) + ', ' + Math.round(p[2] + (q[2] - p[2]) * t) + ', ' + a + ')'; }
+function hatch(c, a) { return 'repeating-linear-gradient(135deg, ' + c + ' 0px 2px, ' + rgba(c, a) + ' 2px 4px)'; }
+function sched(base, spans) { var a = [], i, k; for (i = 0; i < 48; i++) a.push(base); for (k = 0; k < spans.length; k++) { var s = spans[k]; for (i = Math.round(s[0] * 2); i < Math.round(s[1] * 2); i++) a[i] = s[2]; } return a.join(''); }
+var D = { on: '#5dffa8', offA: '#ffc23d', offB: '#ff7a1a', offDot: '#ff6b5b', maybe: '#ffc23d', unk: '#9aa0b4', emerg: '#ff4d4d' };
+var STATES = [
+  { name: 'Світло є', note: 'клітинка, крапка', token: '--bw-on', dark: '#5dffa8', light: '#1fbf72', darkBg: '#5dffa8', lightBg: '#1fbf72' },
+  { name: 'Світла немає', note: 'відрізок, градієнт', token: '--bw-off-a → --bw-off-b', dark: '#ffc23d → #ff7a1a', light: '#f2a20c → #ef6a10', darkBg: 'linear-gradient(90deg, #ffc23d, #ff7a1a)', lightBg: 'linear-gradient(90deg, #f2a20c, #ef6a10)' },
+  { name: 'Світла немає', note: 'крапка, лінія «Фактично»', token: '--bw-off-dot', dark: '#ff6b5b', light: '#ee4b3c', darkBg: '#ff6b5b', lightBg: '#ee4b3c' },
+  { name: 'Можливе відключення', note: 'штриховка 135°, 2/2 px', token: '--bw-maybe', dark: '#ffc23d', light: '#e2a000', darkBg: hatch('#ffc23d', 0.28), lightBg: hatch('#e2a000', 0.28) },
+  { name: 'Немає даних', note: 'штриховка 135°, 2/2 px', token: '--bw-unknown', dark: '#9aa0b4', light: '#8a90a6', darkBg: hatch('#9aa0b4', 0.22), lightBg: hatch('#8a90a6', 0.22) },
+  { name: 'Аварійне', note: 'клітинка, крапка', token: '--bw-emergency', dark: '#ff4d4d', light: '#e3261e', darkBg: '#ff4d4d', lightBg: '#e3261e' },
+  { name: 'Бейдж «Аварійне»', note: 'білий текст 5,1:1', token: '--bw-badge', dark: '#d12b25', light: '#d12b25', darkBg: '#d12b25', lightBg: '#d12b25' }
+];
+var GLASS = [
+  { title: 'Темна тема', glass: 'rgba(18, 20, 28, 0.62)', edge: 'rgba(255, 255, 255, 0.16)', shadow: '0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25)', ink: '#f5f7fc', ink2: 'rgba(245, 247, 252, 0.8)', ink3: 'rgba(245, 247, 252, 0.66)',
+    rows: [{ k: '--bw-ink', v: '#f5f7fc' }, { k: '--bw-ink-2', v: 'rgba(245,247,252,.80)' }, { k: '--bw-ink-3', v: 'rgba(245,247,252,.66)' }, { k: '--bw-glass', v: 'rgba(18,20,28,.62)' }, { k: '--bw-glass-edge', v: 'rgba(255,255,255,.16)' }, { k: '--bw-glass-blur', v: 'blur(30px) saturate(180%)' }, { k: '--bw-hair', v: 'rgba(255,255,255,.12)' }, { k: '--bw-warn-ink', v: '#ffd27a' }] },
+  { title: 'Світла тема', glass: 'rgba(248, 249, 252, 0.66)', edge: 'rgba(255, 255, 255, 0.8)', shadow: '0 0 0 0.5px rgba(17, 19, 26, 0.12), 0 14px 34px rgba(18, 22, 36, 0.22), 0 2px 6px rgba(18, 22, 36, 0.10)', ink: '#11131a', ink2: 'rgba(17, 19, 26, 0.74)', ink3: 'rgba(17, 19, 26, 0.62)',
+    rows: [{ k: '--bw-ink', v: '#11131a' }, { k: '--bw-ink-2', v: 'rgba(17,19,26,.74)' }, { k: '--bw-ink-3', v: 'rgba(17,19,26,.62)' }, { k: '--bw-glass', v: 'rgba(248,249,252,.66)' }, { k: '--bw-glass-edge', v: 'rgba(255,255,255,.80)' }, { k: '--bw-glass-blur', v: 'blur(30px) saturate(180%)' }, { k: '--bw-hair', v: 'rgba(17,19,26,.10)' }, { k: '--bw-warn-ink', v: '#8a5800' }] }
+];
+var RADII = [
+  { k: 'Віджет «Компакт»', v: '22px', px: '22px' }, { k: 'Віджет «Таймлайн»', v: '24px', px: '24px' }, { k: 'Віджет «Циферблат»', v: '26px', px: '26px' },
+  { k: 'Вікно Windows 11', v: '8px', px: '8px' }, { k: 'Вікно macOS', v: '12px', px: '12px' }, { k: 'Картка у вікні', v: '12px', px: '12px' },
+  { k: 'Кнопка, поле', v: '8px', px: '8px' }, { k: 'Клітинка (крайні 4px)', v: '1.5px', px: '2px' }
+];
+var SPACE = [2, 4, 6, 8, 12, 16, 20, 24, 32].map(function (n) { return { k: '--bw-s-' + n, v: n + 'px', w: (n * 6) + 'px' }; });
+var FD = "'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif";
+var FT = "'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif";
+var TYPE = [
+  { name: 'Відлік · Циферблат', where: 'Display', spec: '40 / 44 · 600 · −1px', fam: FD, size: '40px', lh: '44px', fw: '600', ls: '-1px', color: '#f5f7fc', sample: '1:05' },
+  { name: 'Відлік · Таймлайн, вікно', where: 'Display', spec: '34 / 36 · 600 · −0.8px', fam: FD, size: '34px', lh: '36px', fw: '600', ls: '-0.8px', color: '#f5f7fc', sample: '3:10' },
+  { name: 'Статус · вікно', where: 'Display', spec: '30 / 36 · 700 · −0.5px', fam: FD, size: '30px', lh: '36px', fw: '700', ls: '-0.5px', color: '#f5f7fc', sample: 'Світла немає' },
+  { name: 'Статус · віджет', where: 'Text', spec: '20 / 26 · 650 · −0.2px', fam: FT, size: '20px', lh: '26px', fw: '650', ls: '-0.2px', color: '#f5f7fc', sample: 'Можливе відключення' },
+  { name: 'Рядок зміни', where: 'Text · ink-2', spec: '13 / 18 · 400', fam: FT, size: '13px', lh: '18px', fw: '400', ls: '0px', color: 'rgba(245, 247, 252, 0.8)', sample: 'Увімкнуть о 19:00 · через 1 год 5 хв' },
+  { name: 'Попередження', where: 'Text · warn', spec: '12 / 16 · 600', fam: FT, size: '12px', lh: '16px', fw: '600', ls: '0px', color: '#ffd27a', sample: 'Схема підключення змінилась — перевірте лінію' },
+  { name: 'Підпис', where: 'Text · ink-3', spec: '11 / 14 · 400', fam: FT, size: '11px', lh: '14px', fw: '400', ls: '0px', color: 'rgba(245, 247, 252, 0.66)', sample: 'Лінія 1 · черга 1.2 · оновлено 14:50' },
+  { name: 'Бейдж', where: 'Text', spec: '11 / 15 · 650 · +0.2px', fam: FT, size: '11px', lh: '15px', fw: '650', ls: '0.2px', color: '#ffffff', sample: 'Аварійне' },
+  { name: 'Мітки годин', where: 'Text · ink-3', spec: '9.5 / 11 · 400', fam: FT, size: '9.5px', lh: '11px', fw: '400', ls: '0px', color: 'rgba(245, 247, 252, 0.66)', sample: '00   06   12   18   24' }
+];
+function demoCells() {
+  var str = sched('1', [[4, 7.5, '0'], [15, 19, '0'], [22, 24, '?']]).split('');
+  str[20] = 'x'; str[21] = 'x';
+  str = str.join('');
+  var out = [], nowM = 1037;
+  for (var i = 0; i < 48; i++) {
+    var ch = str.charAt(i), al = (i + 1) * 30 <= nowM ? 0.4 : 1, bg;
+    if (ch === '0') { var s = i; while (s > 0 && str.charAt(s - 1) === '0') s--; var e = i; while (e < 47 && str.charAt(e + 1) === '0') e++; var n = e - s + 1; bg = 'linear-gradient(90deg, ' + mixA(D.offA, D.offB, (i - s) / n, al) + ', ' + mixA(D.offA, D.offB, (i - s + 1) / n, al) + ')'; }
+    else if (ch === '1') bg = rgba(D.on, al);
+    else if (ch === '?') bg = 'repeating-linear-gradient(135deg, ' + rgba(D.maybe, al) + ' 0px 2px, ' + rgba(D.maybe, 0.28 * al) + ' 2px 4px)';
+    else bg = 'repeating-linear-gradient(135deg, ' + rgba(D.unk, 0.85 * al) + ' 0px 2px, ' + rgba(D.unk, 0.22 * al) + ' 2px 4px)';
+    out.push({ bg: bg, r: i === 0 ? '4px 1.5px 1.5px 4px' : (i === 47 ? '1.5px 4px 4px 1.5px' : '1.5px') });
+  }
+  return out;
+}
+var ACT = [[0, 242, 'on'], [242, 454, 'off'], [454, 600, 'on'], [600, 660, 'unk'], [660, 905, 'on'], [905, 1037, 'off']];
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      states: STATES, glass: GLASS, radii: RADII, space: SPACE, type: TYPE,
+      demoCells: demoCells(),
+      demoAct: ACT.map(function (a) { return { l: (a[0] / 14.4).toFixed(3) + '%', w: ((a[1] - a[0]) / 14.4).toFixed(3) + '%', bg: a[2] === 'on' ? rgba(D.on, 0.7) : (a[2] === 'off' ? D.offDot : 'repeating-linear-gradient(90deg, ' + rgba(D.unk, 0.95) + ' 0px 2px, rgba(0, 0, 0, 0) 2px 4px)') }; })
+    };
+  }
+}
+</script>
+
+
+</body></html>

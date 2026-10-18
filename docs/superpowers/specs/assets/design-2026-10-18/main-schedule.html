@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="uk"><head>
+<meta charset="utf-8">
+<title>Головне вікно — Графік</title>
+<script src="a3637dd2-ec05-49b4-889c-f007d2638ed3"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#2a5bd7}a:hover{color:#1d44a8}
+</style>
+</helmet>
+<div style="width: 3192px; height: 1010px; box-sizing: border-box; padding: 56px 64px; background: #121419; color: #eef0f6; font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px; -webkit-font-smoothing: antialiased">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.6px">Головне вікно · вкладка «Графік» · 900×640</h1>
+    <p style="margin: 0; font-size: 15px; line-height: 22px; color: #a7adbd">Windows 11 — Mica, macOS — vibrancy. Сітка 24 год з половинками, під нею рядок «Фактично» в тій самій шкалі, нижче — фактичні відключення за 7 днів.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px">
+    <sc-for list="{{wins}}" as="v" hint-placeholder-count="3">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <div style="font-size: 14px; color: #a7adbd"><span style="font-weight: 600; color: #eef0f6">{{v.caption}}</span> · {{v.captionSub}}</div>
+        <div style="height: 740px; border-radius: 20px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: {{v.wp}}">
+          <div style="width: 900px; height: 640px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.38), 0 8px 24px rgba(0, 0, 0, 0.22); border-radius: {{v.wRad}}; background: {{v.winBg}}; border: 1px solid {{v.frameEdge}}; color: {{v.ink}}">
+            <sc-if value="{{v.isWin}}" hint-placeholder-val="{{true}}">
+              <div style="height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between">
+                <div style="display: flex; align-items: center; gap: 10px; padding-left: 14px; font-size: 12px">
+                  <span style="width: 16px; height: 16px; border-radius: 5px; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, #2b2f3b, #11131a); color: #5dffa8"><svg width="10" height="10" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: currentColor"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg></span>
+                  <span>Blackout Widget</span>
+                </div>
+                <div style="display: flex; color: {{v.ink2}}">
+                  <button aria-label="Згорнути" style="width: 46px; height: 32px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true" style="stroke: currentColor; stroke-width: 1"><path d="M0 5h10"></path></svg></button>
+                  <button aria-label="Розгорнути" style="width: 46px; height: 32px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5"></rect></svg></button>
+                  <button aria-label="Закрити" style="width: 46px; height: 32px; border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" sc-camel-view-box="0 0 10 10" aria-hidden="true" style="stroke: currentColor; stroke-width: 1"><path d="M0 0l10 10M10 0 0 10"></path></svg></button>
+                </div>
+              </div>
+              <div style="height: 48px; flex: none; box-sizing: border-box; padding: 0 20px; display: flex; align-items: center; justify-content: space-between">
+                <div style="display: flex; gap: 4px">
+                  <button style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; font: inherit; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: {{v.ctlOn}}; box-shadow: {{v.ctlOnShadow}}; color: {{v.ink}}">Графік<span style="width: 16px; height: 3px; border-radius: 2px; background: {{v.accent}}"></span></button>
+                  <button style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; font: inherit; font-size: 14px; background: transparent; color: {{v.ink2}}">Налаштування</button>
+                </div>
+                <button aria-label="Оновити зараз" style="width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: {{v.btn}}; border: 1px solid {{v.btnEdge}}; color: {{v.ink2}}"><svg width="16" height="16" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v5h-5"></path></svg></button>
+              </div>
+            </sc-if>
+            <sc-if value="{{v.isMac}}" hint-placeholder-val="{{false}}">
+              <div style="height: 52px; flex: none; box-sizing: border-box; padding: 0 16px 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid {{v.hair}}">
+                <div style="display: flex; gap: 8px; width: 120px">
+                  <span style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2)"></span>
+                  <span style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2)"></span>
+                  <span style="width: 12px; height: 12px; border-radius: 50%; background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2)"></span>
+                </div>
+                <div style="display: flex; padding: 2px; border-radius: 8px; background: {{v.ctl}}">
+                  <button style="height: 26px; padding: 0 16px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 600; background: {{v.ctlOn}}; box-shadow: {{v.ctlOnShadow}}; color: {{v.ink}}">Графік</button>
+                  <button style="height: 26px; padding: 0 16px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; background: transparent; color: {{v.ink2}}">Налаштування</button>
+                </div>
+                <div style="width: 120px; display: flex; justify-content: flex-end">
+                  <button aria-label="Оновити зараз" style="width: 30px; height: 28px; border: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: transparent; color: {{v.ink2}}"><svg width="16" height="16" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v5h-5"></path></svg></button>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="flex: 1 1 auto; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: {{v.bodyPad}}">
+              <sc-if value="{{v.hasBanner}}" hint-placeholder-val="{{true}}">
+                <div style="flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px; background: {{v.bnBg}}; border: 1px solid {{v.bnEdge}}">
+                  <span style="flex: none; display: flex; color: {{v.bnIcon}}">
+                    <svg width="20" height="20" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3 2 20.5h20z"></path><path d="M12 10v4.5"></path><path d="M12 17.6v.1"></path></svg>
+                  </span>
+                  <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+                    <span style="font-size: 13.5px; line-height: 18px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{v.bnTitle}}</span>
+                    <span style="font-size: 12.5px; line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: {{v.ink2}}">{{v.bnText}}</span>
+                  </div>
+                  <sc-if value="{{v.hasBnBtn}}" hint-placeholder-val="{{true}}">
+                    <button style="flex: none; height: 32px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: {{v.btn}}; border: 1px solid {{v.btnEdge}}; color: {{v.ink}}">{{v.bnBtn}}</button>
+                  </sc-if>
+                </div>
+              </sc-if>
+
+              <div style="flex: none; box-sizing: border-box; padding: 18px 20px; border-radius: 12px; display: flex; flex-direction: column; background: {{v.card}}; border: 1px solid {{v.cardEdge}}">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px">
+                  <div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                    <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
+                      <span style="flex: none; width: 14px; height: 14px; border-radius: 50%; background: {{v.toneC}}; box-shadow: {{v.dotGlow}}"></span>
+                      <span style="font-family: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.5px; white-space: nowrap">{{v.status}}</span>
+                      <sc-if value="{{v.hasBadge}}" hint-placeholder-val="{{false}}">
+                        <span style="flex: none; font-size: 12px; line-height: 16px; font-weight: 650; color: #ffffff; padding: 3px 10px; border-radius: 999px; background: #d12b25">Аварійне</span>
+                      </sc-if>
+                      <sc-if value="{{v.hasEco}}" hint-placeholder-val="{{false}}">
+                        <span title="Фактичний стан · EcoFlow" style="flex: none; display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; background: {{v.ctl}}; color: {{v.ink2}}"><svg width="12" height="12" sc-camel-view-box="0 0 24 24" aria-hidden="true" style="fill: currentColor"><path d="M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z"></path></svg>Фактично · EcoFlow</span>
+                      </sc-if>
+                    </div>
+                    <div style="font-size: 14px; line-height: 20px; padding-left: 24px; font-variant-numeric: tabular-nums; color: {{v.ink2}}">{{v.line}}</div>
+                  </div>
+                  <sc-if value="{{v.hasCount}}" hint-placeholder-val="{{false}}">
+                    <div style="flex: none; display: flex; flex-direction: column; align-items: flex-end">
+                      <span style="font-family: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; font-size: 36px; line-height: 38px; font-weight: 600; letter-spacing: -0.8px; font-variant-numeric: tabular-nums">{{v.count}}</span>
+                      <span style="font-size: 12px; line-height: 16px; color: {{v.ink2}}">{{v.cl}}</span>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 16px">
+                  <div style="display: flex; padding: 3px; border-radius: 9px; background: {{v.ctl}}">
+                    <button style="height: 28px; padding: 0 14px; border: 0; border-radius: 7px; font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; font-weight: {{v.tabA.fw}}; background: {{v.tabA.bg}}; box-shadow: {{v.tabA.sh}}; color: {{v.tabA.ink}}">Сьогодні 17.10</button>
+                    <button style="height: 28px; padding: 0 14px; border: 0; border-radius: 7px; font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; font-weight: {{v.tabB.fw}}; background: {{v.tabB.bg}}; box-shadow: {{v.tabB.sh}}; color: {{v.tabB.ink}}">Завтра 18.10</button>
+                  </div>
+                  <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: {{v.ink2}}">
+                    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: {{v.lgOn}}"></span>Світло є</span>
+                    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: {{v.lgOff}}"></span>Немає</span>
+                    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: {{v.lgMaybe}}"></span>Можливо немає</span>
+                    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: {{v.lgUnk}}"></span>Невідомо</span>
+                    <sc-if value="{{v.lgHasEmerg}}" hint-placeholder-val="{{false}}">
+                      <span style="display: flex; align-items: center; gap: 6px"><span style="width: 12px; height: 12px; border-radius: 3px; background: {{v.lgEmerg}}"></span>Аварійне</span>
+                    </sc-if>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 16px">
+                  <div style="flex: none; width: 64px; display: flex; flex-direction: column; font-size: 12px; color: {{v.ink3}}">
+                    <span style="height: 14px"></span>
+                    <span style="height: 32px; margin-top: 4px; display: flex; align-items: center; color: {{v.ink2}}">Графік</span>
+                    <span style="height: 10px; margin-top: 8px; display: flex; align-items: center; color: {{v.ink2}}">Фактично</span>
+                  </div>
+                  <div style="flex: 1 1 auto; min-width: 0; position: relative">
+                    <div style="display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); column-gap: 3px; height: 14px; font-size: 10px; line-height: 14px; font-variant-numeric: tabular-nums; color: {{v.ink3}}">
+                      <sc-for list="{{v.hours}}" as="h" hint-placeholder-count="24"><span>{{h.label}}</span></sc-for>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); column-gap: 3px; height: 32px; margin-top: 4px">
+                      <sc-for list="{{v.hours}}" as="h" hint-placeholder-count="24">
+                        <div style="display: flex; gap: 1px; border-radius: 5px; overflow: hidden">
+                          <div style="flex: 1 1 0; background: {{h.a}}"></div>
+                          <div style="flex: 1 1 0; background: {{h.b}}"></div>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="position: relative; height: 10px; margin-top: 8px">
+                      <sc-if value="{{v.hasActualRow}}" hint-placeholder-val="{{true}}">
+                        <div style="position: absolute; left: 0; right: 0; top: 2px; height: 6px; border-radius: 3px; overflow: hidden; background: {{v.hair}}">
+                          <sc-for list="{{v.actual}}" as="a" hint-placeholder-count="6">
+                            <div style="position: absolute; top: 0; bottom: 0; left: {{a.l}}; width: {{a.w}}; background: {{a.bg}}"></div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{v.ecoCta}}" hint-placeholder-val="{{false}}">
+                        <div style="position: absolute; left: 0; right: 0; top: -3px; display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: {{v.ink3}}"><span style="flex: 1 1 auto; height: 0; border-top: 1px dashed {{v.hair}}"></span>Підключіть EcoFlow, щоб бачити, чи є світло насправді<span style="font-weight: 600; color: {{v.accent}}">Підключити</span><span style="flex: 1 1 auto; height: 0; border-top: 1px dashed {{v.hair}}"></span></div>
+                      </sc-if>
+                      <sc-if value="{{v.futureRow}}" hint-placeholder-val="{{false}}">
+                        <div style="position: absolute; left: 0; right: 0; top: -3px; display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: {{v.ink3}}"><span style="flex: 1 1 auto; height: 0; border-top: 1px dashed {{v.hair}}"></span>з’явиться, коли настане день<span style="flex: 1 1 auto; height: 0; border-top: 1px dashed {{v.hair}}"></span></div>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{v.hasNow}}" hint-placeholder-val="{{true}}">
+                      <div style="position: absolute; top: 14px; bottom: -2px; width: 2px; margin-left: -1px; border-radius: 2px; left: {{v.nowL}}; background: {{v.nowC}}; box-shadow: 0 0 0 1.5px {{v.nowRing}}"></div>
+                      <div style="position: absolute; top: -2px; transform: translateX(-50%); padding: 0 5px; border-radius: 5px; font-size: 10px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums; left: {{v.nowL}}; background: {{v.nowC}}; color: {{v.nowInk}}">{{v.nowLabel}}</div>
+                    </sc-if>
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 16px; padding-top: 12px; border-top: 1px solid {{v.hair}}">
+                  <span style="font-size: 13px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-variant-numeric: tabular-nums">{{v.outage}}</span>
+                  <span style="flex: none; display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; color: {{v.ink3}}">Оновлено о 14:50 · графік ДТЕК від 17.10.2026 11:55<sc-if value="{{v.stale}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; font-weight: 650; padding: 1px 8px; border-radius: 999px; color: {{v.warnC}}; background: {{v.warnBg}}">дані застаріли</span></sc-if></span>
+                </div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 8px; min-height: 0">
+                <div style="display: flex; justify-content: space-between; align-items: baseline">
+                  <span style="font-size: 15px; line-height: 20px; font-weight: 650">Фактичні відключення <span style="font-weight: 400; color: {{v.ink3}}">· 7 днів</span></span>
+                  <span style="font-size: 12px; color: {{v.ink3}}">за даними EcoFlow</span>
+                </div>
+                <sc-if value="{{v.hasList}}" hint-placeholder-val="{{true}}">
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+                    <sc-for list="{{v.items}}" as="it" hint-placeholder-count="6">
+                      <div style="height: 38px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; background: {{v.card}}; border: 1px solid {{it.edge}}">
+                        <span style="flex: none; width: 40px; font-size: 12px; color: {{v.ink3}}">{{it.date}}</span>
+                        <span style="flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; white-space: nowrap">
+                          <sc-if value="{{it.live}}" hint-placeholder-val="{{false}}"><span style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: {{v.offDot}}; box-shadow: 0 0 0 3px {{v.offHalo}}"></span></sc-if>{{it.range}}</span>
+                        <span style="flex: none; font-size: 12.5px; color: {{it.durC}}">{{it.dur}}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{v.emptyList}}" hint-placeholder-val="{{false}}">
+                  <div style="box-sizing: border-box; padding: 18px 20px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: {{v.card}}; border: 1px dashed {{v.btnEdge}}">
+                    <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+                      <span style="font-size: 14px; font-weight: 600">Тут будуть реальні відключення</span>
+                      <span style="font-size: 13px; line-height: 18px; color: {{v.ink2}}">Зарядна станція EcoFlow може показувати, чи є світло насправді.</span>
+                    </div>
+                    <button style="flex: none; height: 34px; padding: 0 16px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; background: {{v.primary}}; color: {{v.primaryInk}}">Підключити EcoFlow</button>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:3192,&quot;height&quot;:1010}}">
+function hx(h) { h = String(h).replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function rgba(h, a) { var c = hx(h); return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')'; }
+function mixA(h1, h2, t, a) { var p = hx(h1), q = hx(h2); return 'rgba(' + Math.round(p[0] + (q[0] - p[0]) * t) + ', ' + Math.round(p[1] + (q[1] - p[1]) * t) + ', ' + Math.round(p[2] + (q[2] - p[2]) * t) + ', ' + a + ')'; }
+function mins(s) { var p = String(s).split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); }
+function sched(base, spans) { var a = [], i, k; for (i = 0; i < 48; i++) a.push(base); for (k = 0; k < spans.length; k++) { var s = spans[k]; for (i = Math.round(s[0] * 2); i < Math.round(s[1] * 2); i++) a[i] = s[2]; } return a.join(''); }
+function hatch(c0, c1) { return 'repeating-linear-gradient(135deg, ' + c0 + ' 0px 2.5px, ' + c1 + ' 2.5px 5px)'; }
+
+var WP = {
+  light: 'radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)',
+  dark: 'radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)',
+  busy: 'repeating-linear-gradient(118deg, rgba(255, 255, 255, 0) 0px 16px, rgba(255, 255, 255, 0.6) 16px 19px, rgba(0, 0, 0, 0) 19px 36px, rgba(0, 0, 0, 0.38) 36px 39px), conic-gradient(from 200deg at 38% 46%, #ff4e50, #fc913a, #f9d423, #34e89e, #0f9bff, #8e54e9, #ff4e50)'
+};
+
+var TH = {
+  light: { winBg: 'linear-gradient(160deg, #f4f2f1 0%, #eef0f5 55%, #e8ecf3 100%)', frameEdge: 'rgba(0, 0, 0, 0.14)', card: 'rgba(255, 255, 255, 0.82)', cardEdge: 'rgba(17, 19, 26, 0.07)', ink: '#11131a', ink2: '#474c59', ink3: '#686d7c', hair: 'rgba(17, 19, 26, 0.09)', ctl: 'rgba(17, 19, 26, 0.06)', ctlOn: '#ffffff', ctlOnShadow: '0 1px 2px rgba(17, 19, 26, 0.14), 0 0 0 0.5px rgba(17, 19, 26, 0.08)', btn: 'rgba(255, 255, 255, 0.9)', btnEdge: 'rgba(17, 19, 26, 0.13)', accent: '#2a5bd7', primary: '#1b1e27', primaryInk: '#ffffff', on: '#1fbf72', offA: '#f2a20c', offB: '#ef6a10', offDot: '#ee4b3c', maybe: '#e2a000', unk: '#8a90a6', emerg: '#e3261e', warn: '#8a5800', warnBg: 'rgba(226, 160, 0, 0.2)', now: '#11131a', nowRing: 'rgba(255, 255, 255, 0.95)', nowInk: '#ffffff' },
+  dark: { winBg: 'linear-gradient(160deg, #24252d 0%, #1e2028 60%, #1a1c23 100%)', frameEdge: 'rgba(255, 255, 255, 0.12)', card: 'rgba(255, 255, 255, 0.05)', cardEdge: 'rgba(255, 255, 255, 0.08)', ink: '#f2f4f9', ink2: '#c4c8d3', ink3: '#9ca2b3', hair: 'rgba(255, 255, 255, 0.10)', ctl: 'rgba(255, 255, 255, 0.07)', ctlOn: 'rgba(255, 255, 255, 0.15)', ctlOnShadow: '0 1px 2px rgba(0, 0, 0, 0.3)', btn: 'rgba(255, 255, 255, 0.08)', btnEdge: 'rgba(255, 255, 255, 0.14)', accent: '#8fb4ff', primary: '#f2f4f9', primaryInk: '#15171d', on: '#5dffa8', offA: '#ffc23d', offB: '#ff7a1a', offDot: '#ff6b5b', maybe: '#ffc23d', unk: '#9aa0b4', emerg: '#ff4d4d', warn: '#ffd27a', warnBg: 'rgba(255, 194, 61, 0.18)', now: '#ffffff', nowRing: 'rgba(0, 0, 0, 0.6)', nowInk: '#11131a' }
+};
+
+function cellBg(str, i, t, nowM) {
+  var ch = str.charAt(i), past = nowM != null && (i + 1) * 30 <= nowM, al = past ? 0.4 : 1;
+  if (ch === '0') {
+    var s = i; while (s > 0 && str.charAt(s - 1) === '0') s--;
+    var e = i; while (e < 47 && str.charAt(e + 1) === '0') e++;
+    var n = e - s + 1;
+    return 'linear-gradient(90deg, ' + mixA(t.offA, t.offB, (i - s) / n, al) + ', ' + mixA(t.offA, t.offB, (i - s + 1) / n, al) + ')';
+  }
+  if (ch === '1') return rgba(t.on, al);
+  if (ch === '?') return hatch(rgba(t.maybe, al), rgba(t.maybe, 0.25 * al));
+  if (ch === 'e') return rgba(t.emerg, al);
+  return hatch(rgba(t.unk, 0.85 * al), rgba(t.unk, 0.2 * al));
+}
+function hoursOf(str, t, nowM) {
+  var out = [];
+  for (var h = 0; h < 24; h++) out.push({ label: (h < 10 ? '0' : '') + h, a: cellBg(str, h * 2, t, nowM), b: cellBg(str, h * 2 + 1, t, nowM) });
+  return out;
+}
+function actualSegs(list, t) {
+  return (list || []).map(function (s) {
+    var a = mins(s[0]), b = mins(s[1]);
+    var bg = s[2] === 'on' ? rgba(t.on, 0.65) : (s[2] === 'off' ? t.offDot : 'repeating-linear-gradient(90deg, ' + rgba(t.unk, 0.95) + ' 0px 2px, rgba(0, 0, 0, 0) 2px 4px)');
+    return { l: (a / 14.4).toFixed(3) + '%', w: ((b - a) / 14.4).toFixed(3) + '%', bg: bg };
+  });
+}
+
+var S_TODAY = sched('1', [[8, 12, '0'], [16, 20, '?']]);
+var S_EMERG = sched('1', [[8, 12, '0'], [13.5, 17, 'e'], [17, 20, '?']]);
+var S_TOMORROW = sched('1', [[1, 4.5, '0'], [11, 14, '?'], [19, 22.5, '0']]);
+var ACT = [['00:00', '01:15', 'off'], ['01:15', '03:20', 'on'], ['03:20', '04:10', 'unk'], ['04:10', '08:03', 'on'], ['08:03', '11:57', 'off'], ['11:57', '14:32', 'on'], ['14:32', '16:05', 'off'], ['16:05', '18:10', 'on'], ['18:10', '20:15', 'off']];
+var ITEMS = [
+  { date: '17.10', range: 'з 18:10', dur: 'триває 2 год 5 хв', live: true },
+  { date: '17.10', range: '14:32–16:05', dur: '1 год 33 хв' },
+  { date: '17.10', range: '08:03–11:57', dur: '3 год 54 хв' },
+  { date: '16.10', range: '≈23:40–01:15', dur: '1 год 35 хв' },
+  { date: '16.10', range: '16:02–19:58', dur: '3 год 56 хв' },
+  { date: '15.10', range: '08:00–12:04', dur: '4 год 4 хв' }
+];
+
+var VARS = [
+  { plat: 'win', theme: 'light', wp: WP.light, caption: 'Windows 11 · світла', captionSub: 'EcoFlow не збігається з графіком · банер «схема змінилась»', banner: 'scheme', tone: 'off', status: 'Світла немає', line: 'Не за графіком · з 18:10', eco: true, tab: 'today', sched: S_TODAY, now: '20:15', actual: ACT, outage: 'Відключення: 08:00–12:00, 16:00–20:00 (можливо)', list: true },
+  { plat: 'mac', theme: 'dark', wp: WP.dark, caption: 'macOS · темна', captionSub: 'аварійне · EcoFlow не підключено', banner: 'emerg', tone: 'emerg', status: 'Світла немає', badge: true, line: 'Аварійне · орієнтовно до 17:00', count: '≈2:40', cl: 'орієнтовно до 17:00', tab: 'today', sched: S_EMERG, now: '14:20', outage: 'Відключення: 08:00–12:00, 16:00–20:00 (можливо) · аварійне з 13:40', lgEmerg: true },
+  { plat: 'win', theme: 'dark', wp: WP.busy, caption: 'Windows 11 · темна', captionSub: 'вкладка «Завтра» · банер перевірки ДТЕК', banner: 'captcha', tone: 'on', status: 'Світло є', line: 'Вимкнення завтра о 01:00 · через 4 год 45 хв', count: '4:45', cl: 'до вимкнення о 01:00', eco: true, tab: 'tomorrow', sched: S_TOMORROW, future: true, outage: 'Відключення: 01:00–04:30, 19:00–22:30, 11:00–14:00 (можливо)', stale: true, list: true }
+];
+
+function winVals(d) {
+  var t = TH[d.theme];
+  var tc = d.tone === 'on' ? t.on : d.tone === 'emerg' ? t.emerg : t.offDot;
+  var nowM = d.now ? mins(d.now) : null;
+  var sel = { bg: t.ctlOn, sh: t.ctlOnShadow, ink: t.ink, fw: '600' };
+  var uns = { bg: 'rgba(0, 0, 0, 0)', sh: 'none', ink: t.ink2, fw: '400' };
+  var bn = {
+    scheme: { bg: rgba(t.maybe, 0.14), edge: rgba(t.maybe, 0.45), icon: t.warn, title: 'Схема підключення змінилась — перевірте лінію', text: 'Графік для вашої адреси тепер може бути іншим.', btn: 'Змінити адресу' },
+    captcha: { bg: rgba(t.maybe, 0.14), edge: rgba(t.maybe, 0.45), icon: t.warn, title: 'Сайт ДТЕК просить пройти перевірку', text: 'Поки її не пройдено, графік не оновлюється.', btn: 'Пройти перевірку' },
+    emerg: { bg: rgba(t.emerg, 0.16), edge: rgba(t.emerg, 0.5), icon: t.emerg, title: 'Аварійне відключення', text: 'ДТЕК: «Через пошкодження обладнання будинок знеструмлено. Орієнтовний час відновлення — 17:00.»', btn: '' }
+  }[d.banner];
+  return {
+    caption: d.caption, captionSub: d.captionSub, wp: d.wp,
+    isWin: d.plat === 'win', isMac: d.plat === 'mac', wRad: d.plat === 'win' ? '8px' : '12px',
+    bodyPad: d.plat === 'win' ? '4px 20px 20px' : '16px 20px 20px',
+    winBg: t.winBg, frameEdge: t.frameEdge, card: t.card, cardEdge: t.cardEdge, ink: t.ink, ink2: t.ink2, ink3: t.ink3, hair: t.hair,
+    ctl: t.ctl, ctlOn: t.ctlOn, ctlOnShadow: t.ctlOnShadow, btn: t.btn, btnEdge: t.btnEdge, accent: t.accent, primary: t.primary, primaryInk: t.primaryInk,
+    hasBanner: !!bn, bnBg: bn.bg, bnEdge: bn.edge, bnIcon: bn.icon, bnTitle: bn.title, bnText: bn.text, bnBtn: bn.btn, hasBnBtn: !!bn.btn,
+    toneC: tc, dotGlow: '0 0 0 4px ' + rgba(tc, 0.2) + ', 0 0 14px ' + rgba(tc, 0.55),
+    status: d.status, line: d.line, hasBadge: !!d.badge, hasEco: !!d.eco,
+    hasCount: !!d.count, count: d.count || '', cl: d.cl || '',
+    tabA: d.tab === 'today' ? sel : uns, tabB: d.tab === 'today' ? uns : sel,
+    lgOn: t.on, lgOff: 'linear-gradient(90deg, ' + t.offA + ', ' + t.offB + ')', lgMaybe: hatch(t.maybe, rgba(t.maybe, 0.25)), lgUnk: hatch(t.unk, rgba(t.unk, 0.2)), lgEmerg: t.emerg, lgHasEmerg: !!d.lgEmerg,
+    hours: hoursOf(d.sched, t, nowM),
+    hasNow: nowM != null, nowL: nowM != null ? (nowM / 14.4).toFixed(2) + '%' : '0%', nowLabel: d.now || '', nowC: t.now, nowRing: t.nowRing, nowInk: t.nowInk,
+    hasActualRow: !!d.actual, actual: actualSegs(d.actual, t), ecoCta: !d.eco, futureRow: !!d.future,
+    outage: d.outage, stale: !!d.stale, warnC: t.warn, warnBg: t.warnBg,
+    hasList: !!d.list, emptyList: !d.list, offDot: t.offDot, offHalo: rgba(t.offDot, 0.22),
+    items: ITEMS.map(function (it) { return { date: it.date, range: it.range, dur: it.dur, live: !!it.live, edge: it.live ? rgba(t.offDot, 0.45) : t.cardEdge, durC: it.live ? t.offDot : t.ink2 }; })
+  };
+}
+
+class Component extends DCLogic {
+  renderVals() {
+    return { wins: VARS.map(winVals) };
+  }
+}
+</script>
+
+
+</body></html>
