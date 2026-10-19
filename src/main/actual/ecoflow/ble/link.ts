@@ -32,6 +32,10 @@ export interface BleLinkLike {
   watch(sn: string, token: string): void; unwatch(): void;
   scan(ms: number): Promise<ScanOutcome>;
   connectedSn(): string | null;
+  /** The last adapter state the link has seen; null before any. */
+  adapterState(): AdapterState | null;
+  /** True from `host-failed` until an adapter state other than 'unknown' arrives. */
+  hostFailed(): boolean;
   onEvent(cb: (e: LinkEvent) => void): () => void;
 }
 
@@ -148,6 +152,10 @@ export class BleLink implements BleLinkLike {
   connectedSn(): string | null {
     return this.watched && this.link === 'connected' ? this.watched.sn : null;
   }
+
+  adapterState(): AdapterState | null { return this.adapter; }
+
+  hostFailed(): boolean { return this.failed; }
 
   onEvent(cb: (e: LinkEvent) => void): () => void {
     this.eventCbs.add(cb);

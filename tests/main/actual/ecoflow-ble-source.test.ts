@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INV_SILENT_MS, type BleLinkLike, type LinkEvent } from '../../../src/main/actual/ecoflow/ble/link';
+import { ADAPTER_UNREADY_MS, INV_SILENT_MS, type BleLinkLike, type LinkEvent } from '../../../src/main/actual/ecoflow/ble/link';
 import { EcoflowBleSource, LINK_GRACE_MS, READING_MS, REASON_REPEAT_MS } from '../../../src/main/actual/ecoflow/ble/source';
+import type { AdapterState } from '../../../src/main/actual/ecoflow/ble/messages';
 import type { ActualReading } from '../../../src/main/actual/types';
 import { BLE_REASON } from '../../../src/shared/ecoflow-ble';
 
@@ -12,10 +13,14 @@ const T0 = Date.parse('2026-10-19T10:00:00Z');
 class FakeLink implements BleLinkLike {
   cbs = new Set<(e: LinkEvent) => void>();
   connected: string | null = null;
+  adapter: AdapterState | null = null;
+  failed = false;
   watch = vi.fn<(sn: string, token: string) => void>();
   unwatch = vi.fn<() => void>();
   scan = vi.fn(() => Promise.resolve({ adverts: [] }));
   connectedSn() { return this.connected; }
+  adapterState() { return this.adapter; }
+  hostFailed() { return this.failed; }
   onEvent(cb: (e: LinkEvent) => void) { this.cbs.add(cb); return () => { this.cbs.delete(cb); }; }
   emit(e: LinkEvent) { for (const cb of [...this.cbs]) cb(e); }
 }
@@ -188,6 +193,74 @@ describe('EcoflowBleSource', () => {
     start();
     vi.advanceTimersByTime(LINK_GRACE_MS + INV_SILENT_MS);
     expect(readings[0].reason).toBe(BLE_REASON.invSilent);
+  });
+
+  it('a throwing consumer does not stop the loop: the next reason still arrives', () => {
+    const { start, source, log } = setup();
+    let calls = 0;
+    source.start(() => { calls++; throw new Error('boom'); });
+    void start;
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    expect(calls).toBe(1);
+    expect(log.warn).toHaveBeenCalledWith('ecoflow-ble: reading handler failed');
+    vi.advanceTimersByTime(REASON_REPEAT_MS);
+    expect(calls).toBe(2);
+  });
+
+  it('seeds the adapter state from a link that already reports it', () => {
+    const a = setup();
+    a.link.adapter = 'poweredOff';
+    a.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1000);
+    expect(a.readings).toEqual([]);
+    vi.advanceTimersByTime(2000);
+    expect(a.readings[0].reason).toBe(BLE_REASON['bt-off']);
+
+    const b = setup();
+    b.link.failed = true;
+    b.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    expect(b.readings[0].reason).toBe(BLE_REASON['host-failed']);
+  });
+
+  it('an adapter unknown for under 10 s is no problem; one that lasts is bt-unavailable', () => {
+    const a = setup();
+    a.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1000);
+    a.link.emit({ ev: 'adapter', state: 'unknown' });
+    vi.advanceTimersByTime(ADAPTER_UNREADY_MS - 1000);
+    a.link.emit({ ev: 'adapter', state: 'poweredOn' });
+    vi.advanceTimersByTime(3000);
+    expect(a.readings.map(r => r.reason)).toEqual([BLE_REASON.lost]);
+
+    const b = setup();
+    b.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    b.link.emit({ ev: 'adapter', state: 'unknown' });
+    vi.advanceTimersByTime(ADAPTER_UNREADY_MS - 2000);
+    expect(b.readings.map(r => r.reason)).toEqual([BLE_REASON.lost]);
+    vi.advanceTimersByTime(3000);
+    expect(b.readings.map(r => r.reason)).toEqual([BLE_REASON.lost, BLE_REASON['bt-unavailable']]);
+  });
+
+  it('the AC-off hint prefers MPPT over an older inverter value', () => {
+    const { start, state, inv, mppt, readings } = setup();
+    start();
+    state('connected');
+    inv({ cfgAcEnabled: 0, acInVol: 0, acInFreq: 0, inputWatts: 0 });
+    mppt({ cfgAcEnabled: 1 });
+    readings.length = 0;
+    vi.advanceTimersByTime(INV_SILENT_MS + 1000);
+    expect(readings[0].reason).toBe(BLE_REASON.invSilent);
+  });
+
+  it('a heartbeat after the link dropped is ignored', () => {
+    const { start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    state('lost');
+    inv(GRID);
+    expect(readings).toEqual([]);
   });
 
   it('stop unwatches and stays silent', () => {

@@ -162,6 +162,29 @@ describe('BLE link: supervising the host', () => {
     expect(lives.at(-1)).toEqual({ link: 'searching' });
   });
 
+  it('adapterState and hostFailed expose what the link has seen', async () => {
+    const { link, ports, adapter } = setup();
+    expect(link.adapterState()).toBeNull();
+    expect(link.hostFailed()).toBe(false);
+    link.watch(SN, TOKEN);
+    adapter('poweredOff');
+    expect(link.adapterState()).toBe('poweredOff');
+    adapter('poweredOn');
+    expect(link.adapterState()).toBe('poweredOn');
+    // Three hosts in a row die before reporting an adapter.
+    ports[0].exit(1);
+    for (let i = 1; i < HOST_FAIL_LIMIT + 1; i++) {
+      await advance(CAP_MS);
+      if (i < HOST_FAIL_LIMIT + 1) ports[i].exit(1);
+    }
+    expect(link.hostFailed()).toBe(true);
+    await advance(CAP_MS);
+    adapter('unknown');
+    expect(link.hostFailed()).toBe(true);
+    adapter('poweredOn');
+    expect(link.hostFailed()).toBe(false);
+  });
+
   it('hosts that only ever report an unknown adapter count as dying before the adapter', async () => {
     const { link, ports, adapter, failedCount, lives } = setup();
     link.watch(SN, TOKEN);
