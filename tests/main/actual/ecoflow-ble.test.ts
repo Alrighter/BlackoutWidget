@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createECDH, createHash } from 'node:crypto';
+import { createECDH, createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { parseAdvert } from '../../../src/main/actual/ecoflow/ble/advert';
 import { newEphemeralKey, sessionKey, sharedSecret, SessionCipher } from '../../../src/main/actual/ecoflow/ble/crypto';
@@ -9,11 +9,7 @@ import {
 } from '../../../src/main/actual/ecoflow/ble/protocol';
 import { EcoflowBleSession } from '../../../src/main/actual/ecoflow/ble/session';
 import { authToken } from '../../../src/main/actual/ecoflow/ble/token';
-
-// Decrypted RIVER 2 Pro packets from the ha-ef-ble #218 debug log (research §2.6), lines 24 and on.
-const INV = Buffer.from('aa024600902c00000000010104212002000000004401010501f101600000f0d001006c0300003c95d10100640d00003c3300000000000000000000000001000000000002000000000000000000000000000000000000324f', 'hex');
-const PD = Buffer.from('aa027900aa0c00000000ffff0221200200000000005b0501030000000000266700f80153000000000000000000000000000000001e002c016400000000000000003c0b0000260000007807000000000000000000009f050000fd1d0000968a0200000000000000000000000000000100000800880080000000000000000000010a0000000501000000f9fb', 'hex');
-const MPPT = Buffer.from('aa025e006f2c0000000001010521200200100000780101045b0b0000140000000000b04d00002f4100000000000000000000000000000000000000000000000000000000000027000000000000401f0000000101780000003c9001000000000000002c010000000000000000000094a1', 'hex');
+import { fakeStation, INV, MPPT, PD } from '../../helpers/ble-station';
 
 const md5 = (b: Uint8Array) => createHash('md5').update(b).digest();
 
@@ -120,53 +116,6 @@ describe('EcoFlow BLE advertisement', () => {
     expect(parseAdvert(md.subarray(0, 10))).toBeNull();
   });
 });
-
-/** A station double: the device side of the handshake, written against OpenSSL rather than our crypto module. */
-function fakeStation(opts: { userId: string; sn: string; authCode?: number; clockRequestFirst?: boolean }) {
-  const ecdh = createECDH('secp160r1');
-  ecdh.generateKeys();
-  const sRand = Buffer.alloc(16, 0x42);
-  const seed = Buffer.from([0x03, 0x05]);
-  const table = Buffer.from(KEY_TABLE_B64, 'base64');
-  const pos = seed[0] * 0x10 + (seed[1] - 1) * 0x100;
-  const key = md5(Buffer.concat([table.subarray(pos, pos + 16), sRand]));
-  let iv = Buffer.alloc(16);
-  let initialKey = Buffer.alloc(16);
-  const aes = (k: Buffer, data: Buffer, enc: boolean) => {
-    const c = enc ? createCipheriv('aes-128-cbc', k, iv) : createDecipheriv('aes-128-cbc', k, iv);
-    return Buffer.concat([c.update(data), c.final()]);
-  };
-  const sent: string[] = [];
-  let session!: EcoflowBleSession;
-  const reply = (frame: Buffer) => queueMicrotask(() => session.handle(frame));
-  const send = (p: Parameters<typeof encodePacket>[0]) => reply(encodeFrame(FRAME_PROTOCOL, aes(key, encodePacket(p), true)));
-
-  const write = async (frame: Buffer) => {
-    const [f] = new FrameReader().push(frame);
-    if (f.type === FRAME_COMMAND && f.payload[0] === 0x01) {
-      const shared = ecdh.computeSecret(Buffer.concat([Buffer.from([4]), f.payload.subarray(2)]));
-      initialKey = shared.subarray(0, 16);
-      iv = md5(shared);
-      reply(encodeFrame(FRAME_COMMAND, Buffer.concat([Buffer.from([0x01, 0x01, 0x00]), ecdh.getPublicKey().subarray(1)])));
-      return;
-    }
-    if (f.type === FRAME_COMMAND && f.payload[0] === 0x02) {
-      reply(encodeFrame(FRAME_COMMAND, Buffer.concat([Buffer.from([0x02]), aes(initialKey, Buffer.concat([sRand, seed]), true)])));
-      return;
-    }
-    const p = decodePacket(aes(key, f.payload, false));
-    sent.push(`${p.cmdSet.toString(16)}/${p.cmdId.toString(16)}`);
-    if (p.cmdId === 0x89) send({ src: 0x35, dst: 0x21, cmdSet: 0x35, cmdId: 0x89, payload: Buffer.from([0x00]) });
-    if (p.cmdId === 0x86) {
-      // The station's clock request (src 0x35, cmd 0x01/0x52) can land between our auth and its reply.
-      if (opts.clockRequestFirst) send({ src: 0x35, dst: 0x21, cmdSet: 0x01, cmdId: 0x52 });
-      const ok = p.payload.equals(Buffer.from(md5(Buffer.from(opts.userId + opts.sn)).toString('hex').toUpperCase()));
-      send({ src: 0x35, dst: 0x21, cmdSet: 0x35, cmdId: 0x86, payload: Buffer.from([ok ? 0 : (opts.authCode ?? 6)]) });
-      if (ok) reply(encodeFrame(FRAME_PROTOCOL, aes(key, INV, true)));
-    }
-  };
-  return { sent, attach: (s: EcoflowBleSession) => { session = s; }, write };
-}
 
 describe('EcoFlow BLE session', () => {
   it('runs the handshake against a station double and then streams heartbeats', async () => {
