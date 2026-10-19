@@ -201,16 +201,15 @@ The user tested the Bluetooth source («ок працює») and asked to pick B
 1. **«Джерело» options.** The select keeps only «EcoFlow — вхід через акаунт» and «EcoFlow — ключі розробника». The `ble` option and its hint are gone. The account hint stays as it is.
 2. **«Перевірити» in account mode.**
    - It signs in and shows the account's stations at once, as before.
-   - At the same moment it starts a Bluetooth scan (`SCAN_MS` = 8 s) through a new IPC call. The scan never delays or fails the list.
+   - Once the list is in and contains a RIVER 2 family station, it starts a Bluetooth scan (`SCAN_MS` = 8 s) through a new IPC call. The scan never delays or fails the list. An account without such a station is not scanned, which also spares it the Bluetooth host and, on macOS, the Bluetooth permission prompt.
    - Under the list, while the scan runs: «Шукаю станції поруч через Bluetooth…».
    - A scan problem shows its `BLE_PROBLEM_TEXT` as an alert under the list.
 3. **Each station row.**
    - The right-hand state reads «поруч» (green) when its SN was found by the scan, or when it is the station the running Bluetooth source is connected to.
    - Otherwise it shows the cloud state («в мережі» / «не в мережі»), as before.
-4. **Under the selected station**, a segmented switch «Підключення»: «Bluetooth» | «Інтернет».
-   - **«Bluetooth»** is enabled only when the station is nearby and `isRiver2Family`.
-     - When disabled because it is not nearby: «Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером», plus a «Шукати ще раз» link once the scan has ended.
-     - When disabled because of the model: «Модель поки не підтримується».
+4. **Under the selected station**, if it is of the RIVER 2 family (`isRiver2Family`), a segmented switch «Підключення»: «Bluetooth» | «Інтернет». Another model has no switch and is read over the internet, as before.
+   - **«Bluetooth»** is enabled only when the station is nearby.
+     - When disabled because it is not nearby, once a scan of this check has come in: «Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером», plus a «Шукати ще раз» link once the scan has ended. Before the first scan result it is disabled with no reason.
    - **Default:** «Bluetooth» when it is enabled, else «Інтернет». The default is re-applied when the scan result arrives, unless the user has already touched the switch.
    - **With «Bluetooth» chosen:**
      - the «Перевірка» box reads «Станція поруч — стан світла з’явиться після збереження» (no IPC);

@@ -248,7 +248,7 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
 
     async preview(i, sn) {
       const input = readInput(i), station = readSn(sn);
-      // The Bluetooth form decides its «Перевірка» text itself and never asks.
+      // A station read over Bluetooth has no cloud preview: the form shows its own «Перевірка» text and never asks.
       if (!input || station === null || input.mode === 'ble') return badInput();
       try {
         const { online, verdict } = input.mode === 'keys'

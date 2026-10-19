@@ -466,7 +466,7 @@ test('«Джерело» offers the account and the developer keys only, with no
   expect(screen.queryByText(/Далі інтернет не потрібен/)).toBeNull();
 });
 
-test('check: the scan starts with the sign-in; the stations come at once with the cloud state, then «поруч» from the scan', async () => {
+test('check: the stations come at once with the cloud state; with a RIVER 2 among them the scan starts, then «поруч» from it', async () => {
   const user = userEvent.setup(); let signedIn!: (v: unknown) => void;
   const { api, scan } = scanApi([RIVER, DELTA, MAX], { ecoflowTest: vi.fn(() => new Promise(r => { signedIn = r; })) });
   render(<ActualSettings state={stateOf()} api={api} />);
@@ -475,10 +475,11 @@ test('check: the scan starts with the sign-in; the stations come at once with th
   await user.type(screen.getByLabelText('Пароль'), PASSWORD);
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
   expect(api.ecoflowTest).toHaveBeenCalledWith(ACCOUNT_INPUT);
+  expect(screen.getByRole('button', { name: 'Перевіряю…' })).toBeDisabled();
+  expect(api.ecoflowScan).not.toHaveBeenCalled(); // not before the list says there is a station to look for
+  await act(async () => signedIn({ ok: true, devices: [RIVER, DELTA, MAX] }));
   expect(api.ecoflowScan).toHaveBeenCalledTimes(1);
   expect(api.ecoflowScan).toHaveBeenCalledWith();
-  expect(screen.getByRole('button', { name: 'Перевіряю…' })).toBeDisabled();
-  await act(async () => signedIn({ ok: true, devices: [RIVER, DELTA, MAX] }));
   expect(screen.getByRole('heading', { name: 'Станції в акаунті' })).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent(SCANNING);
   expect(rowState(/River 2 · …1234/)).toHaveTextContent(/^не в мережі$/);
@@ -513,17 +514,31 @@ test('a scan problem is an alert under the list, which stays; a failed scan call
   expect(screen.queryByText(SCANNING)).toBeNull();
 });
 
-test('an account with no stations shows neither the scan line nor its alert', async () => {
-  const user = userEvent.setup(); const { api, scan } = scanApi([]);
+test('an account with no stations is not scanned', async () => {
+  const user = userEvent.setup(); const { api } = scanApi([]);
   render(<ActualSettings state={stateOf()} api={api} />);
   await checkAccount(user);
   expect(screen.getByText('У цьому акаунті немає станцій')).toBeInTheDocument();
+  expect(api.ecoflowScan).not.toHaveBeenCalled();
   expect(screen.queryByText(SCANNING)).toBeNull();
-  await scan(0, { nearby: [], bluetooth: 'Bluetooth на цьому комп’ютері вимкнено' });
-  expect(screen.queryByRole('alert')).toBeNull();
 });
 
-test('«Підключення» defaults to Bluetooth for a nearby RIVER 2, with no preview; otherwise Інтернет, Bluetooth disabled with the reason', async () => {
+test('an account with only a Delta: no scan, no scanning line, no switch; preselected at once with exactly one preview', async () => {
+  const user = userEvent.setup(); const { api } = scanApi([DELTA]);
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  expect(station(/Delta 2 · …5678/)).toBeChecked();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, DELTA.sn);
+  expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(api.ecoflowScan).not.toHaveBeenCalled();
+  expect(screen.queryByText(SCANNING)).toBeNull();
+  expect(screen.queryByRole('radiogroup', { name: 'Підключення' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(api.ecoflowSave).toHaveBeenCalledWith(ACCOUNT_INPUT, { sn: DELTA.sn, label: 'Delta 2' });
+});
+
+test('«Підключення» defaults to Bluetooth for a nearby RIVER 2, with no preview; another model has no switch; a RIVER 2 not nearby gets Інтернет and the reason', async () => {
   const user = userEvent.setup(); const { api, scan } = scanApi();
   render(<ActualSettings state={stateOf()} api={api} />);
   await checkAccount(user);
@@ -539,11 +554,9 @@ test('«Підключення» defaults to Bluetooth for a nearby RIVER 2, wit
   expect(api.ecoflowPreview).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
 
-  await user.click(station(/Delta 2 · …5678/)); // nearby, but another model
-  expect(bt()).toBeDisabled();
-  expect(net()).toBeChecked();
-  expect(linkGroup()).toHaveAccessibleDescription(UNSUPPORTED);
-  expect(screen.queryByRole('button', { name: 'Шукати ще раз' })).toBeNull();
+  await user.click(station(/Delta 2 · …5678/)); // nearby, but another model: the account's cloud, as before
+  expect(screen.queryByRole('radiogroup', { name: 'Підключення' })).toBeNull();
+  expect(screen.queryByText(UNSUPPORTED)).toBeNull();
   expect(api.ecoflowPreview).toHaveBeenLastCalledWith(ACCOUNT_INPUT, DELTA.sn);
   expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
   expect(screen.queryByText(BLE_HINT)).toBeNull();
@@ -551,7 +564,7 @@ test('«Підключення» defaults to Bluetooth for a nearby RIVER 2, wit
   await user.click(station(/River 2 Max · …9999/)); // RIVER 2 family, not nearby
   expect(bt()).toBeDisabled();
   expect(net()).toBeChecked();
-  expect(linkGroup()).toHaveAccessibleDescription(`${NOT_NEARBY} Шукати ще раз`);
+  expect(linkGroup()).toHaveAccessibleDescription(NOT_NEARBY); // the reason only, not the link's text
   expect(screen.getByRole('button', { name: 'Шукати ще раз' })).toBeInTheDocument();
   expect(api.ecoflowPreview).toHaveBeenLastCalledWith(ACCOUNT_INPUT, MAX.sn);
   expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
@@ -567,16 +580,20 @@ test('while the scan runs Bluetooth waits with no «Шукати ще раз»; 
   await user.click(station(/River 2 Max · …9999/));
   expect(net()).toBeChecked();
   expect(bt()).toBeDisabled();
-  expect(linkGroup()).toHaveAccessibleDescription(NOT_NEARBY);
+  // No scan has said anything yet: Bluetooth waits with no reason, so nothing contradicts «Шукаю станції поруч…».
+  expect(linkGroup()).not.toHaveAttribute('aria-describedby');
+  expect(screen.queryByText(NOT_NEARBY)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Шукати ще раз' })).toBeNull();
   expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
 
   await scan(0, { nearby: [] });
+  expect(linkGroup()).toHaveAccessibleDescription(NOT_NEARBY);
   await user.click(screen.getByRole('button', { name: 'Шукати ще раз' }));
   expect(api.ecoflowScan).toHaveBeenCalledTimes(2);
   expect(api.ecoflowTest).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('status')).toHaveTextContent(SCANNING);
   expect(screen.queryByRole('button', { name: 'Шукати ще раз' })).toBeNull();
+  expect(linkGroup()).toHaveAccessibleDescription(NOT_NEARBY); // the last real result stays during a new search
   expect(net()).toHaveFocus(); // the link is gone, the focus stays in the switch
 
   await scan(1, { nearby: [MAX.sn] });
@@ -687,7 +704,7 @@ test('the switch is one Tab stop; the arrows move and pick, and skip a disabled 
   const user = userEvent.setup(); const { api, scan } = scanApi();
   render(<ActualSettings state={stateOf()} api={api} />);
   await checkAccount(user);
-  await scan(0, { nearby: [RIVER.sn, DELTA.sn] });
+  await scan(0, { nearby: [RIVER.sn] });
   await user.click(station(/River 2 · …1234/));
   expect(bt()).toHaveAttribute('tabindex', '0');
   expect(net()).toHaveAttribute('tabindex', '-1');
@@ -700,7 +717,7 @@ test('the switch is one Tab stop; the arrows move and pick, and skip a disabled 
   expect(bt()).toBeChecked();
   expect(bt()).toHaveFocus();
 
-  await user.click(station(/Delta 2 · …5678/));
+  await user.click(station(/River 2 Max · …9999/)); // not nearby: Bluetooth is disabled
   act(() => net().focus());
   await user.keyboard('{ArrowLeft}');
   expect(net()).toBeChecked();
@@ -722,6 +739,46 @@ test('a scan from an earlier check is ignored', async () => {
   await scan(1, { nearby: [MAX.sn] });
   expect(screen.getAllByText('поруч')).toHaveLength(1);
   expect(rowState(/River 2 Max · …9999/)).toHaveTextContent(/^поруч$/);
+});
+
+test.each([
+  ['the only station', false],
+  ['the saved Bluetooth station', true],
+])('«Назад» or a new check while %s waits for the scan: the old scan picks and reads nothing', async (_, saved) => {
+  const user = userEvent.setup();
+  const { api, scan } = scanApi(saved ? [DELTA, RIVER] : [RIVER], { getActualLive: vi.fn(async () => null), onActualLive: vi.fn(() => () => {}) });
+  render(<ActualSettings state={stateOf(saved ? BLE_CONFIG : null)} api={api} />);
+  if (saved) await user.click(screen.getByRole('button', { name: 'Змінити' }));
+  await checkAccount(user, !saved);
+  const back = async () => user.click(screen.getByRole('button', { name: 'Назад' }));
+  const recheck = async () => { await user.click(screen.getByRole('button', { name: 'Перевірити' })); await screen.findByText('Станції в акаунті'); };
+  const picked = () => screen.queryAllByRole('radio', { name: /·/ }).filter(r => (r as HTMLInputElement).checked);
+
+  await back(); await recheck(); await back();
+  await scan(1, { nearby: [] }); // after «Назад»
+  expect(screen.getByRole('heading', { name: 'Підключення EcoFlow' })).toBeInTheDocument();
+  await recheck();
+  await scan(0, { nearby: [] }); // a stale scan during the next check
+  expect(picked()).toEqual([]);
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  await scan(2, { nearby: [RIVER.sn] }); // the current check's own scan
+  expect(picked()).toEqual([station(/River 2 · …1234/)]);
+  expect(bt()).toBeChecked();
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+});
+
+test('«Змінити» on an ecoflow-ble source: a pick by hand while its station waits for the scan wins', async () => {
+  const user = userEvent.setup();
+  const { api, scan } = scanApi([DELTA, RIVER], { getActualLive: vi.fn(async () => null), onActualLive: vi.fn(() => () => {}) });
+  render(<ActualSettings state={stateOf(BLE_CONFIG)} api={api} />);
+  await user.click(screen.getByRole('button', { name: 'Змінити' }));
+  await checkAccount(user, false);
+  await user.click(station(/Delta 2 · …5678/));
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, DELTA.sn);
+  await scan(0, { nearby: [RIVER.sn] });
+  expect(station(/Delta 2 · …5678/)).toBeChecked();
+  expect(station(/River 2 · …1234/)).not.toBeChecked();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
 });
 
 function liveApi(seed: unknown = null) {

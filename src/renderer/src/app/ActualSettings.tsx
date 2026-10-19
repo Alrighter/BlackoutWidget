@@ -131,22 +131,25 @@ const LINK_KEYS: ReadonlySet<string> = new Set(['ArrowLeft', 'ArrowRight', 'Arro
 
 /**
  * «Підключення» under the chosen station: one radio group with a single Tab stop (the checked option); an arrow picks
- * the other option, unless Bluetooth is off for the reason in `why`. `onRescan`: the «Шукати ще раз» link, when offered.
+ * the other option while Bluetooth is on offer (`bleOn`). `why`: the reason it is not, once a scan has told; it alone
+ * describes the group. `onRescan`: the «Шукати ще раз» link, when offered.
  */
-function LinkSwitch({ link, why, onPick, onRescan }: { link: Link; why: string | null; onPick(l: Link): void; onRescan?: () => void }) {
+function LinkSwitch({ link, bleOn, why, onPick, onRescan }: {
+  link: Link; bleOn: boolean; why: string | null; onPick(l: Link): void; onRescan?: () => void;
+}) {
   const label = useId(), hint = useId();
   const cloud = useRef<HTMLButtonElement>(null);
   const move = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!LINK_KEYS.has(e.key)) return;
     e.preventDefault();
-    if (why !== null) return;
+    if (!bleOn) return;
     const next: Link = link === 'ble' ? 'cloud' : 'ble';
     onPick(next);
     e.currentTarget.querySelector<HTMLButtonElement>(`[data-link="${next}"]`)?.focus();
   };
   const option = (value: Link, text: string) => (
     <button type="button" role="radio" className="sv-seg-btn" data-link={value} ref={value === 'cloud' ? cloud : undefined}
-      aria-checked={link === value} tabIndex={link === value ? 0 : -1} disabled={value === 'ble' && why !== null} onClick={() => onPick(value)}>
+      aria-checked={link === value} tabIndex={link === value ? 0 : -1} disabled={value === 'ble' && !bleOn} onClick={() => onPick(value)}>
       {text}
     </button>
   );
@@ -160,8 +163,8 @@ function LinkSwitch({ link, why, onPick, onRescan }: { link: Link; why: string |
         </div>
       </div>
       {why !== null && (
-        <p className="st-hint" id={hint}>
-          {why}
+        <p className="st-hint">
+          <span id={hint}>{why}</span>
           {onRescan && (
             <>
               {' '}
@@ -205,8 +208,8 @@ function useSecretField(isFilled: (v: string) => boolean) {
 /**
  * The keys live only in this component, the two secrets outside the DOM; the form is unmounted after save or cancel.
  * Two steps: the keys, then (after a successful check) the account's stations; «Назад» drops the check result and
- * keeps the keys. With the account, a Bluetooth scan runs beside the check, and the chosen station gets the
- * «Підключення» switch. `preferSn`: the saved Bluetooth station, preselected (like an only station) once the scan is done.
+ * keeps the keys. With the account, once the list holds a RIVER 2 family station, a Bluetooth scan runs, and a chosen
+ * RIVER 2 gets the «Підключення» switch. `preferSn`: the saved Bluetooth station, preselected (like an only station) once the scan is done.
  */
 function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
   api: RendererApi; initialRegion: EcoflowRegion; initialMode: Mode; preferSn?: string; onClose(): void;
@@ -223,6 +226,8 @@ function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
   const [scanning, setScanning] = useState(false);
   const [nearby, setNearby] = useState<string[]>([]);
   const [scanAlert, setScanAlert] = useState<string | null>(null);
+  /** A scan of this check has come in: until then «не знайдено поруч» would only contradict the search. */
+  const [scanDone, setScanDone] = useState(false);
   /** The switch where the user left it, per station; a station not in here follows the default. */
   const [picked, setPicked] = useState<Record<string, Link>>({});
   const [sn, setSn] = useState<string | null>(null);
@@ -242,14 +247,14 @@ function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
   const clearSecrets = () => { setAccessKey(''); secretKey.clear(); setEmail(''); password.clear(); };
   const resetResult = () => {
     seq.current++; scanSeq.current++; previewOf.current = null;
-    setChecking(false); setDevices(null); setScanning(false); setNearby([]); setScanAlert(null); setPicked({});
+    setChecking(false); setDevices(null); setScanning(false); setNearby([]); setScanAlert(null); setScanDone(false); setPicked({});
     setTestError(null); setSn(null); setPreview(null); setSaveError(null);
   };
 
-  /** Why Bluetooth is off for a station (the model first: a new search cannot change it), or null when it is on offer. */
-  const bleOff = (s: string): string | null => (!isRiver2Family(s) ? BLE_LINK_TEXT.unsupported : nearby.includes(s) ? null : NOT_NEARBY);
+  /** Bluetooth reads the RIVER 2 family only; another model has no switch and stays on the account's cloud. */
+  const bleOn = (s: string) => mode === 'account' && isRiver2Family(s) && nearby.includes(s);
   /** Bluetooth by default when it is on offer, unless the user picked «Інтернет» for this station. */
-  const linkOf = (s: string): Link => (mode === 'account' && bleOff(s) === null && picked[s] !== 'cloud' ? 'ble' : 'cloud');
+  const linkOf = (s: string): Link => (bleOn(s) && picked[s] !== 'cloud' ? 'ble' : 'cloud');
   const chosen = devices?.find(d => d.sn === sn);
   const link: Link = chosen ? linkOf(chosen.sn) : 'cloud';
 
@@ -274,26 +279,27 @@ function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
     let res: EcoflowScanResult;
     try { res = await api.ecoflowScan(); } catch { res = { nearby: [], bluetooth: BLE_PROBLEM_TEXT['scan-failed'] }; }
     if (mine !== scanSeq.current) return false;
-    setScanning(false); setNearby(res.nearby); setScanAlert(res.bluetooth ?? null);
+    setScanning(false); setNearby(res.nearby); setScanAlert(res.bluetooth ?? null); setScanDone(true);
     return true;
   }
   async function check() {
     const k = input(); resetResult(); setChecking(true);
     const mine = seq.current;
-    // At the same moment as the sign-in; it never delays or fails the list.
-    const scanned = k.mode === 'account' ? scan() : null;
     let res;
     try { res = await api.ecoflowTest(k); } catch { res = { ok: false as const, error: mode === 'keys' ? 'Не вдалося перевірити ключі' : 'Не вдалося перевірити вхід' }; }
     if (mine !== seq.current) return;
     setChecking(false);
     if (!res.ok) { setTestError(res.error); return; }
     setDevices(res.devices);
+    // Only once the list has a station Bluetooth can read: no other account starts the Bluetooth host (or, on macOS,
+    // its permission prompt). The scan never delays or fails the list.
+    const scanned = k.mode === 'account' && res.devices.some(d => isRiver2Family(d.sn)) ? scan() : null;
     // The station picked for the user: the saved Bluetooth one, else the only one.
     const auto = (scanned && res.devices.find(d => d.sn === preferSn)) || (res.devices.length === 1 ? res.devices[0] : undefined);
     if (!auto) return;
-    // With the account it waits for the scan, so the default connection is known first and no cloud preview (a clientId
-    // of the account's few a day) goes on a station Bluetooth will read. A pick by hand meanwhile wins.
-    if (scanned) void scanned.then(current => { if (current) setSn(s => s ?? auto.sn); });
+    // A station Bluetooth may read waits for the scan, so the default connection is known first and no cloud preview
+    // (a clientId of the account's few a day) goes on it in vain. A pick by hand meanwhile wins.
+    if (scanned && isRiver2Family(auto.sn)) void scanned.then(current => { if (current) setSn(s => s ?? auto.sn); });
     else choose(auto.sn);
   }
   async function save() {
@@ -329,17 +335,18 @@ function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
                     : <span className={`st-station-state${d.online ? ' online' : ''}`}><i />{d.online ? 'в мережі' : 'не в мережі'}</span>}
                 </label>
                 {/* A sibling of the row, not inside its label: a click on the switch must not pick the station. */}
-                {mode === 'account' && sn === d.sn && (
-                  <LinkSwitch link={link} why={bleOff(d.sn)} onPick={l => setPicked(p => ({ ...p, [d.sn]: l }))}
-                    onRescan={!scanning && bleOff(d.sn) === NOT_NEARBY ? () => void scan() : undefined} />
+                {mode === 'account' && sn === d.sn && isRiver2Family(d.sn) && (
+                  <LinkSwitch link={link} bleOn={bleOn(d.sn)} why={scanDone && !bleOn(d.sn) ? NOT_NEARBY : null}
+                    onPick={l => setPicked(p => ({ ...p, [d.sn]: l }))}
+                    onRescan={scanDone && !scanning && !bleOn(d.sn) ? () => void scan() : undefined} />
                 )}
               </Fragment>
             ))}
           </fieldset>
         )}
-        {/* Under the list; with no stations there is nothing for the scan to mark. */}
-        {devices.length > 0 && scanning && <p className="st-hint" role="status">Шукаю станції поруч через Bluetooth…</p>}
-        {devices.length > 0 && scanAlert && <Alert text={scanAlert} />}
+        {/* Under the list; only an account with a RIVER 2 family station is scanned at all. */}
+        {scanning && <p className="st-hint" role="status">Шукаю станції поруч через Bluetooth…</p>}
+        {scanAlert && <Alert text={scanAlert} />}
         {box && <CheckResult preview={box} />}
         {box && link === 'ble' && <p className="st-hint">{BLE_HINT}</p>}
         <div className="st-actions">
