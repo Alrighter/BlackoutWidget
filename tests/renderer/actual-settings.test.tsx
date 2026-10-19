@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ActualSettings } from '../../src/renderer/src/app/ActualSettings';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
@@ -415,4 +415,148 @@ test('a failed account check shows its error and keeps «Перевірити» 
   await openAndCheckAccount(user);
   expect(await screen.findByRole('alert')).toHaveTextContent('Не вдалося перевірити вхід');
   expect(screen.getByRole('button', { name: 'Перевірити' })).toBeEnabled();
+});
+
+// --- bluetooth mode ---
+const BLE_CONFIG = { id: 'ecoflow-ble' as const, region: 'eu' as const, deviceSn: 'R601ZEB4ZEA01234', deviceName: 'River 2', accountHint: 'r…@dully.io' };
+const bleStations = [
+  { sn: 'R601ZEB4ZEA01234', label: 'River 2', online: true, nearby: true, supported: true },
+  { sn: 'R331ZEB4ZEA05678', label: 'Delta 2', online: true, nearby: true, supported: false },
+  { sn: 'R601ZEB4ZEA09999', label: 'River 2 Max', online: false, nearby: false, supported: true },
+];
+async function openBle(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.selectOptions(screen.getByLabelText('Джерело'), 'ble');
+  await user.type(screen.getByLabelText('Email'), 'roman@dully.io');
+  await user.type(screen.getByLabelText('Пароль'), PASSWORD);
+}
+const bleApi = (over: Partial<Record<keyof RendererApi, unknown>> = {}) =>
+  mockApi({ ecoflowTest: vi.fn(async () => ({ ok: true, devices: bleStations })), ...over });
+
+test('ble mode shows email, password and the Bluetooth hint', async () => {
+  const user = userEvent.setup();
+  render(<ActualSettings state={stateOf()} api={mockApi()} />);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.selectOptions(screen.getByLabelText('Джерело'), 'ble');
+  expect(screen.getByRole('option', { name: 'EcoFlow — Bluetooth (без інтернету)' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Email')).toBeInTheDocument();
+  expect(screen.getByLabelText('Пароль')).toBeInTheDocument();
+  expect(screen.getByText('Вхід потрібен один раз: станція пускає лише свій акаунт. Пароль не зберігається — лише ключ для цієї станції. Далі інтернет не потрібен. Поки віджет підключений, телефон зможе керувати станцією лише через інтернет.')).toHaveClass('st-hint');
+  expect(screen.queryByText(/Неофіційний спосіб/)).toBeNull();
+});
+
+test('check shows stations with поруч / не знайдено поруч and the bluetooth alert', async () => {
+  const user = userEvent.setup(); let resolve!: (v: unknown) => void;
+  const api = bleApi({ ecoflowTest: vi.fn(() => new Promise(r => { resolve = r; })) });
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openBle(user);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(screen.getByRole('button', { name: 'Шукаю станцію…' })).toBeDisabled();
+  expect(api.ecoflowTest).toHaveBeenCalledWith({ mode: 'ble', region: 'eu', email: 'roman@dully.io', password: PASSWORD });
+  resolve({ ok: true, devices: bleStations, bluetooth: 'Bluetooth на цьому комп’ютері вимкнено' });
+  expect(await screen.findByText('Станції в акаунті')).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('Bluetooth на цьому комп’ютері вимкнено');
+  expect(screen.getAllByText('поруч')).toHaveLength(2);
+  expect(screen.getAllByText('поруч')[0].closest('.st-station-state')).toHaveClass('online');
+  expect(screen.getByText('не знайдено поруч').closest('.st-station-state')).not.toHaveClass('online');
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+});
+
+test('choosing a nearby RIVER 2 shows the after-save text; an unsupported one warns and disables Зберегти', async () => {
+  const user = userEvent.setup(); const api = bleApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openBle(user);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  await screen.findByText('Станції в акаунті');
+  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+  await user.click(screen.getByRole('radio', { name: /River 2 · …1234/ }));
+  const ok = screen.getByText('Станція поруч — стан світла з’явиться після збереження');
+  expect(ok.closest('.st-result')).toHaveClass('neutral');
+  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
+  await user.click(screen.getByRole('radio', { name: /Delta 2 · …5678/ }));
+  expect(screen.getByText('Модель поки не підтримується').closest('.st-result')).toHaveClass('warn');
+  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+  await user.click(screen.getByRole('radio', { name: /River 2 Max · …9999/ }));
+  expect(screen.getByText('Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером').closest('.st-result')).toHaveClass('neutral');
+  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+});
+
+test('a single station in ble mode is preselected without a preview call', async () => {
+  const user = userEvent.setup();
+  const api = bleApi({ ecoflowTest: vi.fn(async () => ({ ok: true, devices: [bleStations[0]] })) });
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openBle(user);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  expect(await screen.findByText('Станція поруч — стан світла з’явиться після збереження')).toBeInTheDocument();
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+});
+
+test('save sends mode ble', async () => {
+  const user = userEvent.setup(); const api = bleApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await openBle(user);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  await user.click(await screen.findByRole('radio', { name: /River 2 Max · …9999/ }));
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(api.ecoflowSave).toHaveBeenCalledWith(
+    { mode: 'ble', region: 'eu', email: 'roman@dully.io', password: PASSWORD }, { sn: 'R601ZEB4ZEA09999', label: 'River 2 Max' });
+});
+
+function liveApi(seed: unknown = null) {
+  let push: (l: unknown) => void = () => {}; const off = vi.fn();
+  const api = mockApi({
+    getActualLive: vi.fn(async () => seed),
+    onActualLive: vi.fn((cb: (l: unknown) => void) => { push = cb; return off; }),
+  });
+  return { api, off, push: (l: unknown) => act(() => push(l)) };
+}
+const bleActual = { sourceLabel: 'EcoFlow', power: 'on', observedAt: '2026-10-17T08:50:00Z', history: [] } as ActualStatus;
+
+test('connected ecoflow-ble panel shows the Bluetooth name and the live line, updating on push', async () => {
+  const { api, off, push } = liveApi({ link: 'connected', acInVolts: 227, acInHz: 50, inputWatts: 0, acOut: true, soc: 87 });
+  const { unmount } = render(<ActualSettings state={stateOf(BLE_CONFIG, bleActual)} api={api} />);
+  expect(screen.getByText('EcoFlow · River 2 · Bluetooth · акаунт r…@dully.io')).toBeInTheDocument();
+  expect(await screen.findByText('На вході 227 В · 50 Гц · 0 Вт · вихід AC увімк · заряд 87%')).toBeInTheDocument();
+  push({ link: 'connected', invSilent: true, acOut: false, soc: 100 });
+  expect(screen.getByText('Станція не повідомляє про вхід · вихід AC вимк · заряд 100%')).toBeInTheDocument();
+  push({ link: 'searching' });
+  expect(screen.getByText('Шукаю станцію поруч…')).toBeInTheDocument();
+  push({ link: 'bt-off' });
+  expect(screen.getByText('Bluetooth на цьому комп’ютері вимкнено')).toBeInTheDocument();
+  unmount();
+  expect(off).toHaveBeenCalled();
+});
+
+test('live line leaves out values not received yet', async () => {
+  const { api } = liveApi({ link: 'connected', acInVolts: 227, soc: 87 });
+  render(<ActualSettings state={stateOf(BLE_CONFIG, bleActual)} api={api} />);
+  expect(await screen.findByText('На вході 227 В · заряд 87%')).toBeInTheDocument();
+});
+
+test('a late seed does not overwrite a push', async () => {
+  let seed!: (v: unknown) => void; let push: (l: unknown) => void = () => {};
+  const api = mockApi({
+    getActualLive: vi.fn(() => new Promise(r => { seed = r; })),
+    onActualLive: vi.fn((cb: (l: unknown) => void) => { push = cb; return () => {}; }),
+  });
+  render(<ActualSettings state={stateOf(BLE_CONFIG, bleActual)} api={api} />);
+  act(() => push({ link: 'connecting' }));
+  await act(async () => seed({ link: 'searching' }));
+  expect(screen.getByText('Підключаюся…')).toBeInTheDocument();
+});
+
+test('the live line is only for the Bluetooth source', () => {
+  const api = mockApi({ getActualLive: vi.fn(async () => null), onActualLive: vi.fn(() => () => {}) });
+  render(<ActualSettings state={stateOf(APP_CONFIG, bleActual)} api={api} />);
+  expect(api.onActualLive).not.toHaveBeenCalled();
+});
+
+test('«Змінити» on an ecoflow-ble source opens the form in ble mode', async () => {
+  const user = userEvent.setup();
+  const { api } = liveApi();
+  render(<ActualSettings state={stateOf(BLE_CONFIG)} api={api} />);
+  await user.click(screen.getByRole('button', { name: 'Змінити' }));
+  expect(screen.getByLabelText('Джерело')).toHaveValue('ble');
+  expect(screen.getByLabelText('Пароль')).toHaveValue('');
 });
