@@ -160,6 +160,7 @@ function buildScenario(name, { style = 'compact', now } = {}) {
     previewLines: [{ line: LINES[0], today: { date: day, slots: T_A } }, { line: LINES[1], today: { date: day, slots: T_C } }],
     // What window.api's EcoFlow calls resolve with; --stubs replaces them ("pending": never settles).
     ecoflowTest: { ok: true, devices: [{ ...ECOFLOW_DEVICE, online: true }] },
+    ecoflowScan: { nearby: [] },
     ecoflowPreview: { ok: true, online: true, power: 'on', detail: 'на вході 229 В' },
     ecoflowSave: { ok: true },
   };

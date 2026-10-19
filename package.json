@@ -18,6 +18,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@noble/curves": "2.4.0",
+    "@stoprocent/noble": "2.8.0",
     "koffi": "^3.3.3",
     "mqtt": "5.16.0",
     "react": "^19.3.1",

@@ -82,7 +82,7 @@ p { margin: 6px 0; }
   height: 28px; padding: 0 14px; border: 0; border-radius: 7px; font-size: 13px; font-variant-numeric: tabular-nums;
   background: transparent; color: var(--bw-app-ink-2);
 }
-.sv-seg-btn[aria-selected='true'] { font-weight: 600; background: var(--bw-ctl-on); box-shadow: var(--bw-ctl-on-shadow); color: var(--bw-app-ink); }
+.sv-seg-btn[aria-selected='true'], .sv-seg-btn[aria-checked='true'] { font-weight: 600; background: var(--bw-ctl-on); box-shadow: var(--bw-ctl-on-shadow); color: var(--bw-app-ink); }
 .sv-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--bw-app-ink-2); }
 .sv-legend > span { display: flex; align-items: center; gap: 6px; }
 .sv-legend i { width: 12px; height: 12px; border-radius: 3px; }
@@ -256,7 +256,21 @@ p { margin: 6px 0; }
 .st-input.st-mono { font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; }
 .st-input:focus, .st-select select:focus { border: 1.5px solid var(--bw-accent); box-shadow: 0 0 0 3px rgb(from var(--bw-accent) r g b / 0.18); }
 .st-select { position: relative; }
-.st-select select { appearance: none; padding: 0 32px 0 10px; font-size: 13.5px; }
+/* A customizable select: the open list is drawn by the page (like the wizard's suggestion list), not by the OS. */
+.st-select select, .st-select select::picker(select) { appearance: base-select; }
+.st-select select { display: flex; align-items: center; padding: 0 32px 0 10px; font-size: 13.5px; }
+.st-select select::picker-icon { display: none; }
+.st-select select::picker(select) {
+  margin-top: 4px; padding: 4px; border-radius: 10px; color: var(--bw-app-ink);
+  background: var(--bw-menu); border: 1px solid rgb(from var(--bw-app-ink) r g b / 0.10); box-shadow: var(--bw-pop-shadow);
+}
+.st-select option {
+  display: flex; align-items: center; min-height: 34px; padding: 0 10px; border-radius: 7px;
+  font-size: 13.5px; color: var(--bw-app-ink); cursor: default;
+}
+.st-select option::checkmark { display: none; }
+.st-select option:hover, .st-select option:focus-visible { background: rgb(from var(--bw-accent) r g b / 0.08); outline: none; }
+.st-select option:checked { font-weight: 600; background: rgb(from var(--bw-accent) r g b / 0.08); }
 .st-select svg {
   position: absolute; right: 11px; top: 11px; pointer-events: none;
   fill: none; stroke: var(--bw-app-ink-2); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
@@ -286,6 +300,10 @@ p { margin: 6px 0; }
 .st-station-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--bw-unknown); }
 .st-station-state.online { color: var(--bw-on-ink); }
 .st-station-state.online i { background: var(--bw-on); }
+/* «Підключення» under the chosen row, lined up with the station name (padding + radio + gap). */
+.st-station-link { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 10px 38px; background: var(--bw-opt-on); }
+.st-station-link + .st-station { border-top: 1px solid rgb(from var(--bw-app-ink) r g b / 0.08); }
+.st-link-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 /* «Перевірка»: the preview read, tinted by what it says. */
 .st-result {
   --st-tone: var(--bw-unknown);

@@ -3,13 +3,15 @@ import { join } from 'node:path';
 import type { AppState, Settings } from '../shared/types';
 import { createActualActions, createActualRestart } from './actual/actions';
 import { EcoflowApi } from './actual/ecoflow/api';
-import { electronEncryptor, electronFetch, mqttConnect } from './actual/electron-deps';
+import { EcoflowAppApi } from './actual/ecoflow/app-api';
+import { electronEncryptor, electronFetch, mqttConnect, spawnBleHost } from './actual/electron-deps';
+import { BleLink } from './actual/ecoflow/ble/link';
 import { HistoryStore } from './actual/history';
 import { createActualSources } from './actual/registry';
 import { SecretStore } from './actual/secrets';
 import { ActualStateService, safeActualStatus } from './actual/service';
 import { FileLogger } from './file-logger';
-import { broadcastState, registerIpc } from './ipc';
+import { broadcastState, registerIpc, throttleLive } from './ipc';
 import { consoleLogger, type Logger } from './log';
 import { MainWindow } from './main-window';
 import { BrowserSession } from './providers/browser-session';
@@ -67,7 +69,8 @@ async function bootstrap(log: Logger): Promise<void> {
   const scheduler = new RefreshScheduler(() => service.refresh());
   const secrets = new SecretStore(join(userData, 'secrets.json'), electronEncryptor);
   const actualService = new ActualStateService({ history: new HistoryStore(join(userData, 'actual-history.json')), log });
-  const actualSources = createActualSources({ fetch: electronFetch, connect: mqttConnect });
+  const bleLink = new BleLink({ spawn: spawnBleHost, log });
+  const actualSources = createActualSources({ fetch: electronFetch, connect: mqttConnect, ble: bleLink });
   const preload = join(__dirname, '../preload/index.js');
   const mainWindow = new MainWindow(preload);
   const pinner = createDesktopPinner(log);
@@ -117,6 +120,9 @@ async function bootstrap(log: Logger): Promise<void> {
   const restartActual = () => { if (!startActual()) publish(); };
   const actualActions = createActualActions({
     makeApi: (region, keys) => new EcoflowApi(region, keys, { fetch: electronFetch }),
+    makeAppApi: (region, account) => new EcoflowAppApi(region, account, { fetch: electronFetch }),
+    connect: mqttConnect,
+    ble: bleLink,
     secrets, getSettings: () => store.getSettings(), updateSettings: saveSettingsOrThrow, restartActual, log,
   });
 
@@ -152,10 +158,15 @@ async function bootstrap(log: Logger): Promise<void> {
     openDtekSite: () => {
       shell.openExternal(DTEK_URL).catch(err => log.error('opening the DTEK site failed', err));
     },
+    getSettings: () => store.getSettings(),
+    bleLive: bleLink,
   });
 
   service.onState(s => publishState(composeState(s)));
   const stopActualUpdates = actualService.onChange(publish);
+  // The Bluetooth live line goes to the main window only (the settings panel), at most once a second.
+  const livePush = throttleLive(mainWindow);
+  const stopLive = bleLink.onLive(live => livePush.push(live));
   // Keeps the tray icon/tooltip in step with the clock, and actual.observedAt current (the service emits no change for it).
   setInterval(publish, 60_000);
 
@@ -169,10 +180,16 @@ async function bootstrap(log: Logger): Promise<void> {
     stopGlass();
     pinner.dispose();
     stopActualUpdates();
+    stopLive();
+    livePush.dispose();
     actualService.stop(); // closes the journal with a gap and ends the MQTT session
+    bleLink.dispose(); // after the source has unwatched: kills the Bluetooth host for good
   });
 
   powerMonitor.on('resume', () => scheduler.trigger('resume'));
+  // Sleep drops the Bluetooth link and stops scanning; waking starts over with no backoff.
+  powerMonitor.on('suspend', () => bleLink.suspend());
+  powerMonitor.on('resume', () => bleLink.resume());
   let online = net.isOnline();
   setInterval(() => {
     const now = net.isOnline();

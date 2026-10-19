@@ -120,6 +120,7 @@ contextBridge.exposeInMainWorld('api', {
   onMoveMode: cb => (cfg.moveMode ? soon(() => cb(true)) : noop),
   endMoveMode: noop,
   ecoflowTest: () => reply(stubs.ecoflowTest),
+  ecoflowScan: () => reply(stubs.ecoflowScan),
   ecoflowPreview: () => reply(stubs.ecoflowPreview),
   ecoflowSave: () => reply(stubs.ecoflowSave),
   actualDisconnect: () => done(undefined),

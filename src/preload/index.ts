@@ -28,11 +28,14 @@ const api: RendererApi = {
   onMoveMode: cb => subscribe(IPC.widgetMoveMode, cb),
   endMoveMode: () => ipcRenderer.send(IPC.widgetMoveDone),
   ecoflowTest: i => ipcRenderer.invoke(IPC.ecoflowTest, i),
+  ecoflowScan: () => ipcRenderer.invoke(IPC.ecoflowScan),
   ecoflowPreview: (i, sn) => ipcRenderer.invoke(IPC.ecoflowPreview, i, sn),
   ecoflowSave: (i, device) => ipcRenderer.invoke(IPC.ecoflowSave, i, device),
   actualDisconnect: () => ipcRenderer.invoke(IPC.actualDisconnect),
   openEcoflowHelp: () => ipcRenderer.send(IPC.openEcoflowHelp),
   openDtekSite: () => ipcRenderer.send(IPC.openDtekSite),
+  getActualLive: () => ipcRenderer.invoke(IPC.getActualLive),
+  onActualLive: cb => subscribe(IPC.actualLive, cb),
 };
 
 contextBridge.exposeInMainWorld('api', api);

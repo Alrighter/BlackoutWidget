@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { scrubKeys, SecretStore, SecretsUnavailableError, type Encryptor } from '../../../src/main/actual/secrets';
+import { maskEmail, scrubKeys, scrubSecrets, SecretStore, SecretsUnavailableError, type Encryptor } from '../../../src/main/actual/secrets';
 
 const reverse = (s: string) => [...s].reverse().join('');
 const fakeEnc: Encryptor = {
@@ -55,4 +55,16 @@ test('scrubKeys: Secret Key → …, Access Key → its mask; an empty key chang
   expect(scrubKeys('a=AKEY1234567 s=SECRET-xyz, again AKEY1234567', keys)).toBe('a=AKEY… s=…, again AKEY…');
   expect(scrubKeys('Помилка EcoFlow 9999: nothing here', keys)).toBe('Помилка EcoFlow 9999: nothing here');
   expect(scrubKeys('Помилка EcoFlow', { accessKey: '', secretKey: '' })).toBe('Помилка EcoFlow');
+});
+
+test('maskEmail keeps the first character and the domain', () => {
+  expect(maskEmail('roman@dully.io')).toBe('r…@dully.io');
+  expect(maskEmail('nodomain')).toBe('…');
+  expect(maskEmail('@dully.io')).toBe('…');
+});
+
+test('scrubSecrets replaces every secret, longest first, skipping empties', () => {
+  expect(scrubSecrets('pw=secret token=T', ['secret', 'T'])).toBe('pw=… token=…');
+  expect(scrubSecrets('abc', ['', 'b'])).toBe('a…c');
+  expect(scrubSecrets('x=abcdef', ['abc', 'abcdef'])).toBe('x=…');
 });
