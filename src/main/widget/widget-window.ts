@@ -2,11 +2,12 @@ import { app, BrowserWindow, Menu, screen, type MenuItemConstructorOptions, type
 import { join } from 'node:path';
 import { IPC } from '../../shared/ipc';
 import type { WidgetBackground, WidgetPosition, WidgetStyle } from '../../shared/types';
-import { WIDGET_SIZES } from '../../shared/widget-sizes';
+import { WIDGET_RADII, WIDGET_SIZES } from '../../shared/widget-sizes';
 import { silentLogger, type Logger } from '../log';
 import type { AppStore } from '../store';
 import type { DesktopPinner } from './desktop-pin';
 import { placeWidget } from './position';
+import { roundedShape } from './shape';
 
 export interface WidgetWindowDeps { store: AppStore; pinner: DesktopPinner; preload: string; log?: Logger }
 
@@ -45,6 +46,7 @@ export class WidgetWindow {
     if (style === this.style) return;
     this.style = style;
     this.setBounds(this.layout(this.deps.store.getSettings().widgetPosition).rect);
+    if (this.win) this.applyShape(this.win);
     this.emitMoved();
   }
 
@@ -148,6 +150,16 @@ export class WidgetWindow {
     this.emitMoved();
   }
 
+  /**
+   * Windows: cuts the window to the card's rounded corners. The desktop then owns the corners: its selection rectangle
+   * and icons show there (a pinned window's transparent pixels still hide them) and clicks there reach it.
+   */
+  private applyShape(win: BrowserWindow): void {
+    if (process.platform !== 'win32' || win.isDestroyed()) return;
+    const { width, height } = WIDGET_SIZES[this.style];
+    win.setShape(roundedShape(width, height, WIDGET_RADII[this.style]));
+  }
+
   private create(): BrowserWindow {
     const win = new BrowserWindow({
       ...this.bounds, show: false,
@@ -159,6 +171,7 @@ export class WidgetWindow {
       // While still top-level: Electron may create the window a few px off the asked size at fractional scaling,
       // and its first show re-applies its own (screen-coordinate) bounds; both must happen before it becomes a child.
       this.deps.pinner.setBounds(win, this.bounds);
+      this.applyShape(win);
       win.showInactive();
       this.deps.pinner.pin(win);
     });
