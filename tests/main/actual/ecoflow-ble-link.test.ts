@@ -495,6 +495,10 @@ describe('BLE link: the watched station', () => {
     expect(link.getLive()).toStrictEqual({
       link: 'connected', acInVolts: 229, acInHz: 50, inputWatts: 12, acOut: true, soc: 87, invSilent: false,
     });
+    beat('pd', { soc: 87, wattsInSum: 0, wattsOutSum: 12 });
+    expect(link.getLive()).toMatchObject({ wattsIn: 0, wattsOut: 12 });
+    beat('pd', { soc: 87 });
+    expect(link.getLive()).not.toHaveProperty('wattsIn');
 
     // onLive fires on a change only; another station's heartbeat is not ours.
     const count = lives.length;

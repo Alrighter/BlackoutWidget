@@ -1,7 +1,7 @@
 import { BLE_REASON } from '../../../../shared/ecoflow-ble';
 import type { Logger } from '../../../log';
 import type { ActualReading, ActualStateSource } from '../../types';
-import { detectGrid } from '../grid';
+import { detectGrid, type GridVerdict } from '../grid';
 import { ADAPTER_UNREADY_MS, INV_SILENT_MS, type BleLinkLike, type LinkEvent } from './link';
 import type { HostTimers } from './host';
 import type { AdapterState, LinkState } from './messages';
@@ -17,6 +17,14 @@ export const REASON_REPEAT_MS = 60_000;
  * grace and the inverter's silence start over then, so the link gets its chance to come back after a wake.
  */
 export const TICK_GAP_MS = 5_000;
+/**
+ * With the inverter silent, the PD heartbeat's 0 W in and some W out (the battery feeding the outputs) held this long
+ * reads «off». The inverter is the AC charger, so a grid that comes back wakes it and its verdict takes over.
+ */
+export const DRAIN_HOLD_MS = 30_000;
+/** A PD heartbeat older than this says nothing about now. */
+export const PD_FRESH_MS = 15_000;
+export const ON_BATTERY_DETAIL = 'станція працює від батареї, вхід 0 Вт';
 const isUnready = (s: AdapterState | null): boolean => s === 'unknown' || s === 'resetting';
 
 /** How often the clocks above are looked at. */
@@ -63,6 +71,12 @@ export class EcoflowBleSource implements ActualStateSource {
   private checkedAt = 0;
   private mpptAc: number | undefined;
   private invAc: number | undefined;
+  private pdAt = 0;
+  /**
+   * Since when the PD heartbeat has shown the battery feeding the outputs: set by 0 W in with some W out, kept while
+   * the input stays 0 W (a load switched off does not bring the grid back), cleared by any input.
+   */
+  private drainSince: number | undefined;
 
   private lastPower: ActualReading['power'] | undefined;
   private lastGridAt = 0;
@@ -138,6 +152,8 @@ export class EcoflowBleSource implements ActualStateSource {
           if (!this.connected) {
             this.invAt = this.now();
             this.mpptAc = this.invAc = undefined;
+            this.pdAt = 0;
+            this.drainSince = undefined;
           }
           this.connected = true;
         } else this.drop();
@@ -156,6 +172,8 @@ export class EcoflowBleSource implements ActualStateSource {
     if (this.connected) this.graceFrom = this.now();
     this.connected = false;
     this.mpptAc = this.invAc = undefined;
+    this.pdAt = 0;
+    this.drainSince = undefined;
   }
 
   private onHeartbeat(module: 'inv' | 'pd' | 'mppt', fields: Record<string, number | string>): void {
@@ -165,6 +183,7 @@ export class EcoflowBleSource implements ActualStateSource {
       if (module === 'mppt') this.mpptAc = fields.cfgAcEnabled;
       else if (module === 'inv') this.invAc = fields.cfgAcEnabled;
     }
+    if (module === 'pd') this.onPd(t, fields);
     if (module !== 'inv') return;
     // A payload cut short before the frequency would skip detectGrid's voltage/frequency check (0 V alone reads «off»):
     // it gives no verdict and does not count as the inverter reporting.
@@ -173,12 +192,33 @@ export class EcoflowBleSource implements ActualStateSource {
     const verdict = detectGrid({
       'inv.acInVol': fields.acInVol, 'inv.acInFreq': fields.acInFreq, 'inv.inputWatts': fields.inputWatts,
     });
+    this.report(t, verdict);
+  }
+
+  private onPd(t: number, fields: Record<string, number | string>): void {
+    this.pdAt = t;
+    const { wattsInSum: inW, wattsOutSum: outW } = fields;
+    if (typeof inW !== 'number' || inW > 0) this.drainSince = undefined;
+    else if (this.drainSince === undefined && typeof outW === 'number' && outW > 0) this.drainSince = t;
+  }
+
+  /** A grid verdict, at most one per READING_MS unless the power changes. */
+  private report(t: number, verdict: GridVerdict): void {
     if (verdict.power === this.lastPower && t - this.lastGridAt < READING_MS) return;
     this.lastGridAt = t;
     this.lastReason = undefined;
     this.emit(verdict.power === 'unknown'
       ? { power: 'unknown', observedAt: this.iso(t), reason: verdict.reason }
       : { power: verdict.power, observedAt: this.iso(t), detail: verdict.detail });
+  }
+
+  /**
+   * With the inverter silent: 'off' once the battery has fed the outputs for DRAIN_HOLD_MS, 'wait' while that is being
+   * held (so no «unknown» comes in between), null when the PD heartbeat tells nothing.
+   */
+  private battery(t: number): 'off' | 'wait' | null {
+    if (this.drainSince === undefined || t - this.pdAt >= PD_FRESH_MS) return null;
+    return t - this.drainSince >= DRAIN_HOLD_MS ? 'off' : 'wait';
   }
 
   /** The reason the power cannot be told right now, if any. */
@@ -204,7 +244,15 @@ export class EcoflowBleSource implements ActualStateSource {
     const t = this.now();
     const gap = t - this.checkedAt;
     this.checkedAt = t;
-    if (gap > TICK_GAP_MS || gap < 0) this.graceFrom = this.invAt = t;
+    if (gap > TICK_GAP_MS || gap < 0) {
+      this.graceFrom = this.invAt = t;
+      this.drainSince = undefined;
+    }
+    if (this.connected && t - this.invAt >= INV_SILENT_MS) {
+      const battery = this.battery(t);
+      if (battery === 'off') return this.report(t, { power: 'off', detail: ON_BATTERY_DETAIL });
+      if (battery === 'wait') return;
+    }
     const reason = this.reason(t);
     if (reason === undefined) {
       this.lastReason = undefined;

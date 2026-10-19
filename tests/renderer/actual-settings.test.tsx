@@ -798,6 +798,12 @@ test('connected ecoflow-ble panel shows the Bluetooth name and the live line, up
   expect(await screen.findByText('На вході 227 В · 50 Гц · 0 Вт · вихід AC увімк · заряд 87%')).toBeInTheDocument();
   push({ link: 'connected', invSilent: true, acOut: false, soc: 100 });
   expect(screen.getByText('Станція не повідомляє про вхід · вихід AC вимк · заряд 100%')).toBeInTheDocument();
+  push({ link: 'connected', invSilent: true, acOut: false, soc: 97, wattsIn: 0, wattsOut: 12 });
+  expect(screen.getByText('Від батареї · споживання 12 Вт · вихід AC вимк · заряд 97%')).toBeInTheDocument();
+  push({ link: 'connected', invSilent: true, acOut: false, soc: 97, wattsIn: 0, wattsOut: 0 });
+  expect(screen.getByText('Вхід 0 Вт · споживання 0 Вт · вихід AC вимк · заряд 97%')).toBeInTheDocument();
+  push({ link: 'connected', invSilent: true, soc: 97, wattsIn: 40 });
+  expect(screen.getByText('Вхід 40 Вт · заряд 97%')).toBeInTheDocument();
   push({ link: 'searching' });
   expect(screen.getByText('Шукаю станцію поруч…')).toBeInTheDocument();
   push({ link: 'bt-off' });

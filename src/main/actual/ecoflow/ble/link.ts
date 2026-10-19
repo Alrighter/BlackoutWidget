@@ -419,6 +419,10 @@ export class BleLink implements BleLinkLike {
     if (acFlag !== undefined) live.acOut = acFlag === 1;
     const soc = num(pd?.soc);
     if (soc !== undefined) live.soc = soc;
+    const wattsIn = num(pd?.wattsInSum);
+    if (wattsIn !== undefined) live.wattsIn = wattsIn;
+    const wattsOut = num(pd?.wattsOutSum);
+    if (wattsOut !== undefined) live.wattsOut = wattsOut;
     live.invSilent = this.invSilent;
     return live;
   }
