@@ -11,7 +11,6 @@
     "test": "vitest run",
     "ui:capture": "electron scripts/ui-capture/capture.cjs",
     "tray:icons": "electron scripts/gen-tray-icons.cjs",
-    "ble:probe": "rolldown scripts/ble-probe/probe.ts -p node -f cjs -o out/ble-probe/probe.cjs -e @stoprocent/noble && node out/ble-probe/probe.cjs",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64 --publish never"
   },
   "keywords": [],

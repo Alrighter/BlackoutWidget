@@ -1,3 +1,4 @@
+import type { BleProblem } from './ecoflow-ble';
 import type {
   ActualPower, Address, AppState, DaySchedule, EcoflowRegion, HouseInfo, LineInfo, WidgetBackground, WidgetStyle,
 } from './types';
@@ -27,6 +28,11 @@ export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[] } | { o
 export type EcoflowPreviewResult =
   | { ok: true; online: boolean; power: ActualPower; detail?: string; reason?: string; unsupported?: boolean }
   | { ok: false; error: string };
+/** The live line of the Bluetooth source: link state plus the latest values the station has sent (absent = not sent yet). */
+export interface ActualLive {
+  link: 'searching' | 'connecting' | 'connected' | 'refused' | 'stalled' | 'unsupported' | Exclude<BleProblem, 'scan-failed'>;
+  acInVolts?: number; acInHz?: number; inputWatts?: number; acOut?: boolean; soc?: number; invSilent?: boolean;
+}
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export interface RendererApi {

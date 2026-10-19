@@ -74,8 +74,3 @@ export function sessionKey(seed: Uint8Array, sRand: Uint8Array): Buffer {
   if (seed.length < 2 || sRand.length < 16 || pos + 16 > keyTable.length) throw new Error('bad session key material');
   return md5(Buffer.concat([keyTable.subarray(pos, pos + 16), sRand.subarray(0, 16)]));
 }
-
-/** The auth payload: the uppercase hex of MD5(userId + SN), as 32 ASCII bytes. */
-export function authToken(userId: string, sn: string): Buffer {
-  return Buffer.from(md5(Buffer.from(userId + sn, 'ascii')).toString('hex').toUpperCase(), 'ascii');
-}

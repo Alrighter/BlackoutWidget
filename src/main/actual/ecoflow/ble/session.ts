@@ -1,5 +1,5 @@
 import { heartbeatOf } from './heartbeats';
-import { authToken, newEphemeralKey, sessionKey, sharedSecret, SessionCipher } from './crypto';
+import { newEphemeralKey, sessionKey, sharedSecret, SessionCipher } from './crypto';
 import { decodePacket, encodeFrame, encodePacket, FRAME_COMMAND, FRAME_PROTOCOL, FrameReader, type Frame, type Packet } from './protocol';
 
 type Incoming = Frame | Packet;
@@ -24,13 +24,15 @@ export const AUTH_ERRORS: Record<number, string> = {
   5: 'AppSendDataError', 6: 'WrongKey', 7: 'MaximumDevicesError',
 };
 
+export type SessionErrorKind = 'timeout' | 'refused' | 'failed';
+
 export class SessionError extends Error {
-  constructor(readonly stage: SessionStage, message: string) { super(message); }
+  constructor(readonly stage: SessionStage, message: string, readonly kind: SessionErrorKind = 'failed', readonly code?: number) { super(message); }
 }
 
 export interface SessionOptions {
-  userId: string;
-  sn: string;
+  /** The auth payload, MD5(userId + SN) in uppercase hex (see token.ts). Required unless `stopAfterAuthStatus`. */
+  token?: string;
   write(data: Buffer): Promise<void>;
   /** Every decoded packet once the session key is in place, the auth replies included. */
   onPacket?(p: Packet): void;
@@ -75,13 +77,14 @@ export class EcoflowBleSession {
       await this.exchange('auth-status', this.packetFrame(AUTH_STATUS), (f): f is Packet => isPacket(f) && f.src === DST_AUTH && f.cmdSet === 0x35);
       if (this.o.stopAfterAuthStatus) return;
 
-      const reply = await this.exchange('auth', this.packetFrame({ ...AUTH, payload: authToken(this.o.userId, this.o.sn) }),
+      if (!this.o.token) throw new SessionError('auth', 'no auth token');
+      const reply = await this.exchange('auth', this.packetFrame({ ...AUTH, payload: Buffer.from(this.o.token, 'ascii') }),
         // The auth reply, or (as ha-ef-ble accepts) a first heartbeat. Anything else from the station, such as its clock
         // request, proves nothing: a refusal can still follow it.
         (f): f is Packet => isPacket(f) && ((f.src === DST_AUTH && f.cmdSet === 0x35 && f.cmdId === 0x86) || heartbeatOf(f) !== null));
       if (reply.src === DST_AUTH && reply.cmdId === 0x86 && reply.payload.length && reply.payload[0] !== 0) {
         const code = reply.payload[0];
-        throw new SessionError('auth', `station refused auth: ${code} ${AUTH_ERRORS[code] ?? 'unknown'}`);
+        throw new SessionError('auth', `station refused auth: ${code} ${AUTH_ERRORS[code] ?? 'unknown'}`, 'refused', code);
       }
       this.setStage('streaming');
     } catch (e) {
@@ -129,7 +132,7 @@ export class EcoflowBleSession {
   private exchange<T extends Incoming>(stage: SessionStage, frame: Buffer, match: (f: Incoming) => f is T): Promise<T> {
     this.setStage(stage);
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => { this.waiter = null; reject(new SessionError(stage, `no reply in ${stage}`)); }, this.o.stageTimeoutMs ?? 15_000);
+      const timer = setTimeout(() => { this.waiter = null; reject(new SessionError(stage, `no reply in ${stage}`, 'timeout')); }, this.o.stageTimeoutMs ?? 15_000);
       this.waiter = {
         accept: f => {
           if (!match(f)) return false;

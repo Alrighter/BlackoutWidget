@@ -1,13 +1,14 @@
 import { createCipheriv, createDecipheriv, createECDH, createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { parseAdvert } from '../../../src/main/actual/ecoflow/ble/advert';
-import { authToken, newEphemeralKey, sessionKey, sharedSecret, SessionCipher } from '../../../src/main/actual/ecoflow/ble/crypto';
+import { newEphemeralKey, sessionKey, sharedSecret, SessionCipher } from '../../../src/main/actual/ecoflow/ble/crypto';
 import { decodeHeartbeat, heartbeatOf } from '../../../src/main/actual/ecoflow/ble/heartbeats';
 import { KEY_TABLE_B64 } from '../../../src/main/actual/ecoflow/ble/keydata';
 import {
   crc16, crc8, decodePacket, encodeFrame, encodePacket, FRAME_COMMAND, FRAME_PROTOCOL, FrameReader, PacketError,
 } from '../../../src/main/actual/ecoflow/ble/protocol';
-import { EcoflowBleSession, SessionError } from '../../../src/main/actual/ecoflow/ble/session';
+import { EcoflowBleSession } from '../../../src/main/actual/ecoflow/ble/session';
+import { authToken } from '../../../src/main/actual/ecoflow/ble/token';
 
 // Decrypted RIVER 2 Pro packets from the ha-ef-ble #218 debug log (research §2.6), lines 24 and on.
 const INV = Buffer.from('aa024600902c00000000010104212002000000004401010501f101600000f0d001006c0300003c95d10100640d00003c3300000000000000000000000001000000000002000000000000000000000000000000000000324f', 'hex');
@@ -106,8 +107,8 @@ describe('EcoFlow BLE crypto', () => {
 
   it('builds the auth token as uppercase hex of MD5(userId + SN)', () => {
     const t = authToken('1234567890123456789', 'R601ZEB4XXXX0000');
-    expect(t.toString()).toBe(md5(Buffer.from('1234567890123456789R601ZEB4XXXX0000')).toString('hex').toUpperCase());
-    expect(t).toHaveLength(32);
+    expect(t).toBe(md5(Buffer.from('1234567890123456789R601ZEB4XXXX0000')).toString('hex').toUpperCase());
+    expect(t).toMatch(/^[0-9A-F]{32}$/);
   });
 });
 
@@ -173,7 +174,7 @@ describe('EcoFlow BLE session', () => {
     const packets: string[] = [];
     const stages: string[] = [];
     const s = new EcoflowBleSession({
-      userId: '1234567890123456789', sn: 'R601ZEB4XXXX0000', write: station.write,
+      token: authToken('1234567890123456789', 'R601ZEB4XXXX0000'), write: station.write,
       onPacket: p => packets.push(`${p.src}:${p.cmdSet.toString(16)}/${p.cmdId.toString(16)}`), onStage: st => stages.push(st),
     });
     station.attach(s);
@@ -186,29 +187,50 @@ describe('EcoFlow BLE session', () => {
 
   it('fails with the station\'s reason when the account does not own it', async () => {
     const station = fakeStation({ userId: 'owner', sn: 'R601ZEB4XXXX0000' });
-    const s = new EcoflowBleSession({ userId: 'someone-else', sn: 'R601ZEB4XXXX0000', write: station.write });
+    const s = new EcoflowBleSession({ token: authToken('someone-else', 'R601ZEB4XXXX0000'), write: station.write });
     station.attach(s);
     await expect(s.start()).rejects.toThrow(/6 WrongKey/);
     expect(s.currentStage).toBe('failed');
   });
 
+  it('classifies a refusal, a silent stage and a stop after auth-status', async () => {
+    const station = fakeStation({ userId: 'owner', sn: 'R601ZEB4XXXX0000' });
+    const refused = new EcoflowBleSession({ token: authToken('other', 'R601ZEB4XXXX0000'), write: station.write });
+    station.attach(refused);
+    await expect(refused.start()).rejects.toMatchObject({ kind: 'refused', code: 6 });
+
+    // Silent from the auth-status request on: the handshake works, the station never answers 0x89.
+    const mute = fakeStation({ userId: 'owner', sn: 'R601ZEB4XXXX0000' });
+    const quiet = new EcoflowBleSession({
+      token: authToken('owner', 'R601ZEB4XXXX0000'), stageTimeoutMs: 50,
+      write: async f => { const [fr] = new FrameReader().push(f); if (fr.type === FRAME_COMMAND) return mute.write(f); },
+    });
+    mute.attach(quiet);
+    await expect(quiet.start()).rejects.toMatchObject({ kind: 'timeout', stage: 'auth-status' });
+
+    const probe = fakeStation({ userId: 'owner', sn: 'R601ZEB4XXXX0000' });
+    const noToken = new EcoflowBleSession({ write: probe.write, stopAfterAuthStatus: true });
+    probe.attach(noToken);
+    await expect(noToken.start()).resolves.toBeUndefined();
+  });
+
   it('does not take the station\'s clock request for an accepted login', async () => {
     const station = fakeStation({ userId: 'owner', sn: 'R601ZEB4XXXX0000', clockRequestFirst: true });
-    const s = new EcoflowBleSession({ userId: 'someone-else', sn: 'R601ZEB4XXXX0000', write: station.write });
+    const s = new EcoflowBleSession({ token: authToken('someone-else', 'R601ZEB4XXXX0000'), write: station.write });
     station.attach(s);
     await expect(s.start()).rejects.toThrow(/6 WrongKey/);
   });
 
   it('times out a silent station at the first stage', async () => {
-    const s = new EcoflowBleSession({ userId: 'u', sn: 'R601', write: async () => {}, stageTimeoutMs: 20 });
+    const s = new EcoflowBleSession({ token: authToken('u', 'R601'), write: async () => {}, stageTimeoutMs: 20 });
     await expect(s.start()).rejects.toMatchObject({ stage: 'public-key' });
-    await expect(new EcoflowBleSession({ userId: 'u', sn: 'R601', write: async () => { throw new Error('gatt'); } }).start())
-      .rejects.toBeInstanceOf(SessionError);
+    await expect(new EcoflowBleSession({ token: authToken('u', 'R601'), write: async () => { throw new Error('gatt'); } }).start())
+      .rejects.toMatchObject({ kind: 'failed' });
   });
 
   it('refuses to send anything but the handshake and the auth requests', async () => {
     const station = fakeStation({ userId: 'u', sn: 'R601ZEB4XXXX0000' });
-    const s = new EcoflowBleSession({ userId: 'u', sn: 'R601ZEB4XXXX0000', write: station.write });
+    const s = new EcoflowBleSession({ token: authToken('u', 'R601ZEB4XXXX0000'), write: station.write });
     station.attach(s);
     await s.start();
     const frame = (s as any).packetFrame({ src: 0x21, dst: 0x02, cmdSet: 0x20, cmdId: 0x42, payload: Buffer.from([1]) });
