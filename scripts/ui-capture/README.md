@@ -26,7 +26,7 @@ Rebuild after every source change: the rig only sees `out/`.
 | `--wallpaper` | `auto` (= theme), `light`, `dark`, `busy`, `none` (no image: `{ kind: 'tint' }`) | `auto` |
 | `--move-mode` | flag: the widget is told it is in move mode (`onMoveMode(true)`) | off |
 | `--patch` | JSON merged into the AppState (`settings` one level deep), e.g. `'{"phase":"captcha"}'` | none |
-| `--stubs` | JSON replacing what `window.api` calls resolve with, by name: `providers`, `cities`, `streets`, `houses`, `previewLines`, `ecoflowTest`, `ecoflowPreview`, `ecoflowSave` (see [Scenarios](#scenarios)); `"pending"` never settles (EcoFlow calls only) | none |
+| `--stubs` | JSON replacing what `window.api` calls resolve with, by name: `providers`, `cities`, `streets`, `houses`, `previewLines`, `ecoflowTest`, `ecoflowScan`, `ecoflowPreview`, `ecoflowSave` (see [Scenarios](#scenarios)); `"pending"` never settles (EcoFlow calls only) | none |
 | `--exec` | JS run in the page after it rendered (awaited if it returns a promise), e.g. clicks | none |
 | `--tag` | text appended to the file name, for variants made with `--now` / `--patch` / `--exec` | none |
 | `--delay` | ms to wait before the capture (after `--exec`) | `300` |

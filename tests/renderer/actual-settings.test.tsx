@@ -12,6 +12,7 @@ const stations = [{ sn: 'R331ZEB4ZEA01234', label: 'Delta 2', online: true }, { 
 function mockApi(over: Partial<Record<keyof RendererApi, unknown>> = {}) {
   return {
     ecoflowTest: vi.fn(async () => ({ ok: true, devices: [stations[0]] })),
+    ecoflowScan: vi.fn(async () => ({ nearby: [] })),
     ecoflowPreview: vi.fn(async () => ({ ok: true, online: true, power: 'on', detail: 'на вході 229 В' })),
     ecoflowSave: vi.fn(async () => ({ ok: true })),
     actualDisconnect: vi.fn(async () => {}),
@@ -61,6 +62,10 @@ test('check lists stations; single station preselected; preview text', async () 
   expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
   expect(api.ecoflowPreview).toHaveBeenCalledWith({ mode: 'keys', region: 'eu', accessKey: 'AK-123', secretKey: 'SK-456' }, 'R331ZEB4ZEA01234');
   expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
+  // Keys mode has no Bluetooth: no scan, no «Підключення» switch.
+  expect(api.ecoflowScan).not.toHaveBeenCalled();
+  expect(screen.queryByRole('radiogroup', { name: 'Підключення' })).toBeNull();
+  expect(screen.queryByText('Шукаю станції поруч через Bluetooth…')).toBeNull();
 });
 
 test('several stations: none preselected, save disabled until one is picked; empty list message', async () => {
@@ -417,90 +422,284 @@ test('a failed account check shows its error and keeps «Перевірити» 
   expect(screen.getByRole('button', { name: 'Перевірити' })).toBeEnabled();
 });
 
-// --- bluetooth mode ---
+// --- Bluetooth, chosen per station after the account check ---
 const BLE_CONFIG = { id: 'ecoflow-ble' as const, region: 'eu' as const, deviceSn: 'R601ZEB4ZEA01234', deviceName: 'River 2', accountHint: 'r…@dully.io' };
-const bleStations = [
-  { sn: 'R601ZEB4ZEA01234', label: 'River 2', online: true, nearby: true, supported: true },
-  { sn: 'R331ZEB4ZEA05678', label: 'Delta 2', online: true, nearby: true, supported: false },
-  { sn: 'R601ZEB4ZEA09999', label: 'River 2 Max', online: false, nearby: false, supported: true },
-];
-async function openBle(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
-  await user.selectOptions(screen.getByLabelText('Джерело'), 'ble');
+const RIVER = { sn: 'R601ZEB4ZEA01234', label: 'River 2', online: false };
+const DELTA = { sn: 'R331ZEB4ZEA05678', label: 'Delta 2', online: true };
+const MAX = { sn: 'R611ZEB4ZEA09999', label: 'River 2 Max', online: true };
+const ACCOUNT_INPUT = { mode: 'account', region: 'eu', email: 'roman@dully.io', password: PASSWORD };
+const SCANNING = 'Шукаю станції поруч через Bluetooth…';
+const AFTER_SAVE = 'Станція поруч — стан світла з’явиться після збереження';
+const BLE_HINT = 'Поки віджет підключений, телефон зможе керувати станцією лише через інтернет. Пароль не зберігається — лише ключ для цієї станції.';
+const NOT_NEARBY = 'Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером';
+const UNSUPPORTED = 'Модель поки не підтримується';
+
+/** The stations come back at once; each scan waits for `scan(n, result)` (an Error rejects it). */
+function scanApi(devices: unknown[] = [RIVER, DELTA, MAX], over: Partial<Record<keyof RendererApi, unknown>> = {}) {
+  const pending: { resolve(v: unknown): void; reject(e: unknown): void }[] = [];
+  const api = mockApi({
+    ecoflowTest: vi.fn(async () => ({ ok: true, devices })),
+    ecoflowScan: vi.fn(() => new Promise((resolve, reject) => { pending.push({ resolve, reject }); })),
+    ...over,
+  });
+  const scan = (n: number, r: unknown) => act(async () => { if (r instanceof Error) pending[n].reject(r); else pending[n].resolve(r); });
+  return { api, scan };
+}
+async function checkAccount(user: ReturnType<typeof userEvent.setup>, open = true) {
+  if (open) await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
   await user.type(screen.getByLabelText('Email'), 'roman@dully.io');
   await user.type(screen.getByLabelText('Пароль'), PASSWORD);
+  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
+  await screen.findByText('Станції в акаунті');
 }
-const bleApi = (over: Partial<Record<keyof RendererApi, unknown>> = {}) =>
-  mockApi({ ecoflowTest: vi.fn(async () => ({ ok: true, devices: bleStations })), ...over });
+const station = (name: RegExp) => screen.getByRole('radio', { name });
+const rowState = (name: RegExp) => station(name).closest('label')!.querySelector('.st-station-state')!;
+const bt = () => screen.getByRole('radio', { name: 'Bluetooth' });
+const net = () => screen.getByRole('radio', { name: 'Інтернет' });
+const linkGroup = () => screen.getByRole('radiogroup', { name: 'Підключення' });
 
-test('ble mode shows email, password and the Bluetooth hint', async () => {
+test('«Джерело» offers the account and the developer keys only, with no Bluetooth hint', async () => {
   const user = userEvent.setup();
   render(<ActualSettings state={stateOf()} api={mockApi()} />);
   await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
-  await user.selectOptions(screen.getByLabelText('Джерело'), 'ble');
-  expect(screen.getByRole('option', { name: 'EcoFlow — Bluetooth (без інтернету)' })).toBeInTheDocument();
-  expect(screen.getByLabelText('Email')).toBeInTheDocument();
-  expect(screen.getByLabelText('Пароль')).toBeInTheDocument();
-  expect(screen.getByText('Вхід потрібен один раз: станція пускає лише свій акаунт. Пароль не зберігається — лише ключ для цієї станції. Далі інтернет не потрібен. Поки віджет підключений, телефон зможе керувати станцією лише через інтернет.')).toHaveClass('st-hint');
-  expect(screen.queryByText(/Неофіційний спосіб/)).toBeNull();
+  expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['EcoFlow — вхід через акаунт', 'EcoFlow — ключі розробника']);
+  expect(screen.queryByText(/Далі інтернет не потрібен/)).toBeNull();
 });
 
-test('check shows stations with поруч / не знайдено поруч and the bluetooth alert', async () => {
-  const user = userEvent.setup(); let resolve!: (v: unknown) => void;
-  const api = bleApi({ ecoflowTest: vi.fn(() => new Promise(r => { resolve = r; })) });
+test('check: the scan starts with the sign-in; the stations come at once with the cloud state, then «поруч» from the scan', async () => {
+  const user = userEvent.setup(); let signedIn!: (v: unknown) => void;
+  const { api, scan } = scanApi([RIVER, DELTA, MAX], { ecoflowTest: vi.fn(() => new Promise(r => { signedIn = r; })) });
   render(<ActualSettings state={stateOf()} api={api} />);
-  await openBle(user);
+  await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+  await user.type(screen.getByLabelText('Email'), 'roman@dully.io');
+  await user.type(screen.getByLabelText('Пароль'), PASSWORD);
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
-  expect(screen.getByRole('button', { name: 'Шукаю станцію…' })).toBeDisabled();
-  expect(api.ecoflowTest).toHaveBeenCalledWith({ mode: 'ble', region: 'eu', email: 'roman@dully.io', password: PASSWORD });
-  resolve({ ok: true, devices: bleStations, bluetooth: 'Bluetooth на цьому комп’ютері вимкнено' });
-  expect(await screen.findByText('Станції в акаунті')).toBeInTheDocument();
-  expect(screen.getByRole('alert')).toHaveTextContent('Bluetooth на цьому комп’ютері вимкнено');
-  expect(screen.getAllByText('поруч')).toHaveLength(2);
-  expect(screen.getAllByText('поруч')[0].closest('.st-station-state')).toHaveClass('online');
-  expect(screen.getByText('не знайдено поруч').closest('.st-station-state')).not.toHaveClass('online');
+  expect(api.ecoflowTest).toHaveBeenCalledWith(ACCOUNT_INPUT);
+  expect(api.ecoflowScan).toHaveBeenCalledTimes(1);
+  expect(api.ecoflowScan).toHaveBeenCalledWith();
+  expect(screen.getByRole('button', { name: 'Перевіряю…' })).toBeDisabled();
+  await act(async () => signedIn({ ok: true, devices: [RIVER, DELTA, MAX] }));
+  expect(screen.getByRole('heading', { name: 'Станції в акаунті' })).toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent(SCANNING);
+  expect(rowState(/River 2 · …1234/)).toHaveTextContent(/^не в мережі$/);
+  expect(rowState(/Delta 2 · …5678/)).toHaveTextContent(/^в мережі$/);
+  await scan(0, { nearby: [RIVER.sn, DELTA.sn, 'R601ZEB4ZEA00000'] });
+  expect(screen.queryByText(SCANNING)).toBeNull();
+  for (const name of [/River 2 · …1234/, /Delta 2 · …5678/]) {
+    expect(rowState(name)).toHaveTextContent(/^поруч$/);
+    expect(rowState(name)).toHaveClass('online');
+  }
+  expect(rowState(/River 2 Max · …9999/)).toHaveTextContent(/^в мережі$/);
+  expect(api.ecoflowTest).toHaveBeenCalledTimes(1);
   expect(api.ecoflowPreview).not.toHaveBeenCalled();
 });
 
-test('choosing a nearby RIVER 2 shows the after-save text; an unsupported one warns and disables Зберегти', async () => {
-  const user = userEvent.setup(); const api = bleApi();
+test('a scan problem is an alert under the list, which stays; a failed scan call too', async () => {
+  const user = userEvent.setup();
+  const first = scanApi();
+  const { unmount } = render(<ActualSettings state={stateOf()} api={first.api} />);
+  await checkAccount(user);
+  await first.scan(0, { nearby: [], bluetooth: 'Bluetooth на цьому комп’ютері вимкнено' });
+  expect(screen.getByRole('alert')).toHaveTextContent('Bluetooth на цьому комп’ютері вимкнено');
+  expect(screen.getAllByRole('radio', { name: /·/ })).toHaveLength(3);
+  expect(screen.getByRole('group', { name: 'Станція' }).compareDocumentPosition(screen.getByRole('alert')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  unmount();
+
+  const second = scanApi();
+  render(<ActualSettings state={stateOf()} api={second.api} />);
+  await checkAccount(user);
+  await second.scan(0, new Error('ipc'));
+  expect(screen.getByRole('alert')).toHaveTextContent('Не вдалося пошукати станцію через Bluetooth');
+  expect(screen.queryByText(SCANNING)).toBeNull();
+});
+
+test('an account with no stations shows neither the scan line nor its alert', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi([]);
   render(<ActualSettings state={stateOf()} api={api} />);
-  await openBle(user);
+  await checkAccount(user);
+  expect(screen.getByText('У цьому акаунті немає станцій')).toBeInTheDocument();
+  expect(screen.queryByText(SCANNING)).toBeNull();
+  await scan(0, { nearby: [], bluetooth: 'Bluetooth на цьому комп’ютері вимкнено' });
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+test('«Підключення» defaults to Bluetooth for a nearby RIVER 2, with no preview; otherwise Інтернет, Bluetooth disabled with the reason', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  await scan(0, { nearby: [RIVER.sn, DELTA.sn] });
+  expect(screen.queryByRole('radiogroup', { name: 'Підключення' })).toBeNull(); // only under the chosen station
+
+  await user.click(station(/River 2 · …1234/));
+  expect(bt()).toBeChecked();
+  expect(bt()).toBeEnabled();
+  expect(net()).not.toBeChecked();
+  expect(screen.getByText(AFTER_SAVE).closest('.st-result')).toHaveClass('neutral');
+  expect(screen.getByText(BLE_HINT)).toHaveClass('st-hint');
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
+
+  await user.click(station(/Delta 2 · …5678/)); // nearby, but another model
+  expect(bt()).toBeDisabled();
+  expect(net()).toBeChecked();
+  expect(linkGroup()).toHaveAccessibleDescription(UNSUPPORTED);
+  expect(screen.queryByRole('button', { name: 'Шукати ще раз' })).toBeNull();
+  expect(api.ecoflowPreview).toHaveBeenLastCalledWith(ACCOUNT_INPUT, DELTA.sn);
+  expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(screen.queryByText(BLE_HINT)).toBeNull();
+
+  await user.click(station(/River 2 Max · …9999/)); // RIVER 2 family, not nearby
+  expect(bt()).toBeDisabled();
+  expect(net()).toBeChecked();
+  expect(linkGroup()).toHaveAccessibleDescription(`${NOT_NEARBY} Шукати ще раз`);
+  expect(screen.getByRole('button', { name: 'Шукати ще раз' })).toBeInTheDocument();
+  expect(api.ecoflowPreview).toHaveBeenLastCalledWith(ACCOUNT_INPUT, MAX.sn);
+  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
+});
+
+test('while the scan runs Bluetooth waits with no «Шукати ще раз»; the link re-runs only the scan, and the default follows it', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi([MAX]);
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  expect(station(/River 2 Max · …9999/)).toBeChecked();
+  expect(net()).toBeChecked();
+  expect(bt()).toBeDisabled();
+  expect(linkGroup()).toHaveAccessibleDescription(NOT_NEARBY);
+  expect(screen.queryByRole('button', { name: 'Шукати ще раз' })).toBeNull();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+
+  await scan(0, { nearby: [] });
+  await user.click(screen.getByRole('button', { name: 'Шукати ще раз' }));
+  expect(api.ecoflowScan).toHaveBeenCalledTimes(2);
+  expect(api.ecoflowTest).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('status')).toHaveTextContent(SCANNING);
+  expect(screen.queryByRole('button', { name: 'Шукати ще раз' })).toBeNull();
+  expect(net()).toHaveFocus(); // the link is gone, the focus stays in the switch
+
+  await scan(1, { nearby: [MAX.sn] });
+  expect(bt()).toBeChecked();
+  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+});
+
+test('a station picked while the scan runs is read over the internet, then the scan result still lands', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  await user.click(station(/River 2 · …1234/));
+  expect(net()).toBeChecked();
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
+  await scan(0, { nearby: [RIVER.sn] });
+  expect(rowState(/River 2 · …1234/)).toHaveTextContent(/^поруч$/);
+  expect(bt()).toBeChecked();
+  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
+});
+
+test('a single station: the cloud preview runs at once; a nearby scan switches it to Bluetooth and the late preview stays hidden', async () => {
+  const user = userEvent.setup(); let previewDone!: (v: unknown) => void;
+  const { api, scan } = scanApi([RIVER], { ecoflowPreview: vi.fn(() => new Promise(r => { previewDone = r; })) });
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  expect(station(/River 2 · …1234/)).toBeChecked();
+  expect(net()).toBeChecked();
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
+  expect(screen.getByText('Читаю показники…')).toBeInTheDocument();
+
+  await scan(0, { nearby: [RIVER.sn] });
+  expect(bt()).toBeChecked();
+  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
+  await act(async () => previewDone({ ok: true, online: false, power: 'unknown' }));
+  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
+  expect(screen.queryByText('Станція не в мережі')).toBeNull();
+
+  await user.click(net()); // back to Інтернет: the preview already read is reused
+  expect(screen.getByText('Станція не в мережі')).toBeInTheDocument();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+});
+
+test('a switch the user touched is kept when the scan result arrives', async () => {
+  const user = userEvent.setup(); const { scan, api } = scanApi([RIVER]);
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  await user.click(net());
+  await scan(0, { nearby: [RIVER.sn] });
+  expect(bt()).toBeEnabled();
+  expect(net()).toBeChecked();
+  expect(screen.queryByText(AFTER_SAVE)).toBeNull();
+});
+
+test('Bluetooth chosen: «Зберегти» sends the account sign-in with mode ble, and no preview ran', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  await scan(0, { nearby: [RIVER.sn] });
+  await user.click(station(/River 2 · …1234/));
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(api.ecoflowSave).toHaveBeenCalledTimes(1);
+  expect(api.ecoflowSave).toHaveBeenCalledWith({ ...ACCOUNT_INPUT, mode: 'ble' }, { sn: RIVER.sn, label: 'River 2' });
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  expect(await screen.findByRole('button', { name: 'Підключити EcoFlow' })).toBeInTheDocument();
+});
+
+test('Інтернет chosen for a Bluetooth-ready station: the cloud preview, reused on the way back, and a save with mode account', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  await scan(0, { nearby: [RIVER.sn] });
+  await user.click(station(/River 2 · …1234/));
+  expect(bt()).toBeChecked();
+  await user.click(net());
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
+  expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(screen.queryByText(BLE_HINT)).toBeNull();
+  await user.click(bt());
+  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
+  await user.click(net());
+  expect(screen.getByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(api.ecoflowSave).toHaveBeenCalledWith(ACCOUNT_INPUT, { sn: RIVER.sn, label: 'River 2' });
+});
+
+test('the switch is one Tab stop; the arrows move and pick, and skip a disabled Bluetooth', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  await scan(0, { nearby: [RIVER.sn, DELTA.sn] });
+  await user.click(station(/River 2 · …1234/));
+  expect(bt()).toHaveAttribute('tabindex', '0');
+  expect(net()).toHaveAttribute('tabindex', '-1');
+  act(() => bt().focus());
+  await user.keyboard('{ArrowRight}');
+  expect(net()).toBeChecked();
+  expect(net()).toHaveFocus();
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
+  await user.keyboard('{ArrowLeft}');
+  expect(bt()).toBeChecked();
+  expect(bt()).toHaveFocus();
+
+  await user.click(station(/Delta 2 · …5678/));
+  act(() => net().focus());
+  await user.keyboard('{ArrowLeft}');
+  expect(net()).toBeChecked();
+  expect(net()).toHaveFocus();
+});
+
+test('a scan from an earlier check is ignored', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi();
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  await user.click(screen.getByRole('button', { name: 'Назад' }));
   await user.click(screen.getByRole('button', { name: 'Перевірити' }));
   await screen.findByText('Станції в акаунті');
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
-  await user.click(screen.getByRole('radio', { name: /River 2 · …1234/ }));
-  const ok = screen.getByText('Станція поруч — стан світла з’явиться після збереження');
-  expect(ok.closest('.st-result')).toHaveClass('neutral');
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
-  await user.click(screen.getByRole('radio', { name: /Delta 2 · …5678/ }));
-  expect(screen.getByText('Модель поки не підтримується').closest('.st-result')).toHaveClass('warn');
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
-  await user.click(screen.getByRole('radio', { name: /River 2 Max · …9999/ }));
-  expect(screen.getByText('Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером').closest('.st-result')).toHaveClass('neutral');
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
-  expect(api.ecoflowPreview).not.toHaveBeenCalled();
-});
-
-test('a single station in ble mode is preselected without a preview call', async () => {
-  const user = userEvent.setup();
-  const api = bleApi({ ecoflowTest: vi.fn(async () => ({ ok: true, devices: [bleStations[0]] })) });
-  render(<ActualSettings state={stateOf()} api={api} />);
-  await openBle(user);
-  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
-  expect(await screen.findByText('Станція поруч — стан світла з’явиться після збереження')).toBeInTheDocument();
-  expect(api.ecoflowPreview).not.toHaveBeenCalled();
-});
-
-test('save sends mode ble', async () => {
-  const user = userEvent.setup(); const api = bleApi();
-  render(<ActualSettings state={stateOf()} api={api} />);
-  await openBle(user);
-  await user.click(screen.getByRole('button', { name: 'Перевірити' }));
-  await user.click(await screen.findByRole('radio', { name: /River 2 Max · …9999/ }));
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
-  expect(api.ecoflowSave).toHaveBeenCalledWith(
-    { mode: 'ble', region: 'eu', email: 'roman@dully.io', password: PASSWORD }, { sn: 'R601ZEB4ZEA09999', label: 'River 2 Max' });
+  expect(api.ecoflowScan).toHaveBeenCalledTimes(2);
+  await scan(0, { nearby: [RIVER.sn], bluetooth: 'Bluetooth на цьому комп’ютері вимкнено' });
+  expect(screen.queryByText('поруч')).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('status')).toHaveTextContent(SCANNING);
+  await scan(1, { nearby: [MAX.sn] });
+  expect(screen.getAllByText('поруч')).toHaveLength(1);
+  expect(rowState(/River 2 Max · …9999/)).toHaveTextContent(/^поруч$/);
 });
 
 function liveApi(seed: unknown = null) {
@@ -552,11 +751,36 @@ test('the live line is only for the Bluetooth source', () => {
   expect(api.onActualLive).not.toHaveBeenCalled();
 });
 
-test('«Змінити» on an ecoflow-ble source opens the form in ble mode', async () => {
+test('«Змінити» on an ecoflow-ble source: the account form; after the check and the scan its station is preselected with Bluetooth', async () => {
   const user = userEvent.setup();
-  const { api } = liveApi();
+  const { api, scan } = scanApi([DELTA, RIVER], { getActualLive: vi.fn(async () => null), onActualLive: vi.fn(() => () => {}) });
   render(<ActualSettings state={stateOf(BLE_CONFIG)} api={api} />);
   await user.click(screen.getByRole('button', { name: 'Змінити' }));
-  expect(screen.getByLabelText('Джерело')).toHaveValue('ble');
+  expect(screen.getByLabelText('Джерело')).toHaveValue('account');
+  expect(screen.getByLabelText('Email')).toHaveValue('');
   expect(screen.getByLabelText('Пароль')).toHaveValue('');
+  await checkAccount(user, false);
+  // Nothing is picked (or read) until the scan has said whether the station is still nearby.
+  expect(screen.getAllByRole('radio', { name: /·/ }).filter(r => (r as HTMLInputElement).checked)).toEqual([]);
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  await scan(0, { nearby: [RIVER.sn] });
+  expect(station(/River 2 · …1234/)).toBeChecked();
+  expect(bt()).toBeChecked();
+  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(api.ecoflowSave).toHaveBeenCalledWith({ ...ACCOUNT_INPUT, mode: 'ble' }, { sn: RIVER.sn, label: 'River 2' });
+});
+
+test('«Змінити» on an ecoflow-ble source: a station no longer nearby is preselected on Інтернет', async () => {
+  const user = userEvent.setup();
+  const { api, scan } = scanApi([RIVER], { getActualLive: vi.fn(async () => null), onActualLive: vi.fn(() => () => {}) });
+  render(<ActualSettings state={stateOf(BLE_CONFIG)} api={api} />);
+  await user.click(screen.getByRole('button', { name: 'Змінити' }));
+  await checkAccount(user, false);
+  expect(station(/River 2 · …1234/)).not.toBeChecked(); // the only station waits for the scan too
+  await scan(0, { nearby: [] });
+  expect(station(/River 2 · …1234/)).toBeChecked();
+  expect(net()).toBeChecked();
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
 });

@@ -1,21 +1,25 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { BLE_LINK_TEXT, BLE_PROBLEM_TEXT, isRiver2Family } from '../../../shared/ecoflow-ble';
-import type { ActualLive, EcoflowDeviceView, EcoflowInput, EcoflowPreviewResult, RendererApi } from '../../../shared/ipc';
+import type { ActualLive, EcoflowDeviceView, EcoflowInput, EcoflowPreviewResult, EcoflowScanResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
 
 /** `initiallyOpen`: start with the connect / change form expanded (D10). */
 type SettingsProps = { state: AppState; api: RendererApi; initiallyOpen?: boolean };
-type Mode = 'account' | 'keys' | 'ble';
+type Mode = 'account' | 'keys';
 const MODES: { value: Mode; label: string }[] = [
   { value: 'account', label: 'EcoFlow — вхід через акаунт' },
   { value: 'keys', label: 'EcoFlow — ключі розробника' },
-  { value: 'ble', label: 'EcoFlow — Bluetooth (без інтернету)' },
 ];
+/** How the chosen station of the account is read: over Bluetooth, or the cloud as before. */
+type Link = 'ble' | 'cloud';
 
 const cap = (s?: string) => (s ? s[0].toLocaleUpperCase('uk') + s.slice(1) : '');
 const SAVE_FAILED = 'Не вдалося зберегти налаштування. Спробуйте ще раз.';
 const BOLT = 'M13.5 2 4.5 13.5H11l-1.5 8.5 9-11.5H12z';
+const BLE_NEARBY = 'Станція поруч — стан світла з’явиться після збереження';
+const BLE_HINT = 'Поки віджет підключений, телефон зможе керувати станцією лише через інтернет. Пароль не зберігається — лише ключ для цієї станції.';
+const NOT_NEARBY = 'Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером';
 
 /** Colour of the «Перевірка» box: the power read, a model we can't read, or nothing to tell. */
 type Tone = 'on' | 'off' | 'warn' | 'neutral';
@@ -28,14 +32,6 @@ function previewView(r: EcoflowPreviewResult): { text: string; tone: Tone } {
   if (r.power === 'off') return { text: r.detail ? `${cap(r.detail)} — світла немає` : 'Світла немає', tone: 'off' };
   return { text: cap(r.reason), tone: 'neutral' };
 }
-
-/** The «Перевірка» box in Bluetooth mode: worked out from the scan, nothing is read from the station. */
-function bleView(d: EcoflowDeviceView): { text: string; tone: Tone } {
-  if (!bleSupported(d)) return { text: 'Модель поки не підтримується', tone: 'warn' };
-  if (d.nearby) return { text: 'Станція поруч — стан світла з’явиться після збереження', tone: 'neutral' };
-  return { text: 'Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером', tone: 'neutral' };
-}
-const bleSupported = (d: EcoflowDeviceView) => d.supported ?? isRiver2Family(d.sn);
 
 /** The live line of the Bluetooth source; a value the station has not sent yet is left out, never shown as 0. */
 function liveText(l: ActualLive | null): string | null {
@@ -131,6 +127,54 @@ function CheckResult({ preview }: { preview: Preview }) {
   );
 }
 
+const LINK_KEYS: ReadonlySet<string> = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
+
+/**
+ * «Підключення» under the chosen station: one radio group with a single Tab stop (the checked option); an arrow picks
+ * the other option, unless Bluetooth is off for the reason in `why`. `onRescan`: the «Шукати ще раз» link, when offered.
+ */
+function LinkSwitch({ link, why, onPick, onRescan }: { link: Link; why: string | null; onPick(l: Link): void; onRescan?: () => void }) {
+  const label = useId(), hint = useId();
+  const cloud = useRef<HTMLButtonElement>(null);
+  const move = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!LINK_KEYS.has(e.key)) return;
+    e.preventDefault();
+    if (why !== null) return;
+    const next: Link = link === 'ble' ? 'cloud' : 'ble';
+    onPick(next);
+    e.currentTarget.querySelector<HTMLButtonElement>(`[data-link="${next}"]`)?.focus();
+  };
+  const option = (value: Link, text: string) => (
+    <button type="button" role="radio" className="sv-seg-btn" data-link={value} ref={value === 'cloud' ? cloud : undefined}
+      aria-checked={link === value} tabIndex={link === value ? 0 : -1} disabled={value === 'ble' && why !== null} onClick={() => onPick(value)}>
+      {text}
+    </button>
+  );
+  return (
+    <div className="st-station-link">
+      <div className="st-link-row">
+        <span className="st-label" id={label}>Підключення</span>
+        <div className="sv-seg" role="radiogroup" aria-labelledby={label} aria-describedby={why !== null ? hint : undefined} onKeyDown={move}>
+          {option('ble', 'Bluetooth')}
+          {option('cloud', 'Інтернет')}
+        </div>
+      </div>
+      {why !== null && (
+        <p className="st-hint" id={hint}>
+          {why}
+          {onRescan && (
+            <>
+              {' '}
+              {/* The link goes away while the scan runs, so the focus stays in the switch. */}
+              <button type="button" className="st-link" onClick={() => { onRescan(); cloud.current?.focus(); }}>Шукати ще раз</button>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /**
  * A secret input React does not control: a controlled one mirrors its value into the `value` attribute, so the secret
  * would sit in the DOM. The value lives in a ref; the field gets it back (the property, not the attribute) whenever it
@@ -161,10 +205,11 @@ function useSecretField(isFilled: (v: string) => boolean) {
 /**
  * The keys live only in this component, the two secrets outside the DOM; the form is unmounted after save or cancel.
  * Two steps: the keys, then (after a successful check) the account's stations; «Назад» drops the check result and
- * keeps the keys.
+ * keeps the keys. With the account, a Bluetooth scan runs beside the check, and the chosen station gets the
+ * «Підключення» switch. `preferSn`: the saved Bluetooth station, preselected once the scan is done.
  */
-function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
-  api: RendererApi; initialRegion: EcoflowRegion; initialMode: Mode; onClose(): void;
+function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
+  api: RendererApi; initialRegion: EcoflowRegion; initialMode: Mode; preferSn?: string; onClose(): void;
 }) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
@@ -175,81 +220,127 @@ function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
   const [checking, setChecking] = useState(false);
   const [devices, setDevices] = useState<EcoflowDeviceView[] | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
-  const [bluetooth, setBluetooth] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [nearby, setNearby] = useState<string[]>([]);
+  const [scanAlert, setScanAlert] = useState<string | null>(null);
+  /** The switch where the user left it, per station; a station not in here follows the default. */
+  const [picked, setPicked] = useState<Record<string, Link>>({});
   const [sn, setSn] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const seq = useRef(0);
+  /** The scan's own generation: a station pick bumps `seq`, and must not drop the scan of the same check. */
+  const scanSeq = useRef(0);
+  /** The station whose cloud preview is shown or on its way: a switch back to «Інтернет» reuses it. */
+  const previewOf = useRef<string | null>(null);
   const headRef = useStepFocus(devices ? 'stations' : 'form', true);
 
   const input = (): EcoflowInput => mode === 'keys'
     ? { mode, region, accessKey: accessKey.trim(), secretKey: secretKey.read().trim() }
     : { mode, region, email: email.trim(), password: password.read() };
   const clearSecrets = () => { setAccessKey(''); secretKey.clear(); setEmail(''); password.clear(); };
-  const resetResult = () => { seq.current++; setChecking(false); setDevices(null); setBluetooth(null); setTestError(null); setSn(null); setPreview(null); setSaveError(null); };
+  const resetResult = () => {
+    seq.current++; scanSeq.current++; previewOf.current = null;
+    setChecking(false); setDevices(null); setScanning(false); setNearby([]); setScanAlert(null); setPicked({});
+    setTestError(null); setSn(null); setPreview(null); setSaveError(null);
+  };
 
-  async function choose(next: string, k: EcoflowInput) {
+  /** Why Bluetooth is off for a station (the model first: a new search cannot change it), or null when it is on offer. */
+  const bleOff = (s: string): string | null => (!isRiver2Family(s) ? BLE_LINK_TEXT.unsupported : nearby.includes(s) ? null : NOT_NEARBY);
+  /** Bluetooth by default when it is on offer, unless the user picked «Інтернет» for this station. */
+  const linkOf = (s: string): Link => (mode === 'account' && bleOff(s) === null && picked[s] !== 'cloud' ? 'ble' : 'cloud');
+  const chosen = devices?.find(d => d.sn === sn);
+  const link: Link = chosen ? linkOf(chosen.sn) : 'cloud';
+
+  async function runPreview(station: string) {
     const mine = ++seq.current;
-    if (k.mode === 'ble') {
-      // Nothing to read over the internet: the box comes from the scan.
-      const d = devices?.find(x => x.sn === next);
-      setSn(next); setSaveError(null); if (d) setPreview({ sn: next, ...bleView(d) });
-      return;
-    }
-    setSn(next); setPreview({ sn: next, pending: true }); setSaveError(null);
+    previewOf.current = station;
+    setPreview({ sn: station, pending: true });
     let view: { text: string; tone: Tone };
-    try { view = previewView(await api.ecoflowPreview(k, next)); } catch { view = { text: 'Не вдалося прочитати показники', tone: 'neutral' }; }
-    if (mine === seq.current) setPreview({ sn: next, ...view });
+    try { view = previewView(await api.ecoflowPreview(input(), station)); } catch { view = { text: 'Не вдалося прочитати показники', tone: 'neutral' }; }
+    if (mine === seq.current) setPreview({ sn: station, ...view });
+  }
+  // The chosen station read over the internet gets its cloud preview, once; one read over Bluetooth never asks.
+  useEffect(() => {
+    if (chosen && link === 'cloud' && previewOf.current !== chosen.sn) void runPreview(chosen.sn);
+  }, [chosen?.sn, link]);
+
+  const choose = (next: string) => { setSn(next); setSaveError(null); };
+  /** Resolves true when this scan is still the current one once it is in. A failed call is the scan-failed problem. */
+  async function scan(): Promise<boolean> {
+    const mine = ++scanSeq.current;
+    setScanning(true); setScanAlert(null);
+    let res: EcoflowScanResult;
+    try { res = await api.ecoflowScan(); } catch { res = { nearby: [], bluetooth: BLE_PROBLEM_TEXT['scan-failed'] }; }
+    if (mine !== scanSeq.current) return false;
+    setScanning(false); setNearby(res.nearby); setScanAlert(res.bluetooth ?? null);
+    return true;
   }
   async function check() {
     const k = input(); resetResult(); setChecking(true);
     const mine = seq.current;
+    // At the same moment as the sign-in; it never delays or fails the list.
+    const scanned = k.mode === 'account' ? scan() : null;
     let res;
     try { res = await api.ecoflowTest(k); } catch { res = { ok: false as const, error: mode === 'keys' ? 'Не вдалося перевірити ключі' : 'Не вдалося перевірити вхід' }; }
     if (mine !== seq.current) return;
     setChecking(false);
     if (!res.ok) { setTestError(res.error); return; }
     setDevices(res.devices);
-    setBluetooth(res.bluetooth ?? null);
-    if (res.devices.length === 1) {
-      const only = res.devices[0];
-      if (k.mode === 'ble') { setSn(only.sn); setPreview({ sn: only.sn, ...bleView(only) }); } else void choose(only.sn, k);
-    }
+    const prefer = res.devices.find(d => d.sn === preferSn);
+    // The saved Bluetooth station waits for the scan, so that it opens on the connection it still has.
+    if (scanned && prefer) void scanned.then(current => { if (current) setSn(s => s ?? prefer.sn); });
+    else if (res.devices.length === 1) choose(res.devices[0].sn);
   }
   async function save() {
     const device = devices?.find(d => d.sn === sn);
     if (!device) return;
+    const k = input();
+    // Bluetooth signs in with the same account; main keeps only the station's key.
+    const i: EcoflowInput = k.mode === 'account' && linkOf(device.sn) === 'ble' ? { ...k, mode: 'ble' } : k;
     setSaving(true); setSaveError(null);
     let res;
-    try { res = await api.ecoflowSave(input(), { sn: device.sn, label: device.label }); } catch { res = { ok: false as const, error: SAVE_FAILED }; }
+    try { res = await api.ecoflowSave(i, { sn: device.sn, label: device.label }); } catch { res = { ok: false as const, error: SAVE_FAILED }; }
     setSaving(false);
     if (res.ok) { clearSecrets(); onClose(); } else setSaveError(res.error);
   }
 
-  const chosen = devices?.find(d => d.sn === sn);
+  const box: Preview | null = !chosen ? null
+    : link === 'ble' ? { sn: chosen.sn, text: BLE_NEARBY, tone: 'neutral' }
+      : preview?.sn === chosen.sn ? preview : null;
   if (devices) {
     return (
       <div className="st-panel">
         <h2 className="st-title" ref={headRef} tabIndex={-1}>Станції в акаунті</h2>
-        {bluetooth && <Alert text={bluetooth} />}
         {devices.length === 0 ? <p className="st-text">У цьому акаунті немає станцій</p> : (
           <fieldset className="st-stations">
             <legend className="st-sr">Станція</legend>
             {devices.map(d => (
-              <label key={d.sn} className="st-station">
-                <input type="radio" name="ecoflow-station" checked={sn === d.sn} onChange={() => void choose(d.sn, input())} />
-                <span className="st-station-name">{d.label} <span>{`· …${d.sn.slice(-4)}`}</span></span>
-                {mode === 'ble'
-                  ? <span className={`st-station-state${d.nearby ? ' online' : ''}`}><i />{d.nearby ? 'поруч' : 'не знайдено поруч'}</span>
-                  : <span className={`st-station-state${d.online ? ' online' : ''}`}><i />{d.online ? 'в мережі' : 'не в мережі'}</span>}
-              </label>
+              <Fragment key={d.sn}>
+                <label className="st-station">
+                  <input type="radio" name="ecoflow-station" checked={sn === d.sn} onChange={() => choose(d.sn)} />
+                  <span className="st-station-name">{d.label} <span>{`· …${d.sn.slice(-4)}`}</span></span>
+                  {nearby.includes(d.sn)
+                    ? <span className="st-station-state online"><i />поруч</span>
+                    : <span className={`st-station-state${d.online ? ' online' : ''}`}><i />{d.online ? 'в мережі' : 'не в мережі'}</span>}
+                </label>
+                {/* A sibling of the row, not inside its label: a click on the switch must not pick the station. */}
+                {mode === 'account' && sn === d.sn && (
+                  <LinkSwitch link={link} why={bleOff(d.sn)} onPick={l => setPicked(p => ({ ...p, [d.sn]: l }))}
+                    onRescan={!scanning && bleOff(d.sn) === NOT_NEARBY ? () => void scan() : undefined} />
+                )}
+              </Fragment>
             ))}
           </fieldset>
         )}
-        {preview && <CheckResult preview={preview} />}
+        {/* Under the list; with no stations there is nothing for the scan to mark. */}
+        {devices.length > 0 && scanning && <p className="st-hint" role="status">Шукаю станції поруч через Bluetooth…</p>}
+        {devices.length > 0 && scanAlert && <Alert text={scanAlert} />}
+        {box && <CheckResult preview={box} />}
+        {box && link === 'ble' && <p className="st-hint">{BLE_HINT}</p>}
         <div className="st-actions">
-          <button className="sv-primary" disabled={!sn || saving || (mode === 'ble' && !!chosen && !bleSupported(chosen))} onClick={() => void save()}>Зберегти</button>
+          <button className="sv-primary" disabled={!sn || saving} onClick={() => void save()}>Зберегти</button>
           <button className="sv-btn st-ghost st-tall" disabled={saving} onClick={resetResult}>Назад</button>
         </div>
         {saveError && <Alert text={saveError} />}
@@ -289,9 +380,7 @@ function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
             <input className="st-input" type="password" autoComplete="off" ref={password.ref} onChange={e => { password.change(e.target.value); resetResult(); }} />
           </label>
           <p className="st-hint">
-            {mode === 'ble'
-              ? 'Вхід потрібен один раз: станція пускає лише свій акаунт. Пароль не зберігається — лише ключ для цієї станції. Далі інтернет не потрібен. Поки віджет підключений, телефон зможе керувати станцією лише через інтернет.'
-              : "Неофіційний спосіб — той самий вхід, що й у застосунку EcoFlow. Може перестати працювати, якщо EcoFlow щось змінить. Пароль зберігається зашифрованим лише на цьому комп'ютері."}
+            {"Неофіційний спосіб — той самий вхід, що й у застосунку EcoFlow. Може перестати працювати, якщо EcoFlow щось змінить. Пароль зберігається зашифрованим лише на цьому комп'ютері."}
           </p>
         </>
       ) : (
@@ -313,7 +402,7 @@ function EcoflowForm({ api, initialRegion, initialMode, onClose }: {
       <div className="st-actions">
         <button className={`sv-primary${checking ? ' st-busy' : ''}`} disabled={!canCheck} onClick={() => void check()}>
           {checking && <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>}
-          {checking ? (mode === 'ble' ? 'Шукаю станцію…' : 'Перевіряю…') : 'Перевірити'}
+          {checking ? 'Перевіряю…' : 'Перевірити'}
         </button>
         <button className="sv-btn st-ghost st-tall" onClick={() => { clearSecrets(); onClose(); }}>Скасувати</button>
       </div>
@@ -328,7 +417,10 @@ function EcoflowPanel({ state, api, initiallyOpen = false }: SettingsProps) {
   const headRef = useStepFocus(editing ? 'form' : source ? 'connected' : 'idle');
 
   if (editing) {
-    return <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} initialMode={source?.id === 'ecoflow' ? 'keys' : source?.id === 'ecoflow-ble' ? 'ble' : 'account'} onClose={() => setEditing(false)} />;
+    return (
+      <EcoflowForm api={api} initialRegion={source?.region ?? 'eu'} initialMode={source?.id === 'ecoflow' ? 'keys' : 'account'}
+        preferSn={source?.id === 'ecoflow-ble' ? source.deviceSn : undefined} onClose={() => setEditing(false)} />
+    );
   }
   if (!source) {
     return (

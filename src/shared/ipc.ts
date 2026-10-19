@@ -28,10 +28,9 @@ export type EcoflowInput =
   | { mode: 'keys'; region: EcoflowRegion; accessKey: string; secretKey: string }
   | { mode: 'account'; region: EcoflowRegion; email: string; password: string }
   | { mode: 'ble'; region: EcoflowRegion; email: string; password: string };
-/** `nearby` and `supported` come with the Bluetooth check only; `online` is always the account's cloud state. */
-export interface EcoflowDeviceView { sn: string; label: string; online: boolean; nearby?: boolean; supported?: boolean }
-/** `bluetooth`: the Bluetooth check could not scan, and this is why (the stations still come back). */
-export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[]; bluetooth?: string } | { ok: false; error: string };
+/** `online` is the account's cloud state; whether a station is nearby comes from `ecoflowScan`. */
+export interface EcoflowDeviceView { sn: string; label: string; online: boolean }
+export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[] } | { ok: false; error: string };
 /** The setup scan: the SNs seen nearby plus the station the running Bluetooth source holds; `bluetooth`: why it could not scan. */
 export interface EcoflowScanResult { nearby: string[]; bluetooth?: string }
 export type EcoflowPreviewResult =
