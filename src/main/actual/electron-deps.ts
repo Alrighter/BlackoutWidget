@@ -1,6 +1,9 @@
-import { net, safeStorage } from 'electron';
+import { join } from 'node:path';
+import { net, safeStorage, utilityProcess } from 'electron';
 import { connect } from 'mqtt';
 import type { FetchLike } from './ecoflow/api';
+import type { HostPort } from './ecoflow/ble/link';
+import type { HostCommand, HostEvent } from './ecoflow/ble/messages';
 import type { MqttConnect } from './ecoflow/source';
 import type { Encryptor } from './secrets';
 
@@ -19,3 +22,29 @@ export const electronEncryptor: Encryptor = {
 };
 
 export const mqttConnect: MqttConnect = (url, opts) => connect(url, opts);
+
+/**
+ * The BLE host as a utilityProcess, so noble never runs in main. `__dirname` is out/main at runtime: this module is
+ * bundled into out/main/index.js, next to ble-host.js. Commands wait for the spawn, and a post to a host that is gone
+ * is dropped: its exit is on the way.
+ */
+export function spawnBleHost(): HostPort {
+  const child = utilityProcess.fork(join(__dirname, 'ble-host.js'), [], { serviceName: 'Blackout Widget Bluetooth' });
+  const send = (cmd: HostCommand) => {
+    try {
+      child.postMessage(cmd);
+    } catch { /* gone */ }
+  };
+  let early: HostCommand[] | null = [];
+  child.once('spawn', () => {
+    const queued = early ?? [];
+    early = null;
+    for (const cmd of queued) send(cmd);
+  });
+  return {
+    post: cmd => { if (early) early.push(cmd); else send(cmd); },
+    onEvent: cb => { child.on('message', (e: HostEvent) => cb(e)); },
+    onExit: cb => { child.on('exit', code => cb(code)); },
+    kill: () => { child.kill(); },
+  };
+}
