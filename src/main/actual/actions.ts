@@ -280,20 +280,24 @@ export function createActualRestart(deps: ActualRestartDeps): () => boolean {
       const factory = findActualSource(deps.sources, config.id);
       const label = `${factory.displayName} · ${config.deviceName}`;
       const app = config.id === 'ecoflow-app';
-      let clientId = app ? settings.ecoflowAppClientUuid : settings.ecoflowClientId;
-      if (!clientId) {
+      const ble = config.id === 'ecoflow-ble';
+      // The Bluetooth source has no MQTT clientId.
+      let clientId = ble ? '' : app ? settings.ecoflowAppClientUuid : settings.ecoflowClientId;
+      if (!clientId && !ble) {
         clientId = app ? makeAppClientUuid(deps.random) : makeClientId(deps.random);
         deps.updateSettings(app ? { ecoflowAppClientUuid: clientId } : { ecoflowClientId: clientId });
       }
       const secrets = deps.secrets.load(config.id);
-      const complete = app
-        ? typeof secrets?.email === 'string' && typeof secrets.password === 'string'
-        : typeof secrets?.accessKey === 'string' && typeof secrets.secretKey === 'string';
+      const complete = ble
+        ? typeof secrets?.token === 'string' && /^[0-9A-F]{32}$/.test(secrets.token)
+        : app
+          ? typeof secrets?.email === 'string' && typeof secrets.password === 'string'
+          : typeof secrets?.accessKey === 'string' && typeof secrets.secretKey === 'string';
       if (!secrets || !complete) {
-        deps.service.start(secretsMissingSource(now, app ? ACCOUNT_MISSING_REASON : KEYS_MISSING_REASON), label);
+        deps.service.start(secretsMissingSource(now, app || ble ? ACCOUNT_MISSING_REASON : KEYS_MISSING_REASON), label);
         return true;
       }
-      deps.service.start(factory.create(config, secrets, { clientId, log: deps.log }), label);
+      deps.service.start(factory.create(config, secrets, { clientId: clientId ?? '', log: deps.log }), label);
       return true;
     } catch (err) {
       deps.log.error('actual: could not start the source', err);

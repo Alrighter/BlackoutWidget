@@ -8,6 +8,7 @@ import {
 import { AFTER_SAVE_REASON, ecoflowAppPreview, ecoflowAppTest, PREVIEW_WAIT_MS } from '../../../src/main/actual/ecoflow/index';
 import { FRESH_MS } from '../../../src/main/actual/ecoflow/quota-tracker';
 import { NO_LINK_REASON, type MqttClientLike, type MqttConnect } from '../../../src/main/actual/ecoflow/source';
+import type { BleLinkLike } from '../../../src/main/actual/ecoflow/ble/link';
 import { createActualSources, findActualSource } from '../../../src/main/actual/registry';
 import type { ActualReading } from '../../../src/main/actual/types';
 import { silentLogger } from '../../../src/main/log';
@@ -806,7 +807,7 @@ test('registry: the ecoflow-app factory signs in with the account and connects a
     return { ok: true, status: 200, text: async () => JSON.stringify({ code: '0', data }) };
   });
   const mqtt = fakeMqtt();
-  const factory = findActualSource(createActualSources({ fetch, connect: mqtt.connect }), 'ecoflow-app');
+  const factory = findActualSource(createActualSources({ fetch, connect: mqtt.connect, ble: {} as BleLinkLike }), 'ecoflow-app');
   expect([factory.id, factory.displayName]).toEqual(['ecoflow-app', 'EcoFlow']);
   const src = factory.create(APP_CONFIG, { email: EMAIL, password: PASSWORD }, { clientId: UUID, log: silentLogger });
   running.push(src as EcoflowAppSource);
@@ -826,7 +827,7 @@ test('registry: the created source scrubs a server echo of the account', async (
   const fetch = vi.fn<FetchLike>(async () => ({
     ok: true, status: 200, text: async () => JSON.stringify({ code: '9999', message: `email=${EMAIL} password=${B64}` }),
   }));
-  const src = findActualSource(createActualSources({ fetch, connect: fakeMqtt().connect }), 'ecoflow-app')
+  const src = findActualSource(createActualSources({ fetch, connect: fakeMqtt().connect, ble: {} as BleLinkLike }), 'ecoflow-app')
     .create(APP_CONFIG, { email: EMAIL, password: PASSWORD }, { clientId: UUID, log: silentLogger });
   running.push(src as EcoflowAppSource);
   const readings: ActualReading[] = [];

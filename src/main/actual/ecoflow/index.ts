@@ -2,6 +2,8 @@ import type { ActualSourceFactory } from '../types';
 import { EcoflowApi, type EcoflowApiLike, type EcoflowDevice, type FetchLike } from './api';
 import { EcoflowAppApi, type AppSession, type EcoflowAppApiLike } from './app-api';
 import { APP_AUTH_REFUSED_REASON, APP_UNSUPPORTED_REASON, appClientId, appTopics, EcoflowAppSource } from './app-source';
+import type { BleLinkLike } from './ble/link';
+import { EcoflowBleSource } from './ble/source';
 import { detectGrid, type GridVerdict } from './grid';
 import { latestQuotasRequest, parseGetReply, parseJsonObject } from './mqtt-message';
 import { AUTH_REFUSED, connectBroker } from './mqtt-session';
@@ -22,6 +24,15 @@ export function createEcoflowFactory(deps: { fetch: FetchLike; connect: MqttConn
         { connect: deps.connect, log: ctx.log },
       );
     },
+  };
+}
+
+/** `secrets` are `{ token }`: the 32-hex session token. It needs no clientId. */
+export function createEcoflowBleFactory(deps: { ble: BleLinkLike }): ActualSourceFactory {
+  return {
+    id: 'ecoflow-ble',
+    displayName: 'EcoFlow',
+    create: (config, secrets, ctx) => new EcoflowBleSource({ sn: config.deviceSn, token: secrets.token }, deps.ble, { log: ctx.log }),
   };
 }
 

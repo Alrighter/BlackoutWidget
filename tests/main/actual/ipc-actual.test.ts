@@ -510,7 +510,7 @@ describe('restartActual', () => {
       updateSettings: vi.fn((patch: Partial<Settings>) => { settings = { ...settings, ...patch }; }),
       secrets: { load: vi.fn((_id: string) => (o.secrets === undefined ? { accessKey: AKEY, secretKey: SECRET } : o.secrets)) },
       service: { start: vi.fn((_s: ActualStateSource, _label: string) => { o.start?.(); }), stop: vi.fn() },
-      sources: [{ id: 'ecoflow', displayName: 'EcoFlow', create }, { id: 'ecoflow-app', displayName: 'EcoFlow', create }],
+      sources: [{ id: 'ecoflow', displayName: 'EcoFlow', create }, { id: 'ecoflow-app', displayName: 'EcoFlow', create }, { id: 'ecoflow-ble', displayName: 'EcoFlow', create }],
       log: fakeLog(),
       now: () => NOW,
     } satisfies ActualRestartDeps;
@@ -592,6 +592,31 @@ describe('restartActual', () => {
       expect(readings).toEqual([{ power: 'unknown', observedAt: '2026-10-17T10:00:00.000Z', reason: ACCOUNT_MISSING_REASON }]);
     }
     expect(ACCOUNT_MISSING_REASON).toBe('Дані входу EcoFlow не знайдено — увійдіть знову в налаштуваннях');
+  });
+
+  test('an ecoflow-ble source with a valid token starts the Bluetooth factory, with no clientId made', () => {
+    const token = 'ABCDEF0123456789ABCDEF0123456789';
+    const config: ActualSourceConfig = { id: 'ecoflow-ble', region: 'eu', deviceSn: 'R601ZEB4XXXX0000', deviceName: 'RIVER 2', accountHint: 'R601…0000' };
+    const { deps, restart, create, source } = restartSetup({ settings: { actualSource: config }, secrets: { token } });
+    expect(restart()).toBe(true);
+    expect(deps.secrets.load).toHaveBeenCalledWith('ecoflow-ble');
+    expect(create).toHaveBeenCalledWith(config, { token }, { clientId: '', log: deps.log });
+    expect(deps.service.start).toHaveBeenCalledWith(source, 'EcoFlow · RIVER 2');
+    expect(deps.updateSettings).not.toHaveBeenCalled();
+  });
+
+  test('an ecoflow-ble source with a missing or malformed token gives ACCOUNT_MISSING_REASON', () => {
+    const config: ActualSourceConfig = { id: 'ecoflow-ble', region: 'eu', deviceSn: 'R601ZEB4XXXX0000', deviceName: 'RIVER 2', accountHint: 'R601…0000' };
+    for (const secrets of [null, {}, { token: 'abc' }, { token: 'abcdef0123456789abcdef0123456789' }] as (Record<string, string> | null)[]) {
+      const { deps, restart, create, settings } = restartSetup({ settings: { actualSource: config }, secrets });
+      expect(restart()).toBe(true);
+      expect(create).not.toHaveBeenCalled();
+      expect(deps.updateSettings).not.toHaveBeenCalled();
+      expect(settings().ecoflowClientId).toBeUndefined();
+      const readings: ActualReading[] = [];
+      deps.service.start.mock.calls[0][0].start(r => readings.push(r));
+      expect(readings).toEqual([{ power: 'unknown', observedAt: '2026-10-17T10:00:00.000Z', reason: ACCOUNT_MISSING_REASON }]);
+    }
   });
 
   test('a failing start (locked journal) is logged, never thrown', () => {

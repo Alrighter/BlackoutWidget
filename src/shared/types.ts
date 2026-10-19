@@ -35,4 +35,5 @@ export interface ActualStatus {
 }
 export type ActualSourceConfig =
   | { id: 'ecoflow'; region: EcoflowRegion; deviceSn: string; deviceName: string; accessKeyHint: string }
-  | { id: 'ecoflow-app'; region: EcoflowRegion; deviceSn: string; deviceName: string; accountHint: string };
+  | { id: 'ecoflow-app'; region: EcoflowRegion; deviceSn: string; deviceName: string; accountHint: string }
+  | { id: 'ecoflow-ble'; region: EcoflowRegion; deviceSn: string; deviceName: string; accountHint: string };
