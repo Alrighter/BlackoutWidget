@@ -38,6 +38,8 @@ export interface ThemeTokens {
    * suggestion list's shadow, a disabled button's ink and the «Готово» check's ink.
    */
   rail: string; popShadow: string; disabledInk: string; doneInk: string;
+  /** An open dropdown's list (derived): opaque, since it floats over the content below it. */
+  menu: string;
 }
 
 export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
@@ -64,6 +66,7 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     thumbShadow: 'drop-shadow(0 5px 12px rgba(18, 22, 36, 0.22))',
     thumbWp: 'radial-gradient(55% 70% at 12% 18%, #ffd6bd 0%, rgba(255, 214, 189, 0) 70%), radial-gradient(50% 65% at 88% 22%, #c4defc 0%, rgba(196, 222, 252, 0) 70%), radial-gradient(70% 60% at 55% 105%, #e2d6ff 0%, rgba(226, 214, 255, 0) 70%), linear-gradient(170deg, #f7f3ee 0%, #eef1f7 100%)',
     rail: 'rgba(255, 255, 255, 0.35)', popShadow: '0 12px 28px rgba(20, 24, 40, 0.14)', disabledInk: '#9ca2b3', doneInk: '#0f7a45',
+    menu: '#fbfbfd',
   },
   dark: {
     on: '#5dffa8', offA: '#ffc23d', offB: '#ff7a1a', offDot: '#ff6b5b', maybe: '#ffc23d', unknown: '#9aa0b4',
@@ -88,6 +91,7 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     thumbShadow: 'drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45))',
     thumbWp: 'radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)',
     rail: 'rgba(255, 255, 255, 0.03)', popShadow: '0 12px 28px rgba(0, 0, 0, 0.4)', disabledInk: '#757b8b', doneInk: '#5dffa8',
+    menu: '#2b2d35',
   },
 };
 

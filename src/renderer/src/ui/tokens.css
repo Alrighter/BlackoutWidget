@@ -69,6 +69,8 @@
   --bw-pop-shadow: 0 12px 28px rgba(20, 24, 40, 0.14);
   --bw-disabled-ink: #9ca2b3;
   --bw-done-ink: #0f7a45;
+  /* an open dropdown's list: opaque, it floats over the content */
+  --bw-menu: #fbfbfd;
 
   /* radii */
   --bw-r-compact: 22px;
@@ -153,6 +155,7 @@
     --bw-pop-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
     --bw-disabled-ink: #757b8b;
     --bw-done-ink: #5dffa8;
+    --bw-menu: #2b2d35;
   }
 }
 

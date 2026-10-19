@@ -147,7 +147,8 @@ async function capture(job, opts) {
       const page = path.join(ROOT, 'out/renderer', `${job.target}.html`);
       await win.loadFile(page, widget ? {} : { query: { view: job.view } });
       await wc.executeJavaScript(READY_JS);
-      if (opts.exec) await wc.executeJavaScript(opts.exec);
+      // As a user gesture: some page APIs (e.g. a select's showPicker()) need transient activation.
+      if (opts.exec) await wc.executeJavaScript(opts.exec, true);
       await sleep(opts.delay);
       const image = await wc.capturePage();
       if (image.isEmpty()) throw new Error('the capture is empty');
