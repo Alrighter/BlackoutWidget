@@ -13,6 +13,7 @@ import type { EcoflowRegion } from '../../src/shared/types';
 import { EcoflowAppApi } from '../../src/main/actual/ecoflow/app-api';
 import { scrubSecrets } from '../../src/main/actual/secrets';
 import { parseAdvert, type EcoflowAdvert } from '../../src/main/actual/ecoflow/ble/advert';
+import { authToken } from '../../src/main/actual/ecoflow/ble/crypto';
 import { decodeHeartbeat, heartbeatOf, type Fields } from '../../src/main/actual/ecoflow/ble/heartbeats';
 import { EcoflowBleSession } from '../../src/main/actual/ecoflow/ble/session';
 
@@ -29,6 +30,8 @@ const CASES: Record<string, string> = {
 const SCAN_MS = 30_000;
 const RECONNECT_MS = 5_000;
 const INV_SILENCE_MS = 10_000;
+const CONNECT_TIMEOUT_MS = 20_000;
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // ---------- log ----------
 
@@ -175,6 +178,7 @@ async function main(): Promise<void> {
   await noble.stopScanningAsync();
   const found = advert as unknown as EcoflowAdvert;
   addSecret(found.sn);
+  addSecret(authToken(userId, found.sn).toString('ascii'));
   console.log(`Знайдено ${found.sn.slice(0, 4)}…, заряд ${found.soc}%, тип шифрування ${found.encryptType}.`);
   if (found.encryptType !== 7) console.log('Увага: тип шифрування не 7, цей тест розрахований на 7.');
 
@@ -208,7 +212,14 @@ async function main(): Promise<void> {
   const ticker = setInterval(() => { if (state.connected) process.stdout.write(`\r${status()}    `); }, 1000);
   ticker.unref();
 
+  let failures = 0;
   for (let attempt = 1; !quitting; attempt++) {
+    if (state.marker === CASES.p) {
+      // The phone's turn: leave the station to it until another state key is pressed.
+      process.stdout.write('Пауза: Bluetooth станції вільний для телефона. Натисніть a–f, щоб продовжити.\n');
+      while (state.marker === CASES.p && !quitting) await sleep(1000);
+      if (quitting) break;
+    }
     const started = Date.now();
     try {
       await session(peripheral, userId, found.sn, attempt);
@@ -222,11 +233,13 @@ async function main(): Promise<void> {
         await shutdown();
       }
     }
+    failures = state.connected ? 0 : failures + 1;
     state.connected = false;
     if (quitting) break;
-    const wait = Math.min(RECONNECT_MS * 2 ** Math.min(attempt - 1, 4), 60_000);
+    if (state.marker === CASES.p) continue;
+    const wait = Math.min(RECONNECT_MS * 2 ** Math.min(failures, 4), 60_000);
     process.stdout.write(`Перепідключення через ${wait / 1000} с…\n`);
-    await new Promise(r => setTimeout(r, wait));
+    await sleep(wait);
   }
 }
 
@@ -234,7 +247,16 @@ async function main(): Promise<void> {
 async function session(peripheral: any, userId: string, sn: string, attempt: number): Promise<void> {
   const t = Date.now();
   log('connecting', { attempt });
-  await peripheral.connectAsync();
+  // A connect can hang while another central (the phone) holds the station.
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      peripheral.connectAsync(),
+      new Promise((_, reject) => { timer = setTimeout(() => { try { peripheral.cancelConnect(); } catch { /* not pending */ } reject(new Error('станція не відповідає на підключення')); }, CONNECT_TIMEOUT_MS); }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
   log('connected', { attempt, ms: Date.now() - t, mtu: peripheral.mtu });
   const gone = new Promise<never>((_, reject) => {
     peripheral.once('disconnect', (reason: unknown) => { log('disconnect', { reason: String(reason ?? '') }); reject(new Error('станція розірвала з’єднання')); });
@@ -265,8 +287,8 @@ async function session(peripheral: any, userId: string, sn: string, attempt: num
         state[module as 'inv' | 'pd' | 'mppt' | 'ems'] = fields;
         if (module === 'inv') state.invAt = Date.now();
       }
-      // Heartbeats are telemetry; the auth replies are not logged as bytes.
-      if (p.cmdSet !== 0x35) entry.hex = p.payload.toString('hex');
+      // Telemetry and the station's short status replies; the scrub list covers the token as a backstop.
+      entry.hex = p.payload.toString('hex');
       log('packet', entry);
     },
   });

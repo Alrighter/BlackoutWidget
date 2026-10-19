@@ -1,3 +1,4 @@
+import { heartbeatOf } from './heartbeats';
 import { authToken, newEphemeralKey, sessionKey, sharedSecret, SessionCipher } from './crypto';
 import { decodePacket, encodeFrame, encodePacket, FRAME_COMMAND, FRAME_PROTOCOL, FrameReader, type Frame, type Packet } from './protocol';
 
@@ -75,8 +76,9 @@ export class EcoflowBleSession {
       if (this.o.stopAfterAuthStatus) return;
 
       const reply = await this.exchange('auth', this.packetFrame({ ...AUTH, payload: authToken(this.o.userId, this.o.sn) }),
-        // The auth reply, or (as ha-ef-ble accepts) the first data packet.
-        (f): f is Packet => isPacket(f) && !(f.src === DST_AUTH && f.cmdSet === 0x35 && f.cmdId !== 0x86));
+        // The auth reply, or (as ha-ef-ble accepts) a first heartbeat. Anything else from the station, such as its clock
+        // request, proves nothing: a refusal can still follow it.
+        (f): f is Packet => isPacket(f) && ((f.src === DST_AUTH && f.cmdSet === 0x35 && f.cmdId === 0x86) || heartbeatOf(f) !== null));
       if (reply.src === DST_AUTH && reply.cmdId === 0x86 && reply.payload.length && reply.payload[0] !== 0) {
         const code = reply.payload[0];
         throw new SessionError('auth', `station refused auth: ${code} ${AUTH_ERRORS[code] ?? 'unknown'}`);

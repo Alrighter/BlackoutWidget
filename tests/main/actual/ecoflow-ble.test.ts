@@ -121,7 +121,7 @@ describe('EcoFlow BLE advertisement', () => {
 });
 
 /** A station double: the device side of the handshake, written against OpenSSL rather than our crypto module. */
-function fakeStation(opts: { userId: string; sn: string; authCode?: number }) {
+function fakeStation(opts: { userId: string; sn: string; authCode?: number; clockRequestFirst?: boolean }) {
   const ecdh = createECDH('secp160r1');
   ecdh.generateKeys();
   const sRand = Buffer.alloc(16, 0x42);
@@ -157,6 +157,8 @@ function fakeStation(opts: { userId: string; sn: string; authCode?: number }) {
     sent.push(`${p.cmdSet.toString(16)}/${p.cmdId.toString(16)}`);
     if (p.cmdId === 0x89) send({ src: 0x35, dst: 0x21, cmdSet: 0x35, cmdId: 0x89, payload: Buffer.from([0x00]) });
     if (p.cmdId === 0x86) {
+      // The station's clock request (src 0x35, cmd 0x01/0x52) can land between our auth and its reply.
+      if (opts.clockRequestFirst) send({ src: 0x35, dst: 0x21, cmdSet: 0x01, cmdId: 0x52 });
       const ok = p.payload.equals(Buffer.from(md5(Buffer.from(opts.userId + opts.sn)).toString('hex').toUpperCase()));
       send({ src: 0x35, dst: 0x21, cmdSet: 0x35, cmdId: 0x86, payload: Buffer.from([ok ? 0 : (opts.authCode ?? 6)]) });
       if (ok) reply(encodeFrame(FRAME_PROTOCOL, aes(key, INV, true)));
@@ -188,6 +190,13 @@ describe('EcoFlow BLE session', () => {
     station.attach(s);
     await expect(s.start()).rejects.toThrow(/6 WrongKey/);
     expect(s.currentStage).toBe('failed');
+  });
+
+  it('does not take the station\'s clock request for an accepted login', async () => {
+    const station = fakeStation({ userId: 'owner', sn: 'R601ZEB4XXXX0000', clockRequestFirst: true });
+    const s = new EcoflowBleSession({ userId: 'someone-else', sn: 'R601ZEB4XXXX0000', write: station.write });
+    station.attach(s);
+    await expect(s.start()).rejects.toThrow(/6 WrongKey/);
   });
 
   it('times out a silent station at the first stage', async () => {
