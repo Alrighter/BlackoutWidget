@@ -162,6 +162,30 @@ describe('BLE link: supervising the host', () => {
     expect(lives.at(-1)).toEqual({ link: 'searching' });
   });
 
+  it('hosts that only ever report an unknown adapter count as dying before the adapter', async () => {
+    const { link, ports, adapter, failedCount, lives } = setup();
+    link.watch(SN, TOKEN);
+    for (let i = 0; i < HOST_FAIL_LIMIT; i++) {
+      // BleHost posts this from its constructor, before noble's bindings have started; then the binding dies.
+      adapter('unknown');
+      ports[i].exit(1);
+      if (i < HOST_FAIL_LIMIT - 1) await advance(RESPAWN_MS[i]);
+    }
+    expect(failedCount()).toBe(1);
+    expect(link.getLive()).toEqual({ link: 'host-failed' });
+
+    // Failed: a new host's initial unknown does not end the failure, even for a moment; a real state does.
+    await advance(CAP_MS);
+    expect(ports).toHaveLength(HOST_FAIL_LIMIT + 1);
+    const count = lives.length;
+    adapter('unknown');
+    expect(link.getLive()).toEqual({ link: 'host-failed' });
+    expect(lives).toHaveLength(count);
+    await expect(link.scan(8_000)).resolves.toEqual({ adverts: [], problem: 'host-failed' });
+    adapter('poweredOff');
+    expect(link.getLive()).toEqual({ link: 'bt-off' });
+  });
+
   it('a spawn that throws counts as a host that died before the adapter', async () => {
     let throwing = true;
     const { link, ports, failedCount, log } = setup({ spawnThrows: () => throwing });
@@ -182,7 +206,9 @@ describe('BLE link: supervising the host', () => {
       const scan = link.scan(8_000);
       expect(ports).toHaveLength(i + 1);
       ports[i].exit(1);
-      await expect(scan).resolves.toEqual({ adverts: [], problem: 'scan-failed' });
+      // The scan pending at the death that fails the host already names that failure.
+      const problem = i === HOST_FAIL_LIMIT - 1 ? 'host-failed' : 'scan-failed';
+      await expect(scan).resolves.toEqual({ adverts: [], problem });
       // Nothing is watched: no respawn.
       await advance(CAP_MS);
       expect(ports).toHaveLength(i + 1);

@@ -48,8 +48,13 @@ class NoblePeripheral implements BlePeripheral {
     this.id = p.id;
   }
 
-  connect(): Promise<void> {
-    return this.p.connectAsync();
+  /**
+   * A connect that WinRT completed after cancelConnect leaves noble thinking the station is connected, and every later
+   * connectAsync would reject «Peripheral already connected». That link is let go of first.
+   */
+  async connect(): Promise<void> {
+    if (this.p.state === 'connected') await this.disconnect();
+    await this.p.connectAsync();
   }
 
   cancelConnect(): void {

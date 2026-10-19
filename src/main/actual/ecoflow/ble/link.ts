@@ -237,12 +237,14 @@ export class BleLink implements BleLinkLike {
       this.setLink(state);
       this.emit({ ev: 'link', sn: w.sn, state, detail: 'host exited' });
     }
-    for (const id of [...this.scans.keys()]) this.settleScan(id, { adverts: [], problem: 'scan-failed' });
     if (!this.failed && this.deadInRow >= HOST_FAIL_LIMIT) {
       this.failed = true;
       this.deps.log.error(`BLE host failed: ${this.deadInRow} hosts in a row ended before reporting the adapter`);
       this.emit({ ev: 'host-failed' });
     }
+    // Decided first, so that a scan pending at the death that fails the host already names that failure.
+    const problem = this.failed ? 'host-failed' : 'scan-failed';
+    for (const id of [...this.scans.keys()]) this.settleScan(id, { adverts: [], problem });
     if (healthy) this.respawnIndex = 0;
     if (w) {
       const ms = this.failed ? RESPAWN_MS[RESPAWN_MS.length - 1] : RESPAWN_MS[Math.min(this.respawnIndex, RESPAWN_MS.length - 1)];
@@ -281,11 +283,15 @@ export class BleLink implements BleLinkLike {
   private onHostEvent(e: HostEvent): void {
     switch (e.ev) {
       case 'adapter':
-        this.sawAdapter = true;
-        this.deadInRow = 0;
-        if (this.failed) {
-          this.failed = false;
-          this.deps.log.info('BLE host is up again');
+        // BleHost posts 'unknown' from its constructor, before noble's bindings start: only a later state shows the
+        // host got past the binding. One that dies before it still counts toward HOST_FAIL_LIMIT.
+        if (e.state !== 'unknown') {
+          this.sawAdapter = true;
+          this.deadInRow = 0;
+          if (this.failed) {
+            this.failed = false;
+            this.deps.log.info('BLE host is up again');
+          }
         }
         this.setAdapter(e.state);
         break;
