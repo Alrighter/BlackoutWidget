@@ -11,6 +11,7 @@
     "test": "vitest run",
     "ui:capture": "electron scripts/ui-capture/capture.cjs",
     "tray:icons": "electron scripts/gen-tray-icons.cjs",
+    "ble:probe": "rolldown scripts/ble-probe/probe.ts -p node -f cjs -o out/ble-probe/probe.cjs -e @stoprocent/noble && node out/ble-probe/probe.cjs",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64 --publish never"
   },
   "keywords": [],
@@ -18,6 +19,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@noble/curves": "2.4.0",
+    "@stoprocent/noble": "2.8.0",
     "koffi": "^3.3.3",
     "mqtt": "5.16.0",
     "react": "^19.3.1",
