@@ -561,7 +561,10 @@ test('while the scan runs Bluetooth waits with no «Шукати ще раз»; 
   const user = userEvent.setup(); const { api, scan } = scanApi([MAX]);
   render(<ActualSettings state={stateOf()} api={api} />);
   await checkAccount(user);
-  expect(station(/River 2 Max · …9999/)).toBeChecked();
+  // The only station waits for the scan; picked by hand meanwhile, it is read over the internet at once.
+  expect(station(/River 2 Max · …9999/)).not.toBeChecked();
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  await user.click(station(/River 2 Max · …9999/));
   expect(net()).toBeChecked();
   expect(bt()).toBeDisabled();
   expect(linkGroup()).toHaveAccessibleDescription(NOT_NEARBY);
@@ -582,30 +585,18 @@ test('while the scan runs Bluetooth waits with no «Шукати ще раз»; 
   expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
 });
 
-test('a station picked while the scan runs is read over the internet, then the scan result still lands', async () => {
-  const user = userEvent.setup(); const { api, scan } = scanApi();
+test('a station picked while the scan runs is read over the internet at once; a nearby scan then switches it to Bluetooth and the late preview stays hidden', async () => {
+  const user = userEvent.setup(); let previewDone!: (v: unknown) => void;
+  const { api, scan } = scanApi(undefined, { ecoflowPreview: vi.fn(() => new Promise(r => { previewDone = r; })) });
   render(<ActualSettings state={stateOf()} api={api} />);
   await checkAccount(user);
   await user.click(station(/River 2 · …1234/));
   expect(net()).toBeChecked();
   expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
-  await scan(0, { nearby: [RIVER.sn] });
-  expect(rowState(/River 2 · …1234/)).toHaveTextContent(/^поруч$/);
-  expect(bt()).toBeChecked();
-  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
-});
-
-test('a single station: the cloud preview runs at once; a nearby scan switches it to Bluetooth and the late preview stays hidden', async () => {
-  const user = userEvent.setup(); let previewDone!: (v: unknown) => void;
-  const { api, scan } = scanApi([RIVER], { ecoflowPreview: vi.fn(() => new Promise(r => { previewDone = r; })) });
-  render(<ActualSettings state={stateOf()} api={api} />);
-  await checkAccount(user);
-  expect(station(/River 2 · …1234/)).toBeChecked();
-  expect(net()).toBeChecked();
-  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
   expect(screen.getByText('Читаю показники…')).toBeInTheDocument();
 
   await scan(0, { nearby: [RIVER.sn] });
+  expect(rowState(/River 2 · …1234/)).toHaveTextContent(/^поруч$/);
   expect(bt()).toBeChecked();
   expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
   await act(async () => previewDone({ ok: true, online: false, power: 'unknown' }));
@@ -617,10 +608,41 @@ test('a single station: the cloud preview runs at once; a nearby scan switches i
   expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
 });
 
+test('a single station waits for the scan before its default: no preview while it runs; nearby → Bluetooth, still no preview', async () => {
+  const user = userEvent.setup(); const { api, scan } = scanApi([RIVER]);
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  expect(screen.queryByText('Читаю показники…')).toBeNull();
+  expect(screen.getByRole('status')).toHaveTextContent(SCANNING);
+  await scan(0, { nearby: [RIVER.sn] });
+  expect(station(/River 2 · …1234/)).toBeChecked();
+  expect(bt()).toBeChecked();
+  expect(screen.getByText(AFTER_SAVE)).toBeInTheDocument();
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+});
+
+test.each([
+  ['did not find it', { nearby: [] }],
+  ['failed', new Error('ipc')],
+])('a single station whose scan %s: Інтернет and exactly one preview', async (_, result) => {
+  const user = userEvent.setup(); const { api, scan } = scanApi([RIVER]);
+  render(<ActualSettings state={stateOf()} api={api} />);
+  await checkAccount(user);
+  expect(api.ecoflowPreview).not.toHaveBeenCalled();
+  await scan(0, result);
+  expect(station(/River 2 · …1234/)).toBeChecked();
+  expect(net()).toBeChecked();
+  expect(await screen.findByText('На вході 229 В — світло є')).toBeInTheDocument();
+  expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+  expect(api.ecoflowPreview).toHaveBeenCalledWith(ACCOUNT_INPUT, RIVER.sn);
+});
+
 test('a switch the user touched is kept when the scan result arrives', async () => {
   const user = userEvent.setup(); const { scan, api } = scanApi([RIVER]);
   render(<ActualSettings state={stateOf()} api={api} />);
   await checkAccount(user);
+  await user.click(station(/River 2 · …1234/));
   await user.click(net());
   await scan(0, { nearby: [RIVER.sn] });
   expect(bt()).toBeEnabled();

@@ -206,7 +206,7 @@ function useSecretField(isFilled: (v: string) => boolean) {
  * The keys live only in this component, the two secrets outside the DOM; the form is unmounted after save or cancel.
  * Two steps: the keys, then (after a successful check) the account's stations; «Назад» drops the check result and
  * keeps the keys. With the account, a Bluetooth scan runs beside the check, and the chosen station gets the
- * «Підключення» switch. `preferSn`: the saved Bluetooth station, preselected once the scan is done.
+ * «Підключення» switch. `preferSn`: the saved Bluetooth station, preselected (like an only station) once the scan is done.
  */
 function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
   api: RendererApi; initialRegion: EcoflowRegion; initialMode: Mode; preferSn?: string; onClose(): void;
@@ -288,10 +288,13 @@ function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
     setChecking(false);
     if (!res.ok) { setTestError(res.error); return; }
     setDevices(res.devices);
-    const prefer = res.devices.find(d => d.sn === preferSn);
-    // The saved Bluetooth station waits for the scan, so that it opens on the connection it still has.
-    if (scanned && prefer) void scanned.then(current => { if (current) setSn(s => s ?? prefer.sn); });
-    else if (res.devices.length === 1) choose(res.devices[0].sn);
+    // The station picked for the user: the saved Bluetooth one, else the only one.
+    const auto = (scanned && res.devices.find(d => d.sn === preferSn)) || (res.devices.length === 1 ? res.devices[0] : undefined);
+    if (!auto) return;
+    // With the account it waits for the scan, so the default connection is known first and no cloud preview (a clientId
+    // of the account's few a day) goes on a station Bluetooth will read. A pick by hand meanwhile wins.
+    if (scanned) void scanned.then(current => { if (current) setSn(s => s ?? auto.sn); });
+    else choose(auto.sn);
   }
   async function save() {
     const device = devices?.find(d => d.sn === sn);
