@@ -24,9 +24,9 @@ export const electronEncryptor: Encryptor = {
 export const mqttConnect: MqttConnect = (url, opts) => connect(url, opts);
 
 /**
- * The BLE host as a utilityProcess, so noble never runs in main. `__dirname` is out/main at runtime: this module is
- * bundled into out/main/index.js, next to ble-host.js. Commands wait for the spawn, and a post to a host that is gone
- * is dropped: its exit is on the way.
+ * The BLE host as a utilityProcess, so noble never runs in main. `__dirname` is out/main at runtime: this module lands
+ * in a shared chunk that the build keeps in out/main, next to ble-host.js. Commands wait for the spawn, and a post to
+ * a host that is gone is dropped: its exit is on the way.
  */
 export function spawnBleHost(): HostPort {
   const child = utilityProcess.fork(join(__dirname, 'ble-host.js'), [], { serviceName: 'Blackout Widget Bluetooth' });

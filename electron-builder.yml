@@ -6,8 +6,16 @@ files:
   - out/**
   - resources/**
   - package.json
+  # noble's optional HCI tree: only Linux (or a USB/UART dongle) uses it; Windows and macOS load WinRT/CoreBluetooth.
+  - '!**/node_modules/@stoprocent/bluetooth-hci-socket/**'
+  - '!**/node_modules/usb/**'
+  - '!**/node_modules/serialport/**'
+  - '!**/node_modules/@serialport/**'
 asarUnpack:
   - '**/node_modules/koffi/**'
+  - '**/node_modules/@stoprocent/noble/**'
+# Native modules come from their N-API prebuilds (noble's darwin one is universal); nothing is compiled.
+npmRebuild: false
 extraResources:
   - from: resources/tray
     to: tray
@@ -31,3 +39,4 @@ mac:
   # Menu-bar app: no Dock icon and no app menu bar.
   extendInfo:
     LSUIElement: true
+    NSBluetoothAlwaysUsageDescription: 'Blackout Widget читає зарядну станцію EcoFlow через Bluetooth.'
