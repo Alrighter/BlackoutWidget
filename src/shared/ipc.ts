@@ -12,6 +12,7 @@ export const IPC = {
   widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
   ecoflowTest: 'actual:ecoflow-test', ecoflowPreview: 'actual:ecoflow-preview', ecoflowSave: 'actual:ecoflow-save',
   actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openDtekSite: 'addr:dtek-site',
+  actualLive: 'actual:live', getActualLive: 'actual:get-live',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
@@ -22,9 +23,12 @@ export type MainView = 'schedule' | 'settings' | 'setup';
 /** Keys or the account travel renderer → main only in these calls; no result ever carries them back. */
 export type EcoflowInput =
   | { mode: 'keys'; region: EcoflowRegion; accessKey: string; secretKey: string }
-  | { mode: 'account'; region: EcoflowRegion; email: string; password: string };
-export interface EcoflowDeviceView { sn: string; label: string; online: boolean }
-export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[] } | { ok: false; error: string };
+  | { mode: 'account'; region: EcoflowRegion; email: string; password: string }
+  | { mode: 'ble'; region: EcoflowRegion; email: string; password: string };
+/** `nearby` and `supported` come with the Bluetooth check only; `online` is always the account's cloud state. */
+export interface EcoflowDeviceView { sn: string; label: string; online: boolean; nearby?: boolean; supported?: boolean }
+/** `bluetooth`: the Bluetooth check could not scan, and this is why (the stations still come back). */
+export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[]; bluetooth?: string } | { ok: false; error: string };
 export type EcoflowPreviewResult =
   | { ok: true; online: boolean; power: ActualPower; detail?: string; reason?: string; unsupported?: boolean }
   | { ok: false; error: string };
@@ -71,6 +75,10 @@ export interface RendererApi {
   openEcoflowHelp(): void;
   /** Opens the DTEK outage schedule page (a fixed address) in the browser (D11). */
   openDtekSite(): void;
+  /** The Bluetooth source's live line for the first paint; null unless that source is the saved one. */
+  getActualLive(): Promise<ActualLive | null>;
+  /** Live line pushes to the main window, at most one a second; null once nothing is watched. */
+  onActualLive(cb: (live: ActualLive | null) => void): () => void;
 }
 
 declare global { interface Window { api: RendererApi } }

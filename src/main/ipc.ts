@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { CAPTCHA_MARKER, IPC, type MainView } from '../shared/ipc';
+import { CAPTCHA_MARKER, IPC, type ActualLive, type MainView } from '../shared/ipc';
 import { kyivDateKey } from '../shared/time';
 import type { Address, AppState, DaySchedule, LineInfo, Settings, WidgetStyle } from '../shared/types';
 import type { ActualActions } from './actual/actions';
@@ -26,6 +26,10 @@ export interface IpcDeps {
   openEcoflowHelp(): void;
   /** The wizard's «Відкрити графік на сайті ДТЕК» (D11): a fixed address, nothing from the renderer. */
   openDtekSite(): void;
+  /** The saved settings, read on each call. */
+  getSettings(): Settings;
+  /** The Bluetooth link's live line; asked only while the saved source is `ecoflow-ble`. */
+  bleLive: { getLive(): ActualLive | null };
 }
 
 /** One of the app's own windows; the hidden DTEK session window never gets app state. */
@@ -84,6 +88,7 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.ecoflowPreview, (i: unknown, sn: unknown) => deps.actualActions.preview(i, sn));
   handle(IPC.ecoflowSave, (i: unknown, device: unknown) => deps.actualActions.save(i, device));
   handle(IPC.actualDisconnect, () => deps.actualActions.disconnect());
+  handle(IPC.getActualLive, () => (deps.getSettings().actualSource?.id === 'ecoflow-ble' ? deps.bleLive.getLive() : null));
 
   ipcMain.on(IPC.openMainWindow, (_e, view?: MainView) => deps.openMainWindow(view));
   ipcMain.on(IPC.widgetContextMenu, () => deps.widgetContextMenu());
@@ -97,4 +102,43 @@ export function registerIpc(deps: IpcDeps): void {
 
 export function broadcastState(state: AppState, targets: StateTarget[]): void {
   for (const t of targets) t.send(IPC.state, state);
+}
+
+export const LIVE_PUSH_MS = 1_000;
+
+/**
+ * The live line's push to one window: a value goes out at once when the last send is LIVE_PUSH_MS old, otherwise the
+ * latest one goes out when it is, so the window always ends on the last value (null included). `dispose` drops a
+ * pending send and its timer.
+ */
+export function throttleLive(target: StateTarget, ms = LIVE_PUSH_MS): { push(live: ActualLive | null): void; dispose(): void } {
+  let sentAt = -Infinity;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  // Boxed, so that a pending null is told apart from nothing pending.
+  let pending: { live: ActualLive | null } | null = null;
+  let disposed = false;
+  const flush = () => {
+    timer = null;
+    if (!pending) return;
+    const { live } = pending;
+    pending = null;
+    sentAt = Date.now();
+    target.send(IPC.actualLive, live);
+  };
+  return {
+    push(live) {
+      if (disposed) return;
+      pending = { live };
+      if (timer !== null) return;
+      const wait = sentAt + ms - Date.now();
+      if (wait <= 0) flush();
+      else timer = setTimeout(flush, wait);
+    },
+    dispose() {
+      disposed = true;
+      pending = null;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    },
+  };
 }

@@ -33,6 +33,8 @@ const api: RendererApi = {
   actualDisconnect: () => ipcRenderer.invoke(IPC.actualDisconnect),
   openEcoflowHelp: () => ipcRenderer.send(IPC.openEcoflowHelp),
   openDtekSite: () => ipcRenderer.send(IPC.openDtekSite),
+  getActualLive: () => ipcRenderer.invoke(IPC.getActualLive),
+  onActualLive: cb => subscribe(IPC.actualLive, cb),
 };
 
 contextBridge.exposeInMainWorld('api', api);

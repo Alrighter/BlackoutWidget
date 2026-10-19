@@ -1,16 +1,24 @@
+import { ipcMain } from 'electron';
 import {
-  ACCOUNT_MISSING_REASON, createActualActions, createActualRestart, KEYS_MISSING_REASON, makeClientId,
+  ACCOUNT_MISSING_REASON, createActualActions, createActualRestart, KEYS_MISSING_REASON, makeClientId, SCAN_MS,
   type ActualActions, type ActualActionsDeps, type ActualRestartDeps,
 } from '../../../src/main/actual/actions';
 import { EcoflowApiError, type EcoflowApiLike, type EcoflowDevice, type FetchLike } from '../../../src/main/actual/ecoflow/api';
 import { EcoflowAppApi, type AppSession, type EcoflowAppApiLike } from '../../../src/main/actual/ecoflow/app-api';
+import type { ScanOutcome } from '../../../src/main/actual/ecoflow/ble/link';
+import { authToken } from '../../../src/main/actual/ecoflow/ble/token';
 import { AFTER_SAVE_REASON, PREVIEW_WAIT_MS } from '../../../src/main/actual/ecoflow/index';
 import type { MqttClientLike } from '../../../src/main/actual/ecoflow/mqtt-session';
 import { SecretsUnavailableError } from '../../../src/main/actual/secrets';
 import type { ActualReading, ActualSourceFactory, ActualStateSource } from '../../../src/main/actual/types';
+import { LIVE_PUSH_MS, registerIpc, throttleLive, type IpcDeps } from '../../../src/main/ipc';
 import { NetworkError } from '../../../src/main/providers/types';
 import { DEFAULT_SETTINGS } from '../../../src/main/store';
+import { BLE_PROBLEM_TEXT, type BleProblem } from '../../../src/shared/ecoflow-ble';
+import { IPC, type ActualLive } from '../../../src/shared/ipc';
 import type { ActualSourceConfig, Settings } from '../../../src/shared/types';
+
+vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), on: vi.fn() } }));
 
 const AKEY = 'AKEY1234567', SECRET = 'SECRET-xyz';
 const KEYS = { region: 'eu', accessKey: AKEY, secretKey: SECRET };
@@ -29,6 +37,12 @@ const ACCOUNT = { mode: 'account', region: 'eu', email: EMAIL, password: PASSWOR
 const APP_CONFIG: ActualSourceConfig = { id: 'ecoflow-app', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accountHint: 'r…@dully.io' };
 const UUID = /^[0-9A-F]{32}$/;
 const SESSION: AppSession = { token: 'TOKEN', userId: 'USER1' };
+const BLE = { mode: 'ble', region: 'eu', email: EMAIL, password: PASSWORD };
+const BLE_SN = 'R601ZEB4AAAA0001';
+const BLE_DEV = { sn: BLE_SN, label: 'RIVER 2' };
+const BLE_CONFIG: ActualSourceConfig = { id: 'ecoflow-ble', region: 'eu', deviceSn: BLE_SN, deviceName: 'RIVER 2', accountHint: 'r…@dully.io' };
+const UNSUPPORTED = 'Модель поки не підтримується';
+const SETTINGS_FAILED = 'Не вдалося зберегти налаштування. Спробуйте ще раз.';
 
 const settle = <T>(v: T | Error): Promise<T> => (v instanceof Error ? Promise.reject(v) : Promise.resolve(v));
 
@@ -56,18 +70,31 @@ function silentBroker() {
 
 const fakeLog = () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
+/** The Bluetooth link as setup sees it: a scan that answers at once (or fails), and the station it is connected to. */
+function fakeBle(o: { scan?: ScanOutcome | Error; connected?: string | null } = {}) {
+  return {
+    scan: vi.fn((_ms: number) => (o.scan instanceof Error ? Promise.reject(o.scan) : Promise.resolve(o.scan ?? { adverts: [] }))),
+    connectedSn: vi.fn(() => o.connected ?? null),
+  } satisfies ActualActionsDeps['ble'];
+}
+
+const advert = (sn: string) => ({ sn, soc: 80, rssi: -50, encryptType: 7 });
+
 function setup(o: {
   api?: EcoflowApiLike; appApi?: EcoflowAppApiLike; settings?: Partial<Settings>; saveSecrets?: () => void; removeSecrets?: () => void; saveSettings?: () => void;
+  ble?: ActualActionsDeps['ble'];
 } = {}) {
   const order: string[] = [];
   let settings: Settings = { ...DEFAULT_SETTINGS, ...o.settings };
   const api = o.api ?? fakeApi();
   const appApi = o.appApi ?? fakeAppApi();
   const broker = silentBroker();
+  const ble = o.ble ?? fakeBle();
   const deps = {
     makeApi: vi.fn((_region: string, _keys: { accessKey: string; secretKey: string }) => api),
     makeAppApi: vi.fn((_region: string, _account: { email: string; password: string }) => appApi),
     connect: broker.connect,
+    ble,
     secrets: {
       save: vi.fn((_id: string, _s: Record<string, string>) => { order.push('secrets.save'); o.saveSecrets?.(); }),
       remove: vi.fn((_id: string) => { order.push('secrets.remove'); o.removeSecrets?.(); }),
@@ -81,7 +108,7 @@ function setup(o: {
     restartActual: vi.fn(() => { order.push('restartActual'); }),
     log: fakeLog(),
   } satisfies ActualActionsDeps;
-  return { deps, actions: createActualActions(deps), order, settings: () => settings, appApi, broker };
+  return { deps, actions: createActualActions(deps), order, settings: () => settings, appApi, broker, ble };
 }
 
 test('test: lists devices as views', async () => {
@@ -176,8 +203,8 @@ test('save: encrypts keys, stores hint and stable clientId, restarts', async () 
   const patch = deps.updateSettings.mock.calls[0][0];
   expect(patch.actualSource).toEqual({ id: 'ecoflow', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accessKeyHint: 'AKEY…' });
   expect(patch.ecoflowClientId).toMatch(CLIENT_ID);
-  expect(order).toEqual(['secrets.save', 'updateSettings', 'secrets.remove', 'restartActual']);
-  expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow-app');
+  expect(order).toEqual(['secrets.save', 'updateSettings', 'secrets.remove', 'secrets.remove', 'restartActual']);
+  expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow-app', 'ecoflow-ble']);
   expect(deps.makeApi).not.toHaveBeenCalled();
 
   const clientId = settings().ecoflowClientId;
@@ -232,9 +259,8 @@ test('disconnect: clears settings and secrets, keeps clientId', async () => {
   const { actions, deps, order, settings } = setup({ settings: { actualSource: CONFIG, ecoflowClientId: 'BlackoutWidget-abc12345' } });
   await actions.disconnect();
   expect(deps.updateSettings).toHaveBeenCalledWith({ actualSource: null });
-  expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow');
-  expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow-app');
-  expect(order).toEqual(['updateSettings', 'secrets.remove', 'secrets.remove', 'restartActual']);
+  expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow', 'ecoflow-app', 'ecoflow-ble']);
+  expect(order).toEqual(['updateSettings', 'secrets.remove', 'secrets.remove', 'secrets.remove', 'restartActual']);
   expect(settings().actualSource).toBeNull();
   expect(settings().ecoflowClientId).toBe('BlackoutWidget-abc12345');
 });
@@ -242,7 +268,7 @@ test('disconnect: clears settings and secrets, keeps clientId', async () => {
 test('disconnect: a secrets file that cannot be rewritten still restarts', async () => {
   const { actions, deps } = setup({ settings: { actualSource: CONFIG }, removeSecrets: () => { throw new Error('EPERM'); } });
   await expect(actions.disconnect()).resolves.toBeUndefined();
-  expect(deps.log.error).toHaveBeenCalledTimes(2); // each id is tried on its own
+  expect(deps.log.error).toHaveBeenCalledTimes(3); // each id is tried on its own
   expect(deps.restartActual).toHaveBeenCalledTimes(1);
 });
 
@@ -297,8 +323,8 @@ describe('account mode', () => {
     expect(patch.ecoflowAppClientUuid).toMatch(UUID);
     expect(JSON.stringify(patch)).not.toContain(EMAIL);
     expect(JSON.stringify(patch)).not.toContain(PASSWORD);
-    expect(order).toEqual(['secrets.save', 'updateSettings', 'secrets.remove', 'restartActual']);
-    expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow');
+    expect(order).toEqual(['secrets.save', 'updateSettings', 'secrets.remove', 'secrets.remove', 'restartActual']);
+    expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow', 'ecoflow-ble']);
 
     const uuid = settings().ecoflowAppClientUuid;
     expect(await actions.save({ ...ACCOUNT, region: 'us' }, DEV)).toEqual({ ok: true });
@@ -308,7 +334,7 @@ describe('account mode', () => {
   test('save: a failed removal of the keys is logged, not fatal', async () => {
     const { actions, deps } = setup({ removeSecrets: () => { throw new Error('EPERM'); } });
     expect(await actions.save(ACCOUNT, DEV)).toEqual({ ok: true });
-    expect(deps.log.error).toHaveBeenCalledTimes(1);
+    expect(deps.log.error).toHaveBeenCalledTimes(2); // the keys and the Bluetooth token, each on its own
     expect(deps.restartActual).toHaveBeenCalledTimes(1);
   });
 
@@ -417,10 +443,314 @@ describe('account mode', () => {
     ]);
   });
 
-  test('disconnect removes the secrets of both sources', async () => {
+  test('disconnect removes the secrets of all three sources', async () => {
     const { actions, deps } = setup({ settings: { actualSource: APP_CONFIG } });
     await actions.disconnect();
+    expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow', 'ecoflow-app', 'ecoflow-ble']);
+  });
+});
+
+describe('Bluetooth mode', () => {
+  const ALL_PROBLEMS: BleProblem[] = ['bt-off', 'bt-denied', 'bt-missing', 'bt-unavailable', 'host-failed', 'scan-failed'];
+
+  test('ble test: signs in, scans, marks nearby/supported, and the connected station counts as nearby', async () => {
+    const devices: EcoflowDevice[] = [
+      { sn: 'R601ZEB4AAAA0001', online: false, productName: 'RIVER 2' },
+      { sn: 'R611ZEB4AAAA0002', online: true, productName: 'RIVER 2 Max' },
+      { sn: 'R331ZEB4AAAA0003', online: true, productName: 'DELTA 2' },
+      { sn: 'R621ZEB4AAAA0004', online: false, deviceName: 'Garage' },
+    ];
+    const ble = fakeBle({ scan: { adverts: [advert('R601ZEB4AAAA0001'), advert('R331ZEB4AAAA0003'), advert('P351ZEB4AAAA0009')] }, connected: 'R611ZEB4AAAA0002' });
+    const { actions, deps, appApi } = setup({ appApi: fakeAppApi({ devices }), ble });
+    const res = await actions.test({ ...BLE, email: ` ${EMAIL} ` });
+    expect(res).toEqual({
+      ok: true,
+      devices: [
+        { sn: 'R601ZEB4AAAA0001', label: 'RIVER 2', online: false, nearby: true, supported: true },
+        { sn: 'R611ZEB4AAAA0002', label: 'RIVER 2 Max', online: true, nearby: true, supported: true },
+        { sn: 'R331ZEB4AAAA0003', label: 'DELTA 2', online: true, nearby: true, supported: false },
+        { sn: 'R621ZEB4AAAA0004', label: 'Garage', online: false, nearby: false, supported: true },
+      ],
+    });
+    expect(res).not.toHaveProperty('bluetooth');
+    expect(SCAN_MS).toBe(8_000);
+    expect(ble.scan.mock.calls).toEqual([[8_000]]);
+    expect(deps.makeAppApi).toHaveBeenCalledWith('eu', { email: EMAIL, password: PASSWORD });
+    expect(appApi.login).toHaveBeenCalledTimes(1);
+    expect(appApi.listDevices).toHaveBeenCalledWith(SESSION);
+    expect(deps.makeApi).not.toHaveBeenCalled();
+  });
+
+  test('ble test: the scan starts with the sign-in, not after it', async () => {
+    let signIn!: (s: AppSession) => void;
+    const appApi = { ...fakeAppApi(), login: vi.fn(() => new Promise<AppSession>(r => { signIn = r; })) };
+    const ble = fakeBle();
+    const { actions } = setup({ appApi, ble });
+    const pending = actions.test(BLE);
+    expect(ble.scan).toHaveBeenCalledWith(SCAN_MS);
+    signIn(SESSION);
+    expect(await pending).toMatchObject({ ok: true });
+  });
+
+  test('ble test: a scan problem becomes the bluetooth text, the devices still come back', async () => {
+    const station: EcoflowDevice = { sn: BLE_SN, online: true, productName: 'RIVER 2' };
+    const cases: [ScanOutcome | Error, string][] = [
+      ...ALL_PROBLEMS.map((problem): [ScanOutcome, string] => [{ adverts: [], problem }, BLE_PROBLEM_TEXT[problem]]),
+      [new Error('the link fell over'), 'Не вдалося пошукати станцію через Bluetooth'],
+    ];
+    expect(BLE_PROBLEM_TEXT['bt-off']).toBe('Bluetooth на цьому комп’ютері вимкнено');
+    for (const [scan, bluetooth] of cases) {
+      const { actions } = setup({ appApi: fakeAppApi({ devices: [station] }), ble: fakeBle({ scan }) });
+      expect(await actions.test(BLE)).toEqual({ ok: true, devices: [{ sn: BLE_SN, label: 'RIVER 2', online: true, nearby: false, supported: true }], bluetooth });
+    }
+    // The station the running source holds still counts as nearby when the scan cannot run.
+    const held = setup({ appApi: fakeAppApi({ devices: [station] }), ble: fakeBle({ scan: { adverts: [], problem: 'bt-off' }, connected: BLE_SN }) });
+    expect(await held.actions.test(BLE)).toMatchObject({ ok: true, devices: [{ sn: BLE_SN, nearby: true }] });
+  });
+
+  test('ble test: a sign-in error fails the check whatever the scan says', async () => {
+    for (const scan of [{ adverts: [advert(BLE_SN)] }, new Error('scan broke')]) {
+      const { actions } = setup({ appApi: fakeAppApi({ devices: new NetworkError('Немає з’єднання з EcoFlow') }), ble: fakeBle({ scan }) });
+      expect(await actions.test(BLE)).toEqual({ ok: false, error: 'Немає з’єднання з EcoFlow' });
+    }
+  });
+
+  test('ble: invalid input starts no sign-in and no scan; preview is not for ble', async () => {
+    const ble = fakeBle();
+    const { actions, deps } = setup({ ble });
+    const bad: unknown[] = [
+      { ...BLE, email: 'roman.dully.io' }, { ...BLE, password: '' }, { ...BLE, password: 7 }, { ...BLE, region: 'xx' },
+      { mode: 'ble', region: 'eu', email: EMAIL }, { ...BLE, password: 'p'.repeat(201) },
+    ];
+    for (const i of bad) {
+      expect(await actions.test(i)).toEqual({ ok: false, error: BAD_INPUT });
+      expect(await actions.save(i, BLE_DEV)).toEqual({ ok: false, error: BAD_INPUT });
+    }
+    for (const sn of ['R601#1', 'R601/+', '']) expect(await actions.save(BLE, { sn, label: 'RIVER 2' })).toEqual({ ok: false, error: BAD_INPUT });
+    expect(await actions.preview(BLE, BLE_SN)).toEqual({ ok: false, error: BAD_INPUT });
+    expect(ble.scan).not.toHaveBeenCalled();
+    expect(deps.makeAppApi).not.toHaveBeenCalled();
+    expect(deps.secrets.save).not.toHaveBeenCalled();
+    expect(deps.updateSettings).not.toHaveBeenCalled();
+  });
+
+  test('ble save: stores only the token, settings carry the masked email, the other secrets go', async () => {
+    const { actions, deps, order, appApi, settings } = setup({ settings: { ecoflowClientId: 'BlackoutWidget-abc12345' } });
+    expect(await actions.test(BLE)).toMatchObject({ ok: true });
+    expect(await actions.save(BLE, BLE_DEV)).toEqual({ ok: true });
+    expect(appApi.login).toHaveBeenCalledTimes(1); // the check's session
+    expect(deps.secrets.save.mock.calls).toEqual([['ecoflow-ble', { token: authToken('USER1', BLE_SN) }]]);
+    expect(deps.secrets.save.mock.calls[0][1].token).toMatch(UUID);
+    expect(deps.updateSettings.mock.calls).toEqual([[{ actualSource: BLE_CONFIG }]]);
+    expect(order).toEqual(['secrets.save', 'updateSettings', 'secrets.remove', 'secrets.remove', 'restartActual']);
     expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow', 'ecoflow-app']);
+    expect(settings().ecoflowClientId).toBe('BlackoutWidget-abc12345');
+    expect(settings().ecoflowAppClientUuid).toBeUndefined();
+  });
+
+  test('ble save with no check before it signs in itself', async () => {
+    const { actions, deps, appApi } = setup();
+    expect(await actions.save(BLE, BLE_DEV)).toEqual({ ok: true });
+    expect(deps.makeAppApi).toHaveBeenCalledWith('eu', { email: EMAIL, password: PASSWORD });
+    expect(appApi.login).toHaveBeenCalledTimes(1);
+    expect(deps.secrets.save).toHaveBeenCalledWith('ecoflow-ble', { token: authToken('USER1', BLE_SN) });
+  });
+
+  test('ble save refuses an unsupported model', async () => {
+    const { actions, deps, appApi } = setup();
+    for (const sn of ['R331ZEB4AAAA0003', 'P351ZEB4AAAA0009', 'r601ZEB4AAAA0001']) {
+      expect(await actions.save(BLE, { sn, label: 'DELTA 2' })).toEqual({ ok: false, error: UNSUPPORTED });
+    }
+    expect(deps.makeAppApi).not.toHaveBeenCalled();
+    expect(appApi.login).not.toHaveBeenCalled();
+    expect(deps.secrets.save).not.toHaveBeenCalled();
+    expect(deps.updateSettings).not.toHaveBeenCalled();
+    expect(deps.secrets.remove).not.toHaveBeenCalled();
+    expect(deps.restartActual).not.toHaveBeenCalled();
+    expect(deps.log.error).not.toHaveBeenCalled();
+  });
+
+  test('ble save signs in again when the cached session expired', async () => {
+    vi.useFakeTimers({ now: Date.parse('2026-10-19T10:00:00Z') });
+    try {
+      const fresh: AppSession = { token: 'TOKEN2', userId: 'USER2' };
+      let logins = 0;
+      const appApi = { ...fakeAppApi(), login: vi.fn(() => Promise.resolve(++logins === 1 ? SESSION : fresh)) };
+      const { actions, deps } = setup({ appApi });
+      await actions.test(BLE);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(await actions.save(BLE, BLE_DEV)).toEqual({ ok: true });
+      expect(appApi.login).toHaveBeenCalledTimes(2);
+      expect(deps.secrets.save).toHaveBeenCalledWith('ecoflow-ble', { token: authToken('USER2', BLE_SN) });
+      // The fresh session is kept for the next save.
+      expect(await actions.save(BLE, BLE_DEV)).toEqual({ ok: true });
+      expect(appApi.login).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('ble save: a failed sign-in, secrets or settings store nothing further', async () => {
+    const login = setup({ appApi: { ...fakeAppApi(), login: vi.fn(() => Promise.reject(new NetworkError('Немає з’єднання з EcoFlow'))) } });
+    expect(await login.actions.save(BLE, BLE_DEV)).toEqual({ ok: false, error: 'Немає з’єднання з EcoFlow' });
+    expect(login.deps.secrets.save).not.toHaveBeenCalled();
+    expect(login.deps.updateSettings).not.toHaveBeenCalled();
+
+    const secrets = setup({ saveSecrets: () => { throw new SecretsUnavailableError(); } });
+    expect(await secrets.actions.save(BLE, BLE_DEV)).toEqual({ ok: false, error: ACCOUNT_SAVE_FAILED });
+    expect(secrets.deps.updateSettings).not.toHaveBeenCalled();
+
+    const stored = setup({ saveSettings: () => { throw new Error('EBUSY: settings.json'); } });
+    expect(await stored.actions.save(BLE, BLE_DEV)).toEqual({ ok: false, error: SETTINGS_FAILED });
+    for (const s of [login, secrets, stored]) {
+      expect(s.deps.secrets.remove).not.toHaveBeenCalled();
+      expect(s.deps.restartActual).not.toHaveBeenCalled();
+    }
+  });
+
+  test('saving keys or the account after Bluetooth removes the Bluetooth token', async () => {
+    for (const [input, keep] of [[KEYS, 'ecoflow'], [ACCOUNT, 'ecoflow-app']] as const) {
+      const { actions, deps } = setup({ settings: { actualSource: BLE_CONFIG } });
+      expect(await actions.save(input, DEVICE)).toEqual({ ok: true });
+      expect(deps.secrets.remove).toHaveBeenCalledWith('ecoflow-ble');
+      expect(deps.secrets.remove).not.toHaveBeenCalledWith(keep);
+    }
+  });
+
+  test('no result, log or error contains the password, userId or token', async () => {
+    const JWT = 'jwt-token-abc', USER_ID = '1234567890123456789';
+    const TOKEN = authToken(USER_ID, BLE_SN);
+    const secrets = [EMAIL, PASSWORD, PASSWORD_B64, JWT, USER_ID, TOKEN];
+    // The sign-in can only echo what it was given (EcoflowAppApi hides its own session, see the next test);
+    // everything after it may echo all of them.
+    const signInEcho = `bad ${EMAIL} ${PASSWORD} ${PASSWORD_B64}`;
+    const echo = `bad ${secrets.join(' ')}`;
+    const session: AppSession = { token: JWT, userId: USER_ID };
+    const appApi = (o: { devices?: EcoflowDevice[] | Error } = {}) => ({
+      ...fakeAppApi({ devices: o.devices ?? [{ sn: BLE_SN, online: true, productName: 'RIVER 2' }] }),
+      login: vi.fn(() => Promise.resolve(session)),
+    });
+    const results: unknown[] = [];
+    const runs: ReturnType<typeof setup>[] = [];
+    const run = async (s: ReturnType<typeof setup>) => {
+      runs.push(s);
+      results.push(await s.actions.test(BLE), await s.actions.preview(BLE, BLE_SN), await s.actions.save(BLE, BLE_DEV));
+    };
+    await run(setup({ appApi: appApi(), ble: fakeBle({ scan: { adverts: [advert(BLE_SN)] }, connected: BLE_SN }) }));
+    await run(setup({ appApi: appApi(), ble: fakeBle({ scan: new Error(echo) }) }));
+    await run(setup({ appApi: appApi({ devices: new EcoflowApiError('9999', signInEcho) }) }));
+    await run(setup({ appApi: appApi({ devices: new Error(signInEcho) }) }));
+    await run(setup({ appApi: appApi(), saveSecrets: () => { throw new Error(echo); } }));
+    await run(setup({ appApi: appApi(), saveSettings: () => { throw new Error(echo); } }));
+    await run(setup({ appApi: { ...appApi(), login: vi.fn(() => Promise.reject(new EcoflowApiError('9999', signInEcho))) } }));
+    await run(setup({ appApi: { ...appApi(), login: vi.fn(() => Promise.reject(new Error(signInEcho))) } }));
+
+    expect(results).toContainEqual({ ok: true });
+    for (const error of [CONNECT_FAILED, ACCOUNT_SAVE_FAILED, SETTINGS_FAILED, BAD_INPUT]) expect(results).toContainEqual({ ok: false, error });
+    expect(results).toContainEqual({ ok: true, devices: [{ sn: BLE_SN, label: 'RIVER 2', online: true, nearby: true, supported: true }] });
+    for (const s of runs) {
+      const seen = [
+        ...s.deps.updateSettings.mock.calls.map(c => JSON.stringify(c)),
+        ...Object.values(s.deps.log).map(level => JSON.stringify(level.mock.calls)),
+      ];
+      for (const text of seen) for (const secret of secrets) expect(text).not.toContain(secret);
+      for (const [id, saved] of s.deps.secrets.save.mock.calls) expect([id, saved]).toEqual(['ecoflow-ble', { token: TOKEN }]);
+    }
+    for (const r of results) for (const secret of secrets) expect(JSON.stringify(r)).not.toContain(secret);
+  });
+
+  test('a server echo of the session token or the userId never reaches the ble check', async () => {
+    const JWT = 'jwt-token-abc', USER_ID = '1234567890123456789';
+    const fetch = vi.fn<FetchLike>(async url => {
+      const body = url.includes('/auth/login')
+        ? { code: '0', data: { token: JWT, user: { userId: USER_ID } } }
+        : { code: `E-${USER_ID}`, message: `token=${JWT} user=${USER_ID}` };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    });
+    const { actions } = setup({ appApi: new EcoflowAppApi('eu', { email: EMAIL, password: PASSWORD }, { fetch }) });
+    expect(await actions.test(BLE)).toEqual({ ok: false, error: 'Помилка EcoFlow E-…: token=… user=…' });
+  });
+
+  test('disconnect from Bluetooth removes all three secrets', async () => {
+    const { actions, deps, order } = setup({ settings: { actualSource: BLE_CONFIG } });
+    await actions.disconnect();
+    expect(deps.updateSettings).toHaveBeenCalledWith({ actualSource: null });
+    expect(deps.secrets.remove.mock.calls.map(c => c[0]).sort()).toEqual(['ecoflow', 'ecoflow-app', 'ecoflow-ble']);
+    expect(order.at(-1)).toBe('restartActual');
+  });
+});
+
+describe('the live line over IPC', () => {
+  const LIVE: ActualLive = { link: 'connected', acInVolts: 227, soc: 87 };
+
+  /** Registers the handlers with a mocked ipcMain and returns the one for `channel`. */
+  function handlerOf(channel: string, deps: Partial<IpcDeps>): (...args: unknown[]) => unknown {
+    const handle = vi.mocked(ipcMain.handle);
+    handle.mockClear();
+    registerIpc(deps as IpcDeps);
+    const found = handle.mock.calls.find(([ch]) => ch === channel);
+    if (!found) throw new Error(`no handler for ${channel}`);
+    return (...args) => (found[1] as (e: unknown, ...a: unknown[]) => unknown)({}, ...args);
+  }
+
+  test('ipc-actual: getActualLive is wired, and answers only while the saved source is ecoflow-ble', () => {
+    expect(IPC.getActualLive).toBe('actual:get-live');
+    expect(IPC.actualLive).toBe('actual:live');
+    let settings: Settings = { ...DEFAULT_SETTINGS, actualSource: BLE_CONFIG };
+    const getLive = vi.fn(() => LIVE);
+    const getActualLive = handlerOf(IPC.getActualLive, { getSettings: () => settings, bleLive: { getLive } });
+    expect(getActualLive()).toEqual(LIVE);
+    // Read on each call: switching the source takes effect at once.
+    for (const actualSource of [CONFIG, APP_CONFIG, null]) {
+      settings = { ...settings, actualSource };
+      expect(getActualLive()).toBeNull();
+    }
+    expect(getLive).toHaveBeenCalledTimes(1);
+  });
+
+  describe('throttleLive', () => {
+    beforeEach(() => vi.useFakeTimers({ now: Date.parse('2026-10-19T10:00:00Z') }));
+    afterEach(() => vi.useRealTimers());
+
+    const searching: ActualLive = { link: 'searching' }, connecting: ActualLive = { link: 'connecting' };
+
+    test('sends at once when idle, then at most once per second, always ending on the last value', () => {
+      expect(LIVE_PUSH_MS).toBe(1_000);
+      const target = { send: vi.fn() };
+      const live = throttleLive(target);
+      live.push(searching);
+      expect(target.send.mock.calls).toEqual([[IPC.actualLive, searching]]);
+      live.push(connecting);
+      live.push(LIVE);
+      vi.advanceTimersByTime(999);
+      expect(target.send).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1);
+      expect(target.send.mock.calls).toEqual([[IPC.actualLive, searching], [IPC.actualLive, LIVE]]);
+      // A trailing null (the source stopped) is a value like any other.
+      live.push(null);
+      vi.advanceTimersByTime(999);
+      expect(target.send).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(1);
+      expect(target.send.mock.calls[2]).toEqual([IPC.actualLive, null]);
+      // Quiet for a while: the next value goes out at once again.
+      vi.advanceTimersByTime(5_000);
+      live.push(searching);
+      expect(target.send).toHaveBeenCalledTimes(4);
+      vi.advanceTimersByTime(10_000);
+      expect(target.send).toHaveBeenCalledTimes(4);
+    });
+
+    test('dispose drops a pending send and ignores later values', () => {
+      const target = { send: vi.fn() };
+      const live = throttleLive(target);
+      live.push(searching);
+      live.push(LIVE);
+      live.dispose();
+      live.push(connecting);
+      vi.advanceTimersByTime(10_000);
+      expect(target.send.mock.calls).toEqual([[IPC.actualLive, searching]]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });
 
