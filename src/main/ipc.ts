@@ -85,6 +85,8 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.refreshNow, () => deps.scheduler.trigger('manual'));
   handle(IPC.solveCaptcha, () => deps.solveCaptcha());
   handle(IPC.ecoflowTest, (i: unknown) => deps.actualActions.test(i));
+  // Nothing from the renderer is passed on.
+  handle(IPC.ecoflowScan, () => deps.actualActions.scan());
   handle(IPC.ecoflowPreview, (i: unknown, sn: unknown) => deps.actualActions.preview(i, sn));
   handle(IPC.ecoflowSave, (i: unknown, device: unknown) => deps.actualActions.save(i, device));
   handle(IPC.actualDisconnect, () => deps.actualActions.disconnect());

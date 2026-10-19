@@ -453,65 +453,58 @@ describe('account mode', () => {
 describe('Bluetooth mode', () => {
   const ALL_PROBLEMS: BleProblem[] = ['bt-off', 'bt-denied', 'bt-missing', 'bt-unavailable', 'host-failed', 'scan-failed'];
 
-  test('ble test: signs in, scans, marks nearby/supported, and the connected station counts as nearby', async () => {
-    const devices: EcoflowDevice[] = [
-      { sn: 'R601ZEB4AAAA0001', online: false, productName: 'RIVER 2' },
-      { sn: 'R611ZEB4AAAA0002', online: true, productName: 'RIVER 2 Max' },
-      { sn: 'R331ZEB4AAAA0003', online: true, productName: 'DELTA 2' },
-      { sn: 'R621ZEB4AAAA0004', online: false, deviceName: 'Garage' },
-    ];
-    const ble = fakeBle({ scan: { adverts: [advert('R601ZEB4AAAA0001'), advert('R331ZEB4AAAA0003'), advert('P351ZEB4AAAA0009')] }, connected: 'R611ZEB4AAAA0002' });
-    const { actions, deps, appApi } = setup({ appApi: fakeAppApi({ devices }), ble });
-    const res = await actions.test({ ...BLE, email: ` ${EMAIL} ` });
-    expect(res).toEqual({
-      ok: true,
-      devices: [
-        { sn: 'R601ZEB4AAAA0001', label: 'RIVER 2', online: false, nearby: true, supported: true },
-        { sn: 'R611ZEB4AAAA0002', label: 'RIVER 2 Max', online: true, nearby: true, supported: true },
-        { sn: 'R331ZEB4AAAA0003', label: 'DELTA 2', online: true, nearby: true, supported: false },
-        { sn: 'R621ZEB4AAAA0004', label: 'Garage', online: false, nearby: false, supported: true },
-      ],
+  test('test refuses mode ble (the scan has a call of its own): no sign-in, no scan', async () => {
+    const ble = fakeBle({ scan: { adverts: [advert(BLE_SN)] } });
+    const { actions, deps } = setup({ ble });
+    expect(await actions.test(BLE)).toEqual({ ok: false, error: BAD_INPUT });
+    expect(deps.makeAppApi).not.toHaveBeenCalled();
+    expect(deps.makeApi).not.toHaveBeenCalled();
+    expect(ble.scan).not.toHaveBeenCalled();
+  });
+
+  test('the account test does not scan, and its stations carry the cloud state only', async () => {
+    const ble = fakeBle({ scan: { adverts: [advert('SN1')] }, connected: 'SN1' });
+    const { actions } = setup({ ble });
+    expect(await actions.test(ACCOUNT)).toEqual({ ok: true, devices: [{ sn: 'SN1', label: 'RIVER 2', online: true }] });
+    expect(ble.scan).not.toHaveBeenCalled();
+  });
+
+  test('scan: the scanned SNs plus the station the running source holds, each once, with no sign-in', async () => {
+    const ble = fakeBle({
+      scan: { adverts: [advert('R601ZEB4AAAA0001'), advert('R331ZEB4AAAA0003'), advert('R601ZEB4AAAA0001')] }, connected: 'R611ZEB4AAAA0002',
     });
-    expect(res).not.toHaveProperty('bluetooth');
+    const { actions, deps } = setup({ ble });
+    expect(await actions.scan()).toEqual({ nearby: ['R601ZEB4AAAA0001', 'R331ZEB4AAAA0003', 'R611ZEB4AAAA0002'] });
     expect(SCAN_MS).toBe(8_000);
     expect(ble.scan.mock.calls).toEqual([[8_000]]);
-    expect(deps.makeAppApi).toHaveBeenCalledWith('eu', { email: EMAIL, password: PASSWORD });
-    expect(appApi.login).toHaveBeenCalledTimes(1);
-    expect(appApi.listDevices).toHaveBeenCalledWith(SESSION);
+    expect(deps.makeAppApi).not.toHaveBeenCalled();
     expect(deps.makeApi).not.toHaveBeenCalled();
+    // A held station that advertised as well is listed once; nothing nearby and nothing held is an empty list.
+    expect(await setup({ ble: fakeBle({ scan: { adverts: [advert(BLE_SN)] }, connected: BLE_SN }) }).actions.scan()).toEqual({ nearby: [BLE_SN] });
+    expect(await setup().actions.scan()).toEqual({ nearby: [] });
   });
 
-  test('ble test: the scan starts with the sign-in, not after it', async () => {
-    let signIn!: (s: AppSession) => void;
-    const appApi = { ...fakeAppApi(), login: vi.fn(() => new Promise<AppSession>(r => { signIn = r; })) };
-    const ble = fakeBle();
-    const { actions } = setup({ appApi, ble });
-    const pending = actions.test(BLE);
-    expect(ble.scan).toHaveBeenCalledWith(SCAN_MS);
-    signIn(SESSION);
-    expect(await pending).toMatchObject({ ok: true });
-  });
-
-  test('ble test: a scan problem becomes the bluetooth text, the devices still come back', async () => {
-    const station: EcoflowDevice = { sn: BLE_SN, online: true, productName: 'RIVER 2' };
-    const cases: [ScanOutcome | Error, string][] = [
-      ...ALL_PROBLEMS.map((problem): [ScanOutcome, string] => [{ adverts: [], problem }, BLE_PROBLEM_TEXT[problem]]),
-      [new Error('the link fell over'), 'Не вдалося пошукати станцію через Bluetooth'],
-    ];
+  test('scan: a problem becomes the bluetooth text; the held station still counts as nearby', async () => {
     expect(BLE_PROBLEM_TEXT['bt-off']).toBe('Bluetooth на цьому комп’ютері вимкнено');
-    for (const [scan, bluetooth] of cases) {
-      const { actions } = setup({ appApi: fakeAppApi({ devices: [station] }), ble: fakeBle({ scan }) });
-      expect(await actions.test(BLE)).toEqual({ ok: true, devices: [{ sn: BLE_SN, label: 'RIVER 2', online: true, nearby: false, supported: true }], bluetooth });
+    for (const problem of ALL_PROBLEMS) {
+      const { actions } = setup({ ble: fakeBle({ scan: { adverts: [], problem } }) });
+      expect(await actions.scan()).toEqual({ nearby: [], bluetooth: BLE_PROBLEM_TEXT[problem] });
     }
-    // The station the running source holds still counts as nearby when the scan cannot run.
-    const held = setup({ appApi: fakeAppApi({ devices: [station] }), ble: fakeBle({ scan: { adverts: [], problem: 'bt-off' }, connected: BLE_SN }) });
-    expect(await held.actions.test(BLE)).toMatchObject({ ok: true, devices: [{ sn: BLE_SN, nearby: true }] });
+    const held = setup({ ble: fakeBle({ scan: { adverts: [], problem: 'bt-off' }, connected: BLE_SN }) });
+    expect(await held.actions.scan()).toEqual({ nearby: [BLE_SN], bluetooth: 'Bluetooth на цьому комп’ютері вимкнено' });
   });
 
-  test('ble test: a sign-in error fails the check whatever the scan says', async () => {
-    for (const scan of [{ adverts: [advert(BLE_SN)] }, new Error('scan broke')]) {
-      const { actions } = setup({ appApi: fakeAppApi({ devices: new NetworkError('Немає з’єднання з EcoFlow') }), ble: fakeBle({ scan }) });
-      expect(await actions.test(BLE)).toEqual({ ok: false, error: 'Немає з’єднання з EcoFlow' });
+  test('scan never rejects: a rejected or throwing scan is scan-failed, the held station kept, no SN logged', async () => {
+    const FAILED = { bluetooth: 'Не вдалося пошукати станцію через Bluetooth' };
+    const rejected = setup({ ble: fakeBle({ scan: new Error(`the link fell over near ${BLE_SN}`), connected: BLE_SN }) });
+    expect(await rejected.actions.scan()).toEqual({ nearby: [BLE_SN], ...FAILED });
+    expect(await setup({ ble: fakeBle({ scan: new Error('the link fell over') }) }).actions.scan()).toEqual({ nearby: [], ...FAILED });
+    const thrown = setup({ ble: { scan: vi.fn(() => { throw new TypeError(`no host for ${BLE_SN}`); }), connectedSn: vi.fn(() => null) } });
+    expect(await thrown.actions.scan()).toEqual({ nearby: [], ...FAILED });
+    const lost = setup({ ble: { scan: vi.fn(async () => ({ adverts: [advert(BLE_SN)] })), connectedSn: vi.fn(() => { throw new Error(`gone ${BLE_SN}`); }) } });
+    expect(await lost.actions.scan()).toEqual({ nearby: [], ...FAILED });
+    for (const s of [rejected, thrown, lost]) {
+      expect(JSON.stringify(Object.values(s.deps.log).map(level => level.mock.calls))).not.toContain(BLE_SN.slice(4));
     }
   });
 
@@ -536,7 +529,8 @@ describe('Bluetooth mode', () => {
 
   test('ble save: stores only the token, settings carry the masked email, the other secrets go', async () => {
     const { actions, deps, order, appApi, settings } = setup({ settings: { ecoflowClientId: 'BlackoutWidget-abc12345' } });
-    expect(await actions.test(BLE)).toMatchObject({ ok: true });
+    // The form checks with the account and saves the same sign-in with mode ble.
+    expect(await actions.test(ACCOUNT)).toMatchObject({ ok: true });
     expect(await actions.save(BLE, BLE_DEV)).toEqual({ ok: true });
     expect(appApi.login).toHaveBeenCalledTimes(1); // the check's session
     expect(deps.secrets.save.mock.calls).toEqual([['ecoflow-ble', { token: authToken('USER1', BLE_SN) }]]);
@@ -577,7 +571,7 @@ describe('Bluetooth mode', () => {
       let logins = 0;
       const appApi = { ...fakeAppApi(), login: vi.fn(() => Promise.resolve(++logins === 1 ? SESSION : fresh)) };
       const { actions, deps } = setup({ appApi });
-      await actions.test(BLE);
+      await actions.test(ACCOUNT);
       await vi.advanceTimersByTimeAsync(10 * 60_000);
       expect(await actions.save(BLE, BLE_DEV)).toEqual({ ok: true });
       expect(appApi.login).toHaveBeenCalledTimes(2);
@@ -634,7 +628,7 @@ describe('Bluetooth mode', () => {
     const runs: ReturnType<typeof setup>[] = [];
     const run = async (s: ReturnType<typeof setup>) => {
       runs.push(s);
-      results.push(await s.actions.test(BLE), await s.actions.preview(BLE, BLE_SN), await s.actions.save(BLE, BLE_DEV));
+      results.push(await s.actions.test(ACCOUNT), await s.actions.scan(), await s.actions.preview(BLE, BLE_SN), await s.actions.save(BLE, BLE_DEV));
     };
     await run(setup({ appApi: appApi(), ble: fakeBle({ scan: { adverts: [advert(BLE_SN)] }, connected: BLE_SN }) }));
     await run(setup({ appApi: appApi(), ble: fakeBle({ scan: new Error(echo) }) }));
@@ -647,7 +641,9 @@ describe('Bluetooth mode', () => {
 
     expect(results).toContainEqual({ ok: true });
     for (const error of [CONNECT_FAILED, ACCOUNT_SAVE_FAILED, SETTINGS_FAILED, BAD_INPUT]) expect(results).toContainEqual({ ok: false, error });
-    expect(results).toContainEqual({ ok: true, devices: [{ sn: BLE_SN, label: 'RIVER 2', online: true, nearby: true, supported: true }] });
+    expect(results).toContainEqual({ ok: true, devices: [{ sn: BLE_SN, label: 'RIVER 2', online: true }] });
+    expect(results).toContainEqual({ nearby: [BLE_SN] });
+    expect(results).toContainEqual({ nearby: [], bluetooth: 'Не вдалося пошукати станцію через Bluetooth' });
     for (const s of runs) {
       const seen = [
         ...s.deps.updateSettings.mock.calls.map(c => JSON.stringify(c)),
@@ -659,18 +655,6 @@ describe('Bluetooth mode', () => {
     for (const r of results) for (const secret of secrets) expect(JSON.stringify(r)).not.toContain(secret);
   });
 
-  test('a server echo of the session token or the userId never reaches the ble check', async () => {
-    const JWT = 'jwt-token-abc', USER_ID = '1234567890123456789';
-    const fetch = vi.fn<FetchLike>(async url => {
-      const body = url.includes('/auth/login')
-        ? { code: '0', data: { token: JWT, user: { userId: USER_ID } } }
-        : { code: `E-${USER_ID}`, message: `token=${JWT} user=${USER_ID}` };
-      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
-    });
-    const { actions } = setup({ appApi: new EcoflowAppApi('eu', { email: EMAIL, password: PASSWORD }, { fetch }) });
-    expect(await actions.test(BLE)).toEqual({ ok: false, error: 'Помилка EcoFlow E-…: token=… user=…' });
-  });
-
   test('disconnect from Bluetooth removes all three secrets', async () => {
     const { actions, deps, order } = setup({ settings: { actualSource: BLE_CONFIG } });
     await actions.disconnect();
@@ -680,18 +664,26 @@ describe('Bluetooth mode', () => {
   });
 });
 
+/** Registers the handlers with a mocked ipcMain and returns the one for `channel`. */
+function handlerOf(channel: string, deps: Partial<IpcDeps>): (...args: unknown[]) => unknown {
+  const handle = vi.mocked(ipcMain.handle);
+  handle.mockClear();
+  registerIpc(deps as IpcDeps);
+  const found = handle.mock.calls.find(([ch]) => ch === channel);
+  if (!found) throw new Error(`no handler for ${channel}`);
+  return (...args) => (found[1] as (e: unknown, ...a: unknown[]) => unknown)({}, ...args);
+}
+
+test('ipc-actual: ecoflowScan is wired and passes nothing from the renderer on', async () => {
+  expect(IPC.ecoflowScan).toBe('actual:ecoflow-scan');
+  const scan = vi.fn(async () => ({ nearby: [BLE_SN] }));
+  const handler = handlerOf(IPC.ecoflowScan, { actualActions: { scan } as unknown as ActualActions });
+  expect(await handler({ mode: 'ble', region: 'eu' }, 'R601#')).toEqual({ nearby: [BLE_SN] });
+  expect(scan).toHaveBeenCalledWith();
+});
+
 describe('the live line over IPC', () => {
   const LIVE: ActualLive = { link: 'connected', acInVolts: 227, soc: 87 };
-
-  /** Registers the handlers with a mocked ipcMain and returns the one for `channel`. */
-  function handlerOf(channel: string, deps: Partial<IpcDeps>): (...args: unknown[]) => unknown {
-    const handle = vi.mocked(ipcMain.handle);
-    handle.mockClear();
-    registerIpc(deps as IpcDeps);
-    const found = handle.mock.calls.find(([ch]) => ch === channel);
-    if (!found) throw new Error(`no handler for ${channel}`);
-    return (...args) => (found[1] as (e: unknown, ...a: unknown[]) => unknown)({}, ...args);
-  }
 
   test('ipc-actual: getActualLive is wired, and answers only while the saved source is ecoflow-ble', () => {
     expect(IPC.getActualLive).toBe('actual:get-live');

@@ -12,7 +12,7 @@ export const IPC = {
   widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
   ecoflowTest: 'actual:ecoflow-test', ecoflowPreview: 'actual:ecoflow-preview', ecoflowSave: 'actual:ecoflow-save',
   actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openDtekSite: 'addr:dtek-site',
-  actualLive: 'actual:live', getActualLive: 'actual:get-live',
+  actualLive: 'actual:live', getActualLive: 'actual:get-live', ecoflowScan: 'actual:ecoflow-scan',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
@@ -20,7 +20,10 @@ export const CAPTCHA_MARKER = 'CAPTCHA_REQUIRED';
 
 export type MainView = 'schedule' | 'settings' | 'setup';
 
-/** Keys or the account travel renderer → main only in these calls; no result ever carries them back. */
+/**
+ * Keys or the account travel renderer → main only in these calls; no result ever carries them back. `ble` is the
+ * account sign-in again, for the save of a station read over Bluetooth.
+ */
 export type EcoflowInput =
   | { mode: 'keys'; region: EcoflowRegion; accessKey: string; secretKey: string }
   | { mode: 'account'; region: EcoflowRegion; email: string; password: string }
@@ -29,6 +32,8 @@ export type EcoflowInput =
 export interface EcoflowDeviceView { sn: string; label: string; online: boolean; nearby?: boolean; supported?: boolean }
 /** `bluetooth`: the Bluetooth check could not scan, and this is why (the stations still come back). */
 export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[]; bluetooth?: string } | { ok: false; error: string };
+/** The setup scan: the SNs seen nearby plus the station the running Bluetooth source holds; `bluetooth`: why it could not scan. */
+export interface EcoflowScanResult { nearby: string[]; bluetooth?: string }
 export type EcoflowPreviewResult =
   | { ok: true; online: boolean; power: ActualPower; detail?: string; reason?: string; unsupported?: boolean }
   | { ok: false; error: string };
@@ -63,6 +68,8 @@ export interface RendererApi {
   /** The widget's «Готово» button: save the position and pin the widget again. */
   endMoveMode(): void;
   ecoflowTest(i: EcoflowInput): Promise<EcoflowTestResult>;
+  /** Scans Bluetooth for stations nearby (8 s). Never rejects: a problem comes back as `bluetooth`. */
+  ecoflowScan(): Promise<EcoflowScanResult>;
   /**
    * Keys: HTTP only, so it spends none of the account's daily clientIds. Account: one short MQTT session with a
    * throw-away clientId, signed in with the check's session when it is fresh (no HTTP call gives the readings).

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { BLE_LINK_TEXT, BLE_PROBLEM_TEXT, isRiver2Family } from '../../shared/ecoflow-ble';
-import type { ActionResult, EcoflowDeviceView, EcoflowPreviewResult, EcoflowTestResult } from '../../shared/ipc';
+import type { ActionResult, EcoflowDeviceView, EcoflowPreviewResult, EcoflowScanResult, EcoflowTestResult } from '../../shared/ipc';
 import type { EcoflowRegion, Settings } from '../../shared/types';
 import { describeError, type Logger } from '../log';
 import { NetworkError } from '../providers/types';
@@ -26,7 +26,7 @@ const CLIENT_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
 /** How long the previews may reuse the account check's session. */
 const SESSION_KEEP_MS = 10 * 60_000;
 const HEX = '0123456789ABCDEF';
-/** How long the Bluetooth check scans for stations nearby. */
+/** How long the setup scan looks for stations nearby. */
 export const SCAN_MS = 8_000;
 
 export interface ActualActionsDeps {
@@ -34,7 +34,7 @@ export interface ActualActionsDeps {
   makeAppApi(region: EcoflowRegion, account: AppAccount): EcoflowAppApiLike;
   /** MQTT connector for the account preview. */
   connect: MqttConnect;
-  /** The Bluetooth check's scan, and the station the running source holds (a connected station does not advertise). */
+  /** The setup scan, and the station the running source holds (a connected station does not advertise). */
   ble: Pick<BleLinkLike, 'scan' | 'connectedSn'>;
   secrets: Pick<SecretStore, 'save' | 'remove'>;
   getSettings(): Settings;
@@ -50,6 +50,8 @@ export interface ActualActionsDeps {
 /** The renderer's EcoFlow calls; every argument is untrusted and checked here. */
 export interface ActualActions {
   test(i: unknown): Promise<EcoflowTestResult>;
+  /** The setup's Bluetooth scan; it takes nothing from the renderer and never rejects. */
+  scan(): Promise<EcoflowScanResult>;
   preview(i: unknown, sn: unknown): Promise<EcoflowPreviewResult>;
   save(i: unknown, device: unknown): Promise<ActionResult>;
   disconnect(): Promise<void>;
@@ -220,21 +222,27 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
   return {
     async test(i) {
       const input = readInput(i);
-      if (!input) return badInput();
-      // Started before the sign-in so the two run side by side. The scan never fails the check: the stations still come back.
-      const scan = input.mode === 'ble' ? scanNearby() : null;
+      // Bluetooth is picked per station after the account check; its scan is a call of its own.
+      if (!input || input.mode === 'ble') return badInput();
       try {
         if (input.mode === 'keys') return { ok: true, devices: (await ecoflowTest(deps.makeApi(input.region, input.keys))).map(deviceView) };
         const checked = await ecoflowAppTest(deps.makeAppApi(input.region, input.account));
         sessions.set(input, checked.session);
-        if (!scan) return { ok: true, devices: checked.devices.map(deviceView) };
-        const { adverts, problem } = await scan;
-        const seen = new Set(adverts.map(a => a.sn));
-        const connected = deps.ble.connectedSn();
-        const devices = checked.devices.map(d => ({ ...deviceView(d), nearby: seen.has(d.sn) || d.sn === connected, supported: isRiver2Family(d.sn) }));
-        return problem ? { ok: true, devices, bluetooth: BLE_PROBLEM_TEXT[problem] } : { ok: true, devices };
+        return { ok: true, devices: checked.devices.map(deviceView) };
       } catch (err) {
         return fail(err, input);
+      }
+    },
+
+    async scan() {
+      try {
+        const { adverts, problem } = await scanNearby();
+        const held = deps.ble.connectedSn();
+        const nearby = [...new Set([...adverts.map(a => a.sn), ...(held === null ? [] : [held])])];
+        return problem ? { nearby, bluetooth: BLE_PROBLEM_TEXT[problem] } : { nearby };
+      } catch (err) {
+        deps.log.warn(`actual: the Bluetooth scan failed (${err instanceof Error ? err.name : typeof err})`);
+        return { nearby: [], bluetooth: BLE_PROBLEM_TEXT['scan-failed'] };
       }
     },
 
