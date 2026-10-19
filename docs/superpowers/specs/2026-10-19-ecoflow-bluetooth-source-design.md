@@ -195,6 +195,35 @@ Requirements:
   | stalled | «Станція не відповідає — спробую ще раз за кілька хвилин» | «станція не відповідає по Bluetooth» |
 - **«Вихід AC»** comes from MPPT `cfgAcEnabled`, or else the inverter's own `cfgAcEnabled`. PD has no such field, so « (вимкнено вихід AC?)» is appended only when one of those two says 0.
 
+## Revision: Bluetooth chosen per station, not as a «Джерело» (2026-10-19)
+The user tested the Bluetooth source («ок працює») and asked to pick Bluetooth after signing in, from the station list, rather than as a sign-in method. Shown two mockups, they chose «Перемикач у рядку». This replaces Setup steps 1–5 and 7 (step 6, the save, is unchanged):
+
+1. **«Джерело» options.** The select keeps only «EcoFlow — вхід через акаунт» and «EcoFlow — ключі розробника». The `ble` option and its hint are gone. The account hint stays as it is.
+2. **«Перевірити» in account mode.**
+   - It signs in and shows the account's stations at once, as before.
+   - At the same moment it starts a Bluetooth scan (`SCAN_MS` = 8 s) through a new IPC call. The scan never delays or fails the list.
+   - Under the list, while the scan runs: «Шукаю станції поруч через Bluetooth…».
+   - A scan problem shows its `BLE_PROBLEM_TEXT` as an alert under the list.
+3. **Each station row.**
+   - The right-hand state reads «поруч» (green) when its SN was found by the scan, or when it is the station the running Bluetooth source is connected to.
+   - Otherwise it shows the cloud state («в мережі» / «не в мережі»), as before.
+4. **Under the selected station**, a segmented switch «Підключення»: «Bluetooth» | «Інтернет».
+   - **«Bluetooth»** is enabled only when the station is nearby and `isRiver2Family`.
+     - When disabled because it is not nearby: «Станцію не знайдено поруч — увімкніть її і тримайте поряд з комп’ютером», plus a «Шукати ще раз» link once the scan has ended.
+     - When disabled because of the model: «Модель поки не підтримується».
+   - **Default:** «Bluetooth» when it is enabled, else «Інтернет». The default is re-applied when the scan result arrives, unless the user has already touched the switch.
+   - **With «Bluetooth» chosen:**
+     - the «Перевірка» box reads «Станція поруч — стан світла з’явиться після збереження» (no IPC);
+     - a hint reads «Поки віджет підключений, телефон зможе керувати станцією лише через інтернет. Пароль не зберігається — лише ключ для цієї станції.»;
+     - «Зберегти» saves with `mode: 'ble'`.
+   - **With «Інтернет» chosen:** today's account behaviour — the preview over MQTT, and the save with `mode: 'account'`.
+5. **«Змінити» on an `ecoflow-ble` source** opens the account form. After the check, that station is preselected with «Bluetooth» if it is still available.
+6. **Main.**
+   - `test` no longer takes `mode: 'ble'`, because the scan has its own call: `ecoflowScan(): Promise<{ nearby: string[]; bluetooth?: string }>`. `nearby` holds the scanned SNs plus `connectedSn()`. `bluetooth` is the problem text. The call never rejects.
+   - `save` with `mode: 'ble'` is unchanged.
+
+The connected panel, the live line, the readings and the whole Bluetooth stack stay unchanged.
+
 ## Left to the builder
 - The exact module boundaries inside `src/main/actual/ecoflow/ble/`, and the message type names.
 - How the live line is pushed. Suggested:
