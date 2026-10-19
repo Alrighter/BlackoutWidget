@@ -10,8 +10,9 @@ import { EcoflowBleSession, SessionError, type SessionOptions } from './session'
  * process entry implements, so the policy below is tested with fakes.
  *
  * One watched station, rescanned before every attempt. A failed attempt or a lost link backs off 5 s up to 60 s; a
- * refusal pauses 30 min; three stalls in a row pause 5 min; an unsupported advert is never connected to. The host
- * writes nothing of its own: every write is built by EcoflowBleSession, whose allow-list keeps the station read-only.
+ * refusal pauses 30 min; three stalls in a row pause 5 min; an unsupported advert is never connected to; a link that
+ * carries no packet for 60 s is dropped and tried again after the 60 s cap. The host writes nothing of its own: every
+ * write is built by EcoflowBleSession, whose allow-list keeps the station read-only.
  */
 
 export const SCAN_FIND_MS = 15_000;
@@ -22,6 +23,13 @@ export const STALL_PAUSE_MS = 300_000;
 export const REFUSED_PAUSE_MS = 1_800_000;
 export const UNSUPPORTED_RECHECK_MS = 1_800_000;
 export const BAD_FRAME_LIMIT = 10;
+/**
+ * A connected link with no packet of any module for this long has gone mute (the station kept GATT, stopped
+ * streaming). The inverter alone may be silent: it says nothing while the AC output is off.
+ */
+export const SILENT_LINK_MS = 60_000;
+/** How often a connected link's silence is checked. */
+export const SILENT_CHECK_MS = 10_000;
 
 export interface BleChannel { write(data: Buffer): Promise<void> }
 
@@ -72,13 +80,17 @@ interface Attempt {
   /** The peripheral reported the link down: no disconnect() is owed. */
   linkDown: boolean;
   badFrames: number;
+  /** When the last packet of any module arrived; counted from `connected`. */
+  dataAt: number;
   /** Heartbeats that came with the auth reply, passed on once `connected` is posted. */
   early: Map<Forwarded, Fields>;
   cleanups: Array<() => void>;
   done: boolean;
 }
 
-const newAttempt = (): Attempt => ({ phase: 'search', linkDown: false, badFrames: 0, early: new Map(), cleanups: [], done: false });
+const newAttempt = (): Attempt => ({
+  phase: 'search', linkDown: false, badFrames: 0, dataAt: 0, early: new Map(), cleanups: [], done: false,
+});
 
 /** The SN as logs and details may show it. */
 const short = (sn: string): string => `${sn.slice(0, 4)}…`;
@@ -92,7 +104,8 @@ function failure(e: unknown): { detail: string; stall: boolean } {
     if (e.kind === 'timeout') return { detail: `no reply in ${e.stage}`, stall: e.stage === 'auth-status' || e.stage === 'auth' };
     return { detail: `${e.stage} failed`, stall: false };
   }
-  return { detail: 'unexpected error', stall: false };
+  // The class only: the message may carry data.
+  return { detail: `unexpected error (${e instanceof Error ? e.name : typeof e})`, stall: false };
 }
 
 export class BleHost {
@@ -261,6 +274,8 @@ export class BleHost {
       this.backoffIndex = 0;
       this.stalls = 0;
       this.setLink('connected');
+      a.dataAt = this.timers.now();
+      this.checkSilence(a);
       for (const [module, fields] of a.early) this.post({ ev: 'heartbeat', sn: w.sn, module, fields });
       a.early.clear();
     } catch (e) {
@@ -319,6 +334,7 @@ export class BleHost {
   private onPacket(a: Attempt, w: Watch, p: Packet): void {
     if (a.done) return;
     a.badFrames = 0;
+    a.dataAt = this.timers.now();
     const module = heartbeatOf(p);
     if (!isForwarded(module)) return;
     const fields = decodeHeartbeat(module, p.payload);
@@ -336,6 +352,26 @@ export class BleHost {
     if (a.done) return;
     a.linkDown = true;
     this.failed(a, new AttemptFailed('disconnected'));
+  }
+
+  /**
+   * Every SILENT_CHECK_MS while connected: a link with no packet for SILENT_LINK_MS is dropped. The retry waits the
+   * backoff cap, so a station that takes the login and then says nothing is not handshaked again every few seconds.
+   * One timer at a time, released with the attempt.
+   */
+  private checkSilence(a: Attempt): void {
+    let timer: unknown;
+    const check = () => {
+      if (a.done) return;
+      if (this.timers.now() - a.dataAt >= SILENT_LINK_MS) {
+        this.backoffIndex = BACKOFF_MS.length - 1;
+        this.failed(a, new AttemptFailed(`no data for ${SILENT_LINK_MS / 1000} s`));
+        return;
+      }
+      timer = this.timers.setTimeout(check, SILENT_CHECK_MS);
+    };
+    a.cleanups.push(() => this.timers.clearTimeout(timer));
+    timer = this.timers.setTimeout(check, SILENT_CHECK_MS);
   }
 
   /** Ends a failed attempt and decides when to try again. */

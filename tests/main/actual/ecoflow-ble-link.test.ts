@@ -162,6 +162,35 @@ describe('BLE link: supervising the host', () => {
     expect(lives.at(-1)).toEqual({ link: 'searching' });
   });
 
+  it('logs entering the failure once; respawns while failed are silent; its end is one info', async () => {
+    const { link, ports, port, adapter, log } = setup();
+    link.watch(SN, TOKEN);
+    for (let i = 0; i < HOST_FAIL_LIMIT; i++) {
+      ports[i].exit(1);
+      if (i < HOST_FAIL_LIMIT - 1) await advance(RESPAWN_MS[i]);
+    }
+    expect(link.hostFailed()).toBe(true);
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenLastCalledWith(`BLE host exited (code 1); restarting in ${CAP_MS / 1000} s`);
+    const counts = () => [log.info.mock.calls.length, log.warn.mock.calls.length, log.error.mock.calls.length];
+    const before = counts();
+    // An hour of respawns, every one dying: nothing more in the log.
+    for (let i = 0; i < 120; i++) {
+      await advance(CAP_MS);
+      port().exit(1);
+    }
+    expect(ports).toHaveLength(HOST_FAIL_LIMIT + 120);
+    expect(counts()).toEqual(before);
+
+    await advance(CAP_MS);
+    adapter('poweredOn');
+    expect(log.info).toHaveBeenLastCalledWith('BLE host is up again');
+    expect(counts()).toEqual([before[0] + 1, before[1], before[2]]);
+    // Recovered: a crash is logged again.
+    port().exit(1);
+    expect(log.warn).toHaveBeenCalledTimes(before[1] + 1);
+  });
+
   it('adapterState and hostFailed expose what the link has seen', async () => {
     const { link, ports, adapter } = setup();
     expect(link.adapterState()).toBeNull();
@@ -217,6 +246,10 @@ describe('BLE link: supervising the host', () => {
     await advance(RESPAWN_MS[0] + RESPAWN_MS[1]);
     expect(failedCount()).toBe(1);
     expect(log.error).toHaveBeenCalled();
+    // Failed: the spawns that keep throwing log nothing more.
+    const errors = log.error.mock.calls.length, warns = log.warn.mock.calls.length;
+    await advance(CAP_MS * 10);
+    expect([log.error.mock.calls.length, log.warn.mock.calls.length]).toEqual([errors, warns]);
     throwing = false;
     await advance(CAP_MS);
     expect(ports).toHaveLength(1);

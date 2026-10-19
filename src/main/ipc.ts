@@ -130,7 +130,8 @@ export function throttleLive(target: StateTarget, ms = LIVE_PUSH_MS): { push(liv
       if (disposed) return;
       pending = { live };
       if (timer !== null) return;
-      const wait = sentAt + ms - Date.now();
+      // At most `ms`: a clock set back would otherwise put the last send in the future and hold the line that long.
+      const wait = Math.min(sentAt + ms - Date.now(), ms);
       if (wait <= 0) flush();
       else timer = setTimeout(flush, wait);
     },

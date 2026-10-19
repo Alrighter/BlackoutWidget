@@ -12,6 +12,11 @@ export const READING_MS = 10_000;
 export const LINK_GRACE_MS = 30_000;
 /** An unknown reason is reported again this often while it holds. */
 export const REASON_REPEAT_MS = 60_000;
+/**
+ * A longer gap between two looks at the clocks (or one going back) means the system slept or the clock jumped: the
+ * grace and the inverter's silence start over then, so the link gets its chance to come back after a wake.
+ */
+export const TICK_GAP_MS = 5_000;
 const isUnready = (s: AdapterState | null): boolean => s === 'unknown' || s === 'resetting';
 
 /** How often the clocks above are looked at. */
@@ -54,6 +59,8 @@ export class EcoflowBleSource implements ActualStateSource {
   private invAt = 0;
   /** When the adapter entered unknown/resetting; a momentary one (a host respawn) is no problem. */
   private adapterSince = 0;
+  /** The last look at the clocks, for TICK_GAP_MS. */
+  private checkedAt = 0;
   private mpptAc: number | undefined;
   private invAc: number | undefined;
 
@@ -76,6 +83,7 @@ export class EcoflowBleSource implements ActualStateSource {
     this.stopped = false;
     const t = this.now();
     this.graceFrom = t;
+    this.checkedAt = t;
     if (this.link.connectedSn() === this.cfg.sn) {
       this.connected = true;
       this.linkState = 'connected';
@@ -158,6 +166,9 @@ export class EcoflowBleSource implements ActualStateSource {
       else if (module === 'inv') this.invAc = fields.cfgAcEnabled;
     }
     if (module !== 'inv') return;
+    // A payload cut short before the frequency would skip detectGrid's voltage/frequency check (0 V alone reads «off»):
+    // it gives no verdict and does not count as the inverter reporting.
+    if (typeof fields.acInVol !== 'number' || typeof fields.acInFreq !== 'number') return;
     this.invAt = t;
     const verdict = detectGrid({
       'inv.acInVol': fields.acInVol, 'inv.acInFreq': fields.acInFreq, 'inv.inputWatts': fields.inputWatts,
@@ -188,8 +199,12 @@ export class EcoflowBleSource implements ActualStateSource {
     }
   }
 
+  /** Reached from the 1 s loop and from link events, whichever comes first after a wake. */
   private evaluate(): void {
     const t = this.now();
+    const gap = t - this.checkedAt;
+    this.checkedAt = t;
+    if (gap > TICK_GAP_MS || gap < 0) this.graceFrom = this.invAt = t;
     const reason = this.reason(t);
     if (reason === undefined) {
       this.lastReason = undefined;

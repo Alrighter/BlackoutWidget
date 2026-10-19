@@ -740,6 +740,21 @@ describe('the live line over IPC', () => {
       expect(target.send).toHaveBeenCalledTimes(4);
     });
 
+    test('a clock set back an hour does not hold the next value for that hour', () => {
+      const target = { send: vi.fn() };
+      const live = throttleLive(target);
+      live.push(searching);
+      // The last send now looks an hour in the future.
+      vi.setSystemTime(Date.now() - 3_600_000);
+      live.push(connecting);
+      vi.advanceTimersByTime(LIVE_PUSH_MS);
+      expect(target.send.mock.calls).toEqual([[IPC.actualLive, searching], [IPC.actualLive, connecting]]);
+      // And the pace after it is the usual one.
+      live.push(LIVE);
+      vi.advanceTimersByTime(LIVE_PUSH_MS);
+      expect(target.send).toHaveBeenCalledTimes(3);
+    });
+
     test('dispose drops a pending send and ignores later values', () => {
       const target = { send: vi.fn() };
       const live = throttleLive(target);

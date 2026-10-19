@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  BACKOFF_MS, BAD_FRAME_LIMIT, BleHost, CONNECT_TIMEOUT_MS, REFUSED_PAUSE_MS, SCAN_FIND_MS, STALL_PAUSE_MS,
-  UNSUPPORTED_RECHECK_MS, type BleCentral, type BleChannel, type BlePeripheral,
+  BACKOFF_MS, BAD_FRAME_LIMIT, BleHost, CONNECT_TIMEOUT_MS, REFUSED_PAUSE_MS, SCAN_FIND_MS, SILENT_LINK_MS,
+  STALL_PAUSE_MS, UNSUPPORTED_RECHECK_MS, type BleCentral, type BleChannel, type BlePeripheral,
 } from '../../../src/main/actual/ecoflow/ble/host';
 import type { AdapterState, HostEvent } from '../../../src/main/actual/ecoflow/ble/messages';
 import { encodePacket } from '../../../src/main/actual/ecoflow/ble/protocol';
@@ -174,13 +174,15 @@ describe('BLE host: the watched station', () => {
       .toEqual(['searching', 'connecting', 'connected', 'inv']);
   });
 
-  it('does not forward ems/bms heartbeats', async () => {
+  it('does not forward ems/bms heartbeats, nor inverter ids outside command set 0x20', async () => {
     const { place, watch, heartbeats } = setup();
     const { station } = place();
     watch();
     await advance(ADVERT_MS);
     station.emit(encodePacket({ src: 0x03, dst: 0x21, cmdSet: 0x20, cmdId: 0x02, payload: Buffer.alloc(40) }));
     station.emit(encodePacket({ src: 0x03, dst: 0x21, cmdSet: 0x20, cmdId: 0x32, payload: Buffer.alloc(80) }));
+    // The inverter's ids under another command set are no heartbeat.
+    station.emit(encodePacket({ src: 0x04, dst: 0x21, cmdSet: 0x32, cmdId: 0x02, payload: Buffer.alloc(70) }));
     station.emit(PD);
     station.emit(MPPT);
     station.emit(INV);
@@ -235,6 +237,20 @@ describe('BLE host: the watched station', () => {
       ADVERT_MS + BACKOFF_MS[0], ADVERT_MS + BACKOFF_MS[1], ADVERT_MS + STAGE_MS + BACKOFF_MS[2],
       ADVERT_MS + STAGE_MS + BACKOFF_MS[3], ADVERT_MS + STAGE_MS + BACKOFF_MS[4],
     ]);
+  });
+
+  it('an unexpected error names its class, never its message', async () => {
+    const { events, host, place, watch, lastLink } = setup();
+    const { peripheral } = place();
+    peripheral.connect = () => { throw new TypeError(`bad state ${TOKEN}`); };
+    watch();
+    await advance(ADVERT_MS);
+    expect(lastLink()).toEqual({ ev: 'link', sn: SN, state: 'searching', detail: 'unexpected error (TypeError)' });
+    host.handle({ cmd: 'unwatch' });
+    host.handle({ cmd: 'probe', id: 5 });
+    await advance(ADVERT_MS);
+    expect(events.at(-1)).toEqual({ ev: 'probe-result', id: 5, ok: false, detail: 'R601… unexpected error (TypeError)' });
+    expect(JSON.stringify(events)).not.toContain('bad state');
   });
 
   it('a refusal pauses 30 min and posts refused with the code', async () => {
@@ -318,6 +334,84 @@ describe('BLE host: the watched station', () => {
     await advance(1 + ADVERT_MS);
     expect(links()).toEqual(['searching', 'connecting', 'connected', 'lost', 'searching', 'connecting', 'connected']);
     expect(peripheral.connects).toBe(2);
+  });
+
+  it('a link that carries nothing for 60 s is dropped, and the next try waits the 60 s cap', async () => {
+    const { events, place, watch, links, lastLink } = setup();
+    const { peripheral } = place();
+    watch();
+    await advance(ADVERT_MS);
+    expect(links().at(-1)).toBe('connected');
+    await advance(SILENT_LINK_MS - 1);
+    expect(links().at(-1)).toBe('connected');
+    expect(peripheral.disconnects).toBe(0);
+    await advance(1);
+    expect(lastLink()).toEqual({ ev: 'link', sn: SN, state: 'lost', detail: 'no data for 60 s' });
+    expect(peripheral.disconnects).toBe(1);
+    expect(events.flatMap(e => (e.ev === 'log' ? [e.text] : [])).at(-1)).toBe('R601… lost (no data for 60 s)');
+    // Not BACKOFF_MS[0]: a station that takes the login and then says nothing is not handshaked again every 5 s.
+    await advance(BACKOFF_MS[BACKOFF_MS.length - 1] - 1);
+    expect(peripheral.connects).toBe(1);
+    await advance(1 + ADVERT_MS);
+    expect(peripheral.connects).toBe(2);
+    expect(links().at(-1)).toBe('connected');
+  });
+
+  it('any module keeps the link: PD alone, then ems alone, with the inverter silent throughout', async () => {
+    const { place, watch, links, heartbeats } = setup();
+    const { station, peripheral } = place();
+    const EMS = encodePacket({ src: 0x03, dst: 0x21, cmdSet: 0x20, cmdId: 0x02, payload: Buffer.alloc(40) });
+    watch();
+    await advance(ADVERT_MS);
+    // 130 s of PD every 5 s, then 70 s of ems only (never forwarded, still data).
+    for (let i = 0; i < 26; i++) { station.emit(PD); await advance(5_000); }
+    for (let i = 0; i < 14; i++) { station.emit(EMS); await advance(5_000); }
+    expect(links()).toEqual(['searching', 'connecting', 'connected']);
+    expect(peripheral.disconnects).toBe(0);
+    expect(heartbeats()).not.toContain('inv');
+    // Then nothing: dropped once the last packet is 60 s old, at the next check.
+    const lastAt = Date.now() - 5_000;
+    await until(() => links().at(-1) === 'lost');
+    expect(Date.now() - lastAt).toBeGreaterThanOrEqual(SILENT_LINK_MS);
+    expect(Date.now() - lastAt).toBeLessThanOrEqual(SILENT_LINK_MS + 10_000);
+  });
+
+  it('ending a connected session stops its silence check: unwatch, suspend, adapter off, disconnect', async () => {
+    const ends: Array<[string, (s: ReturnType<typeof setup> & { peripheral: FakePeripheral }) => void, number]> = [
+      ['unwatch', s => s.host.handle({ cmd: 'unwatch' }), 0],
+      ['suspend', s => s.host.handle({ cmd: 'suspend' }), 0],
+      ['adapter off', s => s.central.setState('poweredOff'), 0],
+      // Only the backoff is left.
+      ['disconnect', s => s.peripheral.drop(), 1],
+    ];
+    for (const [name, end, left] of ends) {
+      const s = setup();
+      const { peripheral } = s.place();
+      s.watch();
+      await advance(ADVERT_MS + 25_000);
+      expect(s.links().at(-1), name).toBe('connected');
+      // The silence check is the one timer of a connected session.
+      expect(vi.getTimerCount(), name).toBe(1);
+      end({ ...s, peripheral });
+      expect(vi.getTimerCount(), name).toBe(left);
+      vi.clearAllTimers();
+    }
+  });
+
+  it('a new watch mid-session stops the old silence check', async () => {
+    const { host, place, watch, links } = setup();
+    const { peripheral } = place();
+    watch();
+    await advance(ADVERT_MS + 25_000);
+    watch();
+    await advance(ADVERT_MS);
+    expect(peripheral.connects).toBe(2);
+    expect(peripheral.disconnects).toBe(1);
+    expect(links()).toEqual(['searching', 'connecting', 'connected', 'searching', 'connecting', 'connected']);
+    // The new session's check only: the old one (due at 31 s) is gone.
+    expect(vi.getTimerCount()).toBe(1);
+    host.handle({ cmd: 'unwatch' });
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('suspend disconnects and resume reconnects at once', async () => {

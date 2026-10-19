@@ -88,10 +88,13 @@ const BMS: Layout = [
 
 export type Module = 'inv' | 'pd' | 'mppt' | 'ems' | 'bms';
 
-/** Which heartbeat a packet is (river2.py `data_parse`); null for anything else. */
+/**
+ * Which heartbeat a packet is (river2.py `data_parse`); null for anything else. Every one is under command set 0x20,
+ * the inverter's included: its ids under another set would be read as a grid verdict.
+ */
 export function heartbeatOf(p: { src: number; cmdSet: number; cmdId: number }): Module | null {
-  if (p.src === 0x04 && p.cmdId === 0x02) return 'inv';
   if (p.cmdSet !== 0x20) return null;
+  if (p.src === 0x04 && p.cmdId === 0x02) return 'inv';
   if (p.src === 0x02 && p.cmdId === 0x02) return 'pd';
   if (p.src === 0x03 && p.cmdId === 0x02) return 'ems';
   if (p.src === 0x03 && p.cmdId === 0x32) return 'bms';

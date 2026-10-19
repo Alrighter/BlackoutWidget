@@ -212,11 +212,13 @@ export class BleLink implements BleLinkLike {
     this.respawnTimer = this.clear(this.respawnTimer);
     this.sawAdapter = false;
     this.spawnedAt = this.timers.now();
+    // Failed: the failure was logged when it began, and a line per respawn (every 30 s) would roll the log.
+    const quiet = this.failed;
     let port: HostPort;
     try {
       port = this.deps.spawn();
     } catch (e) {
-      this.deps.log.error('BLE host did not start', e);
+      if (!quiet) this.deps.log.error('BLE host did not start', e);
       this.hostGone('did not start');
       return;
     }
@@ -224,7 +226,7 @@ export class BleLink implements BleLinkLike {
     // HostPort has no unsubscribe: events and the exit of a host that is no longer current are dropped here.
     port.onEvent(e => { if (this.port === port) this.onHostEvent(e); });
     port.onExit(code => { if (this.port === port) this.hostGone(`exited (code ${code})`); });
-    this.deps.log.info('BLE host started');
+    if (!quiet) this.deps.log.info('BLE host started');
     if (this.suspended) port.post({ cmd: 'suspend' });
     if (this.watched) port.post({ cmd: 'watch', sn: this.watched.sn, token: this.watched.token });
     for (const [id, s] of this.scans) port.post({ cmd: 'scan', id, ms: s.ms });
@@ -233,6 +235,8 @@ export class BleLink implements BleLinkLike {
 
   /** The current host is gone without being asked to stop: what it said goes with it, and another is due if needed. */
   private hostGone(what: string): void {
+    // Already failed: this death is one of the respawns that are not logged.
+    const quiet = this.failed;
     this.port = null;
     this.idleTimer = this.clear(this.idleTimer);
     const healthy = this.sawAdapter && this.timers.now() - this.spawnedAt >= HOST_STABLE_MS;
@@ -261,8 +265,8 @@ export class BleLink implements BleLinkLike {
         this.respawnTimer = null;
         if (!this.disposed && !this.port && (this.watched || this.scans.size > 0)) this.spawnHost();
       }, ms);
-      this.deps.log.warn(`BLE host ${what}; restarting in ${ms / 1000} s`);
-    } else {
+      if (!quiet) this.deps.log.warn(`BLE host ${what}; restarting in ${ms / 1000} s`);
+    } else if (!quiet) {
       this.deps.log.warn(`BLE host ${what}`);
     }
     this.refresh();

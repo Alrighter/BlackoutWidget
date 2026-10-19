@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { decodeHeartbeat } from '../../../src/main/actual/ecoflow/ble/heartbeats';
 import { ADAPTER_UNREADY_MS, INV_SILENT_MS, type BleLinkLike, type LinkEvent } from '../../../src/main/actual/ecoflow/ble/link';
+import { decodePacket } from '../../../src/main/actual/ecoflow/ble/protocol';
 import { EcoflowBleSource, LINK_GRACE_MS, READING_MS, REASON_REPEAT_MS } from '../../../src/main/actual/ecoflow/ble/source';
 import type { AdapterState } from '../../../src/main/actual/ecoflow/ble/messages';
 import type { ActualReading } from '../../../src/main/actual/types';
 import { BLE_REASON } from '../../../src/shared/ecoflow-ble';
+import { INV } from '../../helpers/ble-station';
 
 const SN = 'R601ZEB4XXXX0000';
 const OTHER_SN = 'R601ZEB4YYYY1111';
@@ -33,7 +36,7 @@ function setup() {
   const start = () => source.start(r => readings.push(r));
   const state = (state: 'connected' | 'lost' | 'refused' | 'stalled' | 'unsupported' | 'searching', sn = SN) =>
     link.emit({ ev: 'link', sn, state });
-  const inv = (fields: Record<string, number>, sn = SN) => link.emit({ ev: 'heartbeat', sn, module: 'inv', fields });
+  const inv = (fields: Record<string, number | string>, sn = SN) => link.emit({ ev: 'heartbeat', sn, module: 'inv', fields });
   const mppt = (fields: Record<string, number>) => link.emit({ ev: 'heartbeat', sn: SN, module: 'mppt', fields });
   const GRID = { acInVol: 119_189, acInFreq: 60, inputWatts: 100 };
   return { link, log, source, readings, start, state, inv, mppt, GRID };
@@ -64,6 +67,25 @@ describe('EcoflowBleSource', () => {
     inv({ acInVol: 0, acInFreq: 0, inputWatts: 0 });
     expect(readings).toHaveLength(1);
     expect(readings[0].power).toBe('off');
+  });
+
+  it('an inverter heartbeat without both voltage and frequency gives no verdict: a 28-byte payload is never «off»', () => {
+    const { start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    // 0 V and no frequency would read «off»: the frequency is what tells a real zero from a payload cut short.
+    inv(decodeHeartbeat('inv', Buffer.alloc(28)));
+    inv(decodeHeartbeat('inv', decodePacket(INV).payload.subarray(0, 28)));
+    inv({ acInFreq: 0, inputWatts: 0 });
+    expect(readings).toEqual([]);
+    // Nor does it count as the inverter reporting: kept up every 5 s, the silence reason still comes at 20 s.
+    for (let i = 0; i < 6; i++) {
+      vi.advanceTimersByTime(5_000);
+      inv(decodeHeartbeat('inv', Buffer.alloc(28)));
+    }
+    expect(readings.map(r => r.reason)).toEqual([BLE_REASON.invSilent]);
+    inv(GRID);
+    expect(readings.at(-1)).toMatchObject({ power: 'on' });
   });
 
   it('throttles to one reading per 10 s unless the power changes', () => {
@@ -118,6 +140,64 @@ describe('EcoflowBleSource', () => {
     vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
     const last = readings[readings.length - 1];
     expect(last).toMatchObject({ power: 'unknown', reason: 'станція поза зв’язком Bluetooth' });
+  });
+
+  it('a sleep between ticks starts a fresh grace: nothing at the wake, the usual waits after it', () => {
+    const MIN10 = 10 * 60_000;
+    // Lost at the suspend; the tick after the wake sees a 10 min jump.
+    const a = setup();
+    a.start();
+    a.state('connected');
+    a.inv(a.GRID);
+    a.state('lost');
+    a.readings.length = 0;
+    vi.setSystemTime(Date.now() + MIN10);
+    vi.advanceTimersByTime(1_000);
+    expect(a.readings).toEqual([]);
+    vi.advanceTimersByTime(LINK_GRACE_MS - 2_000);
+    expect(a.readings).toEqual([]);
+    vi.advanceTimersByTime(2_000);
+    expect(a.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.lost })]);
+    a.source.stop();
+
+    // The host's first event after the resume can come before the tick.
+    const b = setup();
+    b.start();
+    b.state('connected');
+    b.inv(b.GRID);
+    b.state('lost');
+    b.readings.length = 0;
+    vi.setSystemTime(Date.now() + MIN10);
+    b.state('searching');
+    expect(b.readings).toEqual([]);
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1_000);
+    expect(b.readings).toEqual([]);
+    vi.advanceTimersByTime(1_000);
+    expect(b.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.lost })]);
+    b.source.stop();
+
+    // Still connected across the gap: the inverter's silence counts from the wake too.
+    const c = setup();
+    c.start();
+    c.state('connected');
+    c.inv(c.GRID);
+    c.readings.length = 0;
+    vi.setSystemTime(Date.now() + MIN10);
+    vi.advanceTimersByTime(1_000);
+    expect(c.readings).toEqual([]);
+    vi.advanceTimersByTime(INV_SILENT_MS - 2_000);
+    expect(c.readings).toEqual([]);
+    vi.advanceTimersByTime(2_000);
+    expect(c.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.invSilent })]);
+    c.source.stop();
+
+    // A clock set back an hour does not hold the grace for that hour.
+    const d = setup();
+    d.start();
+    d.state('lost');
+    vi.setSystemTime(Date.now() - 60 * 60_000);
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1_000);
+    expect(d.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.lost })]);
   });
 
   it('never connecting reports lost only after the grace from start', () => {

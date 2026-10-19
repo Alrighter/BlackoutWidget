@@ -38,6 +38,19 @@ describe('EcoFlow BLE wire format', () => {
     expect(decodeHeartbeat('mppt', mppt.payload)).toHaveProperty('cfgAcEnabled');
   });
 
+  it('a heartbeat is one only under command set 0x20, the inverter included', () => {
+    for (const [src, cmdId] of [[0x04, 0x02], [0x02, 0x02], [0x03, 0x02], [0x03, 0x32], [0x05, 0x02]]) {
+      expect(heartbeatOf({ src, cmdSet: 0x20, cmdId })).not.toBeNull();
+      for (const cmdSet of [0x00, 0x01, 0x21, 0x32, 0x35]) expect(heartbeatOf({ src, cmdSet, cmdId })).toBeNull();
+    }
+  });
+
+  it('a short inverter payload yields the voltage without the frequency', () => {
+    const fields = decodeHeartbeat('inv', decodePacket(INV).payload.subarray(0, 28));
+    expect(fields).toMatchObject({ acInVol: 119189 });
+    expect(fields).not.toHaveProperty('acInFreq');
+  });
+
   it('rejects broken packets and ignores cipher padding after the CRC', () => {
     expect(() => decodePacket(Buffer.from('bb02', 'hex'))).toThrow(PacketError);
     const bad = Buffer.from(INV);
