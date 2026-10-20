@@ -2,21 +2,17 @@ import { providerDisplayName } from '../../../shared/providers';
 import { addDays, formatHM, kyivDateKey } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot, Slot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
-import type { HttpFetch, HttpResponse } from '../http';
-import { NetworkError, ProviderError, type ScheduleProvider } from '../types';
+import type { HttpFetch } from '../http';
+import { HttpSource, quietNote, sourceTexts } from '../http-source';
+import { nameKey, normHouse, sameName } from '../names';
+import type { ProviderError, ScheduleProvider } from '../types';
 import { readGpvGrid } from './gpv-image';
 import { housesOf, matchOutage, parseOutageTable, parseQueueTable, type QueueRow } from './html';
-import { nameKey, normHouse, sameName } from './names';
 import { decodePng } from './png';
 import { bareName, findSettlement, hasNamesake, operatorCity, voeSettlements } from './settlements';
 
-export const VOE_QUIET_NOTE =
-  'Волиньобленерго не опублікувало графік на сьогодні — зазвичай це означає, що відключень за графіком немає';
-
-const OFFLINE = 'Немає з’єднання з сайтом Волиньобленерго';
-const NO_ANSWER = 'Сайт Волиньобленерго не відповідає';
-const HTTP_ERROR = 'Сайт Волиньобленерго повернув помилку';
-const UNREADABLE = 'Не вдалося прочитати графік Волиньобленерго';
+const NAME = 'Волиньобленерго';
+export const VOE_QUIET_NOTE = quietNote(NAME, 'опублікувало');
 
 const API = 'https://api-voe-poweron.inneti.net';
 const ARCHIVE_URL = `${API}/api/archive_gpv_graphs?page=1`;
@@ -24,7 +20,6 @@ const SITE = 'https://energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni'
 const QUEUE_URL = `${SITE}/cherga/`;
 const OUTAGE_URL = `${SITE}/chomu-nemaie-elektropostachannia/`;
 const FORM_HEADERS = { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' };
-const TIMEOUT_MS = 20_000;
 const IMAGE_CACHE_SIZE = 4;
 
 type Grid = Record<string, Slot[]>;
@@ -39,10 +34,6 @@ const allOn = (): Slot[] => Array<Slot>(48).fill('on');
 
 const queueLabel = (groupId: string): string => (groupId === 'none' ? 'Не залучено до ГПВ' : `Черга ${groupId}`);
 
-function unreadable(cause?: unknown): ProviderError {
-  return new ProviderError(UNREADABLE, cause === undefined ? undefined : { cause });
-}
-
 function isDateKey(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
 }
@@ -52,8 +43,8 @@ function isDateKey(s: string): boolean {
  * without a sane date means the source is dead or moved: page 1 in another order would hold old days, and every day
  * would read as quiet.
  */
-function parseArchive(text: string): ArchiveEntry[] {
-  const members = (JSON.parse(text) as { 'hydra:member'?: unknown })['hydra:member'];
+function parseArchive(body: unknown, unreadable: (cause?: Record<string, unknown>) => ProviderError): ArchiveEntry[] {
+  const members = (body as { 'hydra:member'?: unknown } | null)?.['hydra:member'];
   if (!Array.isArray(members) || members.length === 0) throw unreadable({ archive: 'empty' });
   const entries = members.map((m): ArchiveEntry => ({
     id: Number(m?.id),
@@ -116,6 +107,7 @@ export class VoeProvider implements ScheduleProvider {
   readonly id = 'voe';
   readonly displayName = providerDisplayName('voe');
   private readonly log: Logger;
+  private readonly http: HttpSource;
   private readonly now: () => Date;
   /** Parsed day pictures by `contentUrl`, least recently used first. */
   private readonly grids = new Map<string, Grid>();
@@ -125,6 +117,9 @@ export class VoeProvider implements ScheduleProvider {
   constructor(private readonly deps: VoeDeps) {
     this.log = deps.log ?? silentLogger;
     this.now = deps.now ?? (() => new Date());
+    this.http = new HttpSource({
+      fetch: deps.fetch, isOnline: deps.isOnline, log: this.log, tag: 'voe', texts: sourceTexts(NAME),
+    });
   }
 
   listCities(): Promise<string[]> {
@@ -133,7 +128,7 @@ export class VoeProvider implements ScheduleProvider {
 
   /** Each street once, in the operator's first spelling: two apostrophes or a look-alike letter make no second street. */
   listStreets(city: string): Promise<string[]> {
-    return this.serial('listStreets', async () => {
+    return this.http.serial('listStreets', async () => {
       const byKey = new Map<string, string>();
       for (const r of await this.queueRows(city)) if (!byKey.has(nameKey(r.street))) byKey.set(nameKey(r.street), r.street);
       return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'uk'));
@@ -141,14 +136,16 @@ export class VoeProvider implements ScheduleProvider {
   }
 
   listHouses(city: string, street: string): Promise<HouseInfo[]> {
-    return this.serial('listHouses', async () => housesOf(await this.queueRows(city), street));
+    return this.http.serial('listHouses', async () => housesOf(await this.queueRows(city), street));
   }
 
   fetchSnapshot(address: Address): Promise<ScheduleSnapshot> {
-    return this.serial('fetchSnapshot', async () => {
+    return this.http.serial('fetchSnapshot', async () => {
       const now = this.now();
       const today = kyivDateKey(now);
-      const entries = parseArchive(await this.text(ARCHIVE_URL, { method: 'GET', headers: { Accept: 'application/ld+json' } }));
+      const entries = parseArchive(
+        await this.http.json(ARCHIVE_URL, { method: 'GET', headers: { Accept: 'application/ld+json' } }), this.http.unreadable.bind(this.http),
+      );
       const todayEntry = pick(entries, today);
       const tomorrowEntry = pick(entries, addDays(today, 1));
       // Nothing published for today: power is on by schedule. Tomorrow without a picture is simply left out.
@@ -184,43 +181,24 @@ export class VoeProvider implements ScheduleProvider {
 
   dispose(): void {}
 
-  // One operation at a time: no parallel requests to the source; a failure doesn't break the chain.
-  private tail: Promise<unknown> = Promise.resolve();
-  private serial<T>(op: string, fn: () => Promise<T>): Promise<T> {
-    const run = this.tail.then(() => this.guard(op, fn));
-    this.tail = run.catch(() => {});
-    return run;
-  }
-
-  // Callers only ever see ProviderError (incl. NetworkError); anything else is a response we could not read.
-  private async guard<T>(op: string, fn: () => Promise<T>): Promise<T> {
-    try {
-      return await fn();
-    } catch (e) {
-      const err = e instanceof ProviderError ? e : unreadable(e);
-      this.log.error(`voe ${op} failed`, err);
-      throw err;
-    }
-  }
-
   private async slots(entry: ArchiveEntry, groupId: string): Promise<Slot[]> {
     if (groupId === 'none') return allOn(); // not in the hourly schedule: the picture says nothing about it
     const row = (await this.grid(entry))[groupId];
-    if (!row) throw unreadable({ groupId, date: entry.date });
+    if (!row) throw this.http.unreadable({ groupId, date: entry.date });
     return row;
   }
 
   private async grid(entry: ArchiveEntry): Promise<Grid> {
     const path = entry.contentUrl;
     // A path on the API host only: never let the archive point the download elsewhere.
-    if (!path || !path.startsWith('/') || path.startsWith('//')) throw unreadable({ date: entry.date, contentUrl: path });
+    if (!path || !path.startsWith('/') || path.startsWith('//')) throw this.http.unreadable({ date: entry.date, contentUrl: path });
     const hit = this.grids.get(path);
     if (hit) {
       this.grids.delete(path);
       this.grids.set(path, hit);
       return hit;
     }
-    const bytes = await this.call(`${API}${path}`, { method: 'GET' }, (r) => r.arrayBuffer());
+    const bytes = await this.http.bytes(`${API}${path}`);
     const grid = readGpvGrid(decodePng(new Uint8Array(bytes)));
     this.grids.set(path, grid);
     while (this.grids.size > IMAGE_CACHE_SIZE) this.grids.delete(this.grids.keys().next().value!);
@@ -252,7 +230,7 @@ export class VoeProvider implements ScheduleProvider {
     const place = this.place(address.city);
     if (!place.city) return undefined;
     try {
-      const html = await this.text(OUTAGE_URL, {
+      const html = await this.http.text(OUTAGE_URL, {
         method: 'POST', headers: FORM_HEADERS,
         body: new URLSearchParams({ formCity: place.city, formStreet: '', searchForm: 'searchFromForm' }).toString(),
       });
@@ -278,7 +256,7 @@ export class VoeProvider implements ScheduleProvider {
     if (cached) return cached;
     const place = this.place(label);
     if (!place.city) return [];
-    const html = await this.text(QUEUE_URL, {
+    const html = await this.http.text(QUEUE_URL, {
       method: 'POST', headers: FORM_HEADERS,
       body: new URLSearchParams({ formCity: place.city, formStreet: '%' }).toString(),
     });
@@ -286,32 +264,5 @@ export class VoeProvider implements ScheduleProvider {
     // An empty answer may be a glitch or a changed page: ask again next time.
     if (rows.length > 0) this.queues.set(label, rows);
     return rows;
-  }
-
-  private text(url: string, init: Omit<Parameters<HttpFetch>[1], 'signal'>): Promise<string> {
-    return this.call(url, init, (r) => r.text());
-  }
-
-  /** One request with a timeout. No answer → NetworkError when offline, else «не відповідає»; a non-OK status → «повернув помилку». */
-  private async call<T>(
-    url: string, init: Omit<Parameters<HttpFetch>[1], 'signal'>, read: (r: HttpResponse) => Promise<T>,
-  ): Promise<T> {
-    let res: HttpResponse;
-    try {
-      res = await this.deps.fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
-    } catch (e) {
-      throw this.noAnswer(url, e);
-    }
-    if (!res.ok) throw new ProviderError(HTTP_ERROR, { cause: { url, status: res.status } });
-    try {
-      return await read(res);
-    } catch (e) {
-      throw this.noAnswer(url, e);
-    }
-  }
-
-  private noAnswer(url: string, e: unknown): ProviderError {
-    if (!this.deps.isOnline()) return new NetworkError(OFFLINE, { cause: e });
-    return new ProviderError(NO_ANSWER, { cause: { url, error: e } });
   }
 }
