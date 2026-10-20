@@ -1,16 +1,14 @@
-import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { app, net } from 'electron';
 import { electronHttp } from './providers/electron-http';
 import { VoeProvider } from './providers/voe';
 import { consoleLogger } from './log';
+import { makeSmokeProfile, removeSmokeProfile } from './smoke-profile';
 import { slotRuns } from '../shared/widget-state';
 
 // Live check of the Volyn provider: Kovel streets -> Незалежності houses -> snapshot for house 25, line 1.
 // Plain HTTPS from main, no window. A throwaway profile, never the app's (or Electron's default) user data.
-const profile = mkdtempSync(join(tmpdir(), 'bw-smoke-voe-'));
+const PROFILE_PREFIX = 'bw-smoke-voe-';
+const profile = makeSmokeProfile(PROFILE_PREFIX);
 app.setPath('userData', profile);
 
 const CITY = 'м. Ковель';
@@ -44,26 +42,9 @@ async function main(): Promise<number> {
   }
 }
 
-/**
- * Chromium's helper processes (GPU, network) keep files of the profile open until the app is gone, so on Windows the
- * folder often cannot be removed from inside. Then a detached Node (Electron run as Node, no window) retries for 10 s.
- */
-function removeProfile(): void {
-  try {
-    rmSync(profile, { recursive: true, force: true });
-    return;
-  } catch { /* still held */ }
-  const retry = `const { rmSync } = require('node:fs'); let n = 0; const t = setInterval(() => {
-    try { rmSync(process.argv[1], { recursive: true, force: true }); clearInterval(t); } catch { if (++n >= 40) clearInterval(t); }
-  }, 250);`;
-  spawn(process.execPath, ['-e', retry, profile], {
-    detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-  }).unref();
-}
-
 app.whenReady().then(async () => {
   const code = await main();
   // Before app.exit: exit ends the process, so nothing after it runs.
-  removeProfile();
+  removeSmokeProfile(profile, PROFILE_PREFIX);
   app.exit(code);
 });

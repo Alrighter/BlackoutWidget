@@ -16,7 +16,7 @@ export interface IpcDeps {
   /** Persists the patch, applies side effects (autostart) and republishes state. */
   updateSettings(patch: Partial<Settings>): void;
   openMainWindow(view?: MainView): void;
-  /** Shows the verification window (saved address's provider, else the first one) and refreshes afterwards. */
+  /** Shows the given provider's verification window (else the saved address's; none without either) and refreshes afterwards. */
   solveCaptcha(providerId?: string): Promise<void>;
   widgetDrag(phase: DragPhase, screenX: number, screenY: number): void;
   widgetContextMenu(): void;

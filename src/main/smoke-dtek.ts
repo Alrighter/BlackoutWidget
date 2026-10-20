@@ -1,17 +1,16 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { app, net, session } from 'electron';
 import { BrowserSession } from './providers/browser-session';
 import { electronHttp } from './providers/electron-http';
 import { createProviders, findProvider } from './providers/registry';
 import { consoleLogger } from './log';
+import { makeSmokeProfile, removeSmokeProfile } from './smoke-profile';
 import type { HouseInfo } from '../shared/types';
 import { slotRuns } from '../shared/widget-state';
 
 // Live check of one DTEK site: city -> street -> house -> snapshot. Hidden window only; console output only.
 // A throwaway profile, never the app's (or Electron's default) user data.
-const profile = mkdtempSync(join(tmpdir(), 'bw-smoke-dtek-'));
+const PROFILE_PREFIX = 'bw-smoke-dtek-';
+const profile = makeSmokeProfile(PROFILE_PREFIX);
 app.setPath('userData', profile);
 
 const flag = process.argv.indexOf('--provider');
@@ -64,6 +63,7 @@ async function main(): Promise<number> {
 
 app.whenReady().then(async () => {
   const code = await main();
+  // Before app.exit: exit ends the process, so nothing after it runs.
+  removeSmokeProfile(profile, PROFILE_PREFIX);
   app.exit(code);
-  try { rmSync(profile, { recursive: true, force: true }); } catch { /* still held */ }
 });

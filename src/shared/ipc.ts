@@ -79,7 +79,7 @@ export interface RendererApi {
   actualDisconnect(): Promise<void>;
   /** Opens the EcoFlow developer site (a fixed address) in the browser. */
   openEcoflowHelp(): void;
-  /** Opens the DTEK outage schedule page (a fixed address) in the browser (D11). */
+  /** Opens the given provider's outage schedule page in the browser (D11); main looks the address up by the id. */
   openProviderSite(providerId: string): void;
   /** The Bluetooth source's live line for the first paint; null unless that source is the saved one. */
   getActualLive(): Promise<ActualLive | null>;
