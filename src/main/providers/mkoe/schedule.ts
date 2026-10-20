@@ -45,13 +45,14 @@ function checkTimeSeries(body: unknown): void {
   for (let id = 1; id <= 48; id++) if (!ids.has(id)) fail('time-series: ids not 1-48');
 }
 
-/** `outage-queue/by-type/3`: name → id over the rows with `deleted` 0. All twelve names, each once. */
+/** `outage-queue/by-type/3`: name → id over the rows with `deleted` 0 (it must be 0 or 1). All twelve names, each once. */
 function queueIds(body: unknown): Map<string, number> {
   if (!Array.isArray(body)) fail('by-type/3: not a list');
   const ids = new Map<string, number>();
   for (const r of body) {
     if (!isObj(r) || !isInt(r.id) || typeof r.name !== 'string') fail('by-type/3: row');
-    if (r.deleted !== 0) continue;
+    if (r.deleted !== 0 && r.deleted !== 1) fail('by-type/3: deleted');
+    if (r.deleted === 1) continue;
     if (ids.has(r.name)) fail('by-type/3: a name twice');
     ids.set(r.name, r.id);
   }

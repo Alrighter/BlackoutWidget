@@ -29,7 +29,7 @@ function fail(reason: string): never {
 /** A street or a house: the operator's id and the trimmed name. */
 interface Rec { id: number; name: string }
 /** One of a house's queues (`outage-queue`): type 1 ГАВ, 2 СГАВ, 3 ГПВ; `on` is `enabled` exactly 1. */
-interface HouseQueue { id: number; typeId: number; name: string; on: boolean }
+interface HouseQueue { id: number; typeId: number; name: string; deleted: 0 | 1; on: boolean }
 
 /** A list of `{[idKey]: integer, [nameKey]: string}` rows; names are trimmed and empty ones dropped. */
 function records(body: unknown, idKey: string, nameKey: string, what: string): Rec[] {
@@ -43,21 +43,37 @@ function records(body: unknown, idKey: string, nameKey: string, what: string): R
   return recs;
 }
 
-/** `addr/dom/{iddom}/outage-queue`: the house's queues of every type. A queue marked deleted is skipped. */
+/** `addr/dom/{iddom}/outage-queue`: the house's queues of every type, as they come; `deleted` must be 0 or 1. */
 function parseHouseQueues(body: unknown): HouseQueue[] {
   if (!Array.isArray(body)) fail('outage-queue: not a list');
-  const queues: HouseQueue[] = [];
-  for (const r of body) {
+  return body.map((r): HouseQueue => {
     const o = isObj(r) ? r.outage : undefined;
     if (!isObj(o) || !isInt(o.id) || !isInt(o.type_id) || typeof o.name !== 'string') fail('outage-queue: row');
-    if (o.deleted === 1) continue;
-    queues.push({ id: o.id, typeId: o.type_id, name: o.name.trim(), on: o.enabled === 1 });
-  }
-  return queues;
+    if (o.deleted !== 0 && o.deleted !== 1) fail('outage-queue: deleted');
+    return { id: o.id, typeId: o.type_id, name: o.name.trim(), deleted: o.deleted, on: o.enabled === 1 };
+  });
 }
 
-/** The house's lines: its ГПВ queues by name («2.2»); none left is the always-on line. */
-const linesOfQueues = (queues: HouseQueue[]): LineInfo[] => linesOf(queues.filter((q) => q.typeId === 3).map((q) => q.name));
+const QUEUE_NAME = /^\d+\.\d+$/;
+
+/**
+ * The house's lines: its live ГПВ queues by name («2.2»); none at all is the always-on line. A ГПВ row named outside
+ * N.M or marked deleted, or a row of a type other than ГАВ, СГАВ or ГПВ, is a shape we do not know: then `unknown`
+ * names it and `lines` holds only the queues that could be read, never the always-on line (which it cannot prove).
+ */
+function linesOfQueues(queues: HouseQueue[]): { lines: LineInfo[]; unknown?: string } {
+  let unknown: string | undefined;
+  const names: string[] = [];
+  for (const q of queues) {
+    if (q.typeId !== 1 && q.typeId !== 2 && q.typeId !== 3) unknown ??= 'type';
+    else if (q.typeId !== 3) continue;
+    else if (q.deleted !== 0) unknown ??= 'deleted';
+    else if (!QUEUE_NAME.test(q.name)) unknown ??= 'queue name';
+    else names.push(q.name);
+  }
+  if (unknown === undefined) return { lines: linesOf(names) };
+  return { lines: names.length > 0 ? linesOf(names) : [], unknown };
+}
 
 // --- Current outage --------------------------------------------------------------------------------------------
 
@@ -67,7 +83,7 @@ const EMERGENCY: Record<number, string> = { 1: 'ГАВ', 2: 'СГАВ' };
 /** A switched-on ГАВ or СГАВ queue of the house. There are no times. ГАВ before СГАВ, then by id, whatever the order. */
 function currentOutageOf(queues: HouseQueue[]): CurrentOutage | undefined {
   const on = queues
-    .filter((q) => q.on && Object.hasOwn(EMERGENCY, q.typeId))
+    .filter((q) => q.on && q.deleted === 0 && Object.hasOwn(EMERGENCY, q.typeId))
     .sort((a, b) => a.typeId - b.typeId || a.id - b.id)[0];
   return on ? { kind: 'emergency', text: `Знеструмлення за ${EMERGENCY[on.typeId]} ${on.name}` } : undefined;
 }
@@ -143,7 +159,9 @@ export class MkoeProvider implements ScheduleProvider {
   houseLines(city: string, street: string, house: string): Promise<LineInfo[]> {
     return this.http.serial('houseLines', async () => {
       const found = this.house(await this.houseList(await this.streetId(city, street)), house);
-      return linesOfQueues(await this.houseQueues(found.id));
+      const { lines, unknown } = linesOfQueues(await this.houseQueues(found.id));
+      if (unknown !== undefined) throw this.http.unreadable({ what: 'outage-queue', reason: unknown });
+      return lines;
     });
   }
 
@@ -153,14 +171,19 @@ export class MkoeProvider implements ScheduleProvider {
       const today = kyivDateKey(now);
       const iddom = await this.houseCheck(address);
       const queues = iddom === undefined ? undefined : await this.softHouseQueues(iddom);
-      const lines = queues
-        ? linesOfQueues(queues)
+      const read = queues ? linesOfQueues(queues) : undefined;
+      const lines = read
+        ? read.lines
         : [{ index: address.lineIndex, groupId: address.groupId, label: queueLabel(address.groupId) }];
       const currentOutage = queues ? currentOutageOf(queues) : undefined;
       let days: DaySchedule[];
       let sourceUpdatedAt: string | undefined;
       let note: string | undefined;
-      if (!lines.some((l) => l.groupId === address.groupId)) {
+      if (read?.unknown !== undefined) {
+        // The house's queues came in a shape we do not know: neither its line nor the always-on line is proven.
+        this.log.warn('mkoe fetchSnapshot: house queues of an unknown shape', { what: 'outage-queue', reason: read.unknown });
+        days = [{ date: today, slots: daySlots('unknown') }];
+      } else if (!lines.some((l) => l.groupId === address.groupId)) {
         // The operator moved the house to another queue (or in or out of the schedule): the app asks to pick again.
         days = [{ date: today, slots: daySlots('unknown') }];
       } else if (address.groupId === NONE_GROUP) {

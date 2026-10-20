@@ -46,6 +46,14 @@ const queueRow = (id: number, name: string, typeId: number, enabled = 0) => ({
   outageType: { id: typeId, name: TYPE_NAME[typeId], created_at: null, updated_at: null },
 });
 const queueRows = (...rows: ReturnType<typeof queueRow>[]) => JSON.stringify(rows);
+/** A `queueRow` with some `outage` fields changed. */
+const patched = (row: ReturnType<typeof queueRow>, patch: Record<string, unknown>) => ({ ...row, outage: { ...row.outage, ...patch } });
+/** House answers of a shape we do not know, with the reason: a ГПВ name outside N.M, a deleted ГПВ row, an unknown type. */
+const ODD_HOUSES: [string, string][] = [
+  ['queue name', JSON.stringify([queueRow(40, '7', 3), queueRow(12, '2', 2)])],
+  ['deleted', JSON.stringify([patched(queueRow(17, '2.2', 3), { deleted: 1 }), queueRow(12, '2', 2)])],
+  ['type', JSON.stringify([queueRow(50, '1', 4), queueRow(12, '2', 2)])],
+];
 /** House 115392's real answer with the queue of this id switched on. */
 const dom115392Enabled = (...ids: number[]) => JSON.stringify(
   JSON.parse(DOM_115392).map((r: any) => (ids.includes(r.outage.id) ? { ...r, outage: { ...r.outage, enabled: 1 } } : r)),
@@ -224,6 +232,26 @@ describe('MkoeProvider address lookup', () => {
     expect(await empty.p.houseLines(CITY, 'вул. Шевченка', '1')).toEqual(NONE_LINE);
   });
 
+  it('a house answer of an unknown shape is unreadable, never the always-on line (R11)', async () => {
+    for (const [reason, body] of ODD_HOUSES) {
+      const { p } = setup({ http: fakeHttp({ '/api/addr/dom/124212/outage-queue': () => ok(body) }) });
+      const err = await expectError(p.houseLines(CITY, 'вул. Шевченка', '1'), ProviderError, UNREADABLE);
+      expect(err.cause).toEqual({ what: 'outage-queue', reason });
+    }
+    // Next to a known queue too.
+    const mixed = queueRows(queueRow(17, '2.2', 3), queueRow(40, '7', 3));
+    const { p } = setup({ http: fakeHttp({ '/api/addr/dom/124212/outage-queue': () => ok(mixed) }) });
+    await expectError(p.houseLines(CITY, 'вул. Шевченка', '1'), ProviderError, UNREADABLE);
+  });
+
+  it('a house row whose deleted is not 0 or 1 is unreadable (R11)', async () => {
+    for (const deleted of [null, '0', 2, false, undefined]) {
+      const body = JSON.stringify([patched(queueRow(17, '2.2', 3), { deleted })]);
+      const { p } = setup({ http: fakeHttp({ '/api/addr/dom/124212/outage-queue': () => ok(body) }) });
+      await expectError(p.houseLines(CITY, 'вул. Шевченка', '1'), ProviderError, UNREADABLE);
+    }
+  });
+
   it('houseLines for a house the list does not have is not found', async () => {
     const { p, http } = setup();
     await expectError(p.houseLines(CITY, 'вул. Шевченка', '999'), AddressNotFoundError, NOT_FOUND);
@@ -341,6 +369,30 @@ describe('MkoeProvider schedule', () => {
     expect(http.to('addr/dom/124212/outage-queue')).toHaveLength(1);
   });
 
+  it('a house answer of an unknown shape gives today unknown, never the none line\'s all on (R11)', async () => {
+    for (const [, body] of ODD_HOUSES) {
+      const none = setup({ http: withSynthetic({ '/api/addr/dom/124212/outage-queue': () => ok(body) }) });
+      const a = await none.p.fetchSnapshot(SHEVCHENKA_1);
+      expect(a.days).toEqual([{ date: '2026-10-20', slots: fill('unknown') }]);
+      // Only the queues it can read: never the always-on line it cannot prove.
+      expect(a.lines).toEqual([]);
+      expect('note' in a).toBe(false);
+      expect(none.http.schedule()).toHaveLength(0);
+      const queue = setup({ http: withSynthetic({ '/api/addr/dom/115392/outage-queue': () => ok(body) }) });
+      const b = await queue.p.fetchSnapshot(MARIUPOLSKA);
+      expect(b.days).toEqual([{ date: '2026-10-20', slots: fill('unknown') }]);
+      expect('note' in b).toBe(false);
+      expect(queue.http.schedule()).toHaveLength(0);
+    }
+    // Next to a known queue, the known one stays in lines and today is still unknown.
+    const mixed = queueRows(queueRow(17, '2.2', 3), queueRow(40, '7', 3));
+    const { p, log } = setup({ http: withSynthetic({ '/api/addr/dom/115392/outage-queue': () => ok(mixed) }) });
+    const snap = await p.fetchSnapshot(MARIUPOLSKA);
+    expect(snap.days).toEqual([{ date: '2026-10-20', slots: fill('unknown') }]);
+    expect(snap.lines).toEqual([{ index: 1, groupId: '2.2', label: 'Черга 2.2' }]);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^mkoe fetchSnapshot: /), { what: 'outage-queue', reason: 'queue name' });
+  });
+
   it('a moved queue gives today unknown and the house\'s new lines, without reading the schedule', async () => {
     const { p, http } = setup({ http: withSynthetic() });
     const snap = await p.fetchSnapshot({ ...MARIUPOLSKA, groupId: '3.1' });
@@ -393,6 +445,7 @@ describe('MkoeProvider.fetchSnapshot address check', () => {
       { '/api/addr/street/2967/dom': () => ok('{"iddom":115392}') },
       { '/api/addr/dom/115392/outage-queue': () => ok('<html>Server Error</html>') },
       { '/api/addr/dom/115392/outage-queue': () => ok('[{"outage":null}]') },
+      { '/api/addr/dom/115392/outage-queue': () => ok(JSON.stringify([patched(queueRow(17, '2.2', 3), { deleted: null })])) },
     ] as Record<string, Route>[]) {
       const { p, log } = setup({ http: withSynthetic(over) });
       const snap = await p.fetchSnapshot(MARIUPOLSKA);
@@ -498,6 +551,14 @@ describe('MkoeProvider current outage', () => {
     const rows = JSON.parse(DOM_115392).map((r: any) => (r.outage.type_id === 1 ? { ...r, outage: { ...r.outage, enabled: true } } : r));
     const odd = setup({ http: fakeHttp({ '/api/addr/dom/115392/outage-queue': () => ok(JSON.stringify(rows)) }) });
     expect('currentOutage' in await odd.p.fetchSnapshot(MARIUPOLSKA)).toBe(false);
+  });
+
+  it('a deleted ГАВ queue is not a current outage, even switched on', async () => {
+    const rows = queueRows(queueRow(17, '2.2', 3), patched(queueRow(36, '8(Р)', 1, 1), { deleted: 1 }));
+    const { p } = setup({ http: fakeHttp({ '/api/addr/dom/115392/outage-queue': () => ok(rows) }) });
+    const snap = await p.fetchSnapshot(MARIUPOLSKA);
+    expect('currentOutage' in snap).toBe(false);
+    expect(snap.lines).toEqual([{ index: 1, groupId: '2.2', label: 'Черга 2.2' }]);
   });
 
   it('applies to a house out of the schedule too', async () => {

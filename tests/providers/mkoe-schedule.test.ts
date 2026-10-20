@@ -104,6 +104,16 @@ describe('mkoeDay', () => {
     expect(() => mkoeDay(SYNTHETIC, TIME_SERIES, {}, '2026-10-20', '2.2')).toThrow(MkoeShapeError);
   });
 
+  it('a by-type/3 row whose deleted is not 0 or 1 throws (R11)', () => {
+    for (const deleted of [null, '0', 2, false, undefined]) {
+      const odd = QUEUES.map((q: { name: string }) => (q.name === '3.1' ? { ...q, deleted } : q));
+      expect(() => mkoeDay(SYNTHETIC, TIME_SERIES, odd, '2026-10-20', '2.2')).toThrow(MkoeShapeError);
+    }
+    // Also on a row outside the twelve.
+    const extra = [...QUEUES, { id: 99, name: '7.1', type_id: 3, enabled: 0, deleted: null }];
+    expect(() => mkoeDay(QUIET, TIME_SERIES, extra, '2026-10-20', '2.2')).toThrow(MkoeShapeError);
+  });
+
   it('a queue name twice among the live rows throws; a deleted twin is ignored', () => {
     const twin = { ...QUEUES[3], id: 99 };
     expect(() => mkoeDay(SYNTHETIC, TIME_SERIES, [...QUEUES, twin], '2026-10-20', '2.2')).toThrow(MkoeShapeError);
