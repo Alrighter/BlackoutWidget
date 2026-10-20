@@ -80,15 +80,19 @@ const later = (a: GpvDay, b: GpvDay): boolean => a.dateCreate > b.dateCreate || 
 
 /**
  * The `a_gpv_g` collection, one member per date: for the same date the later `dateCreate`, then the larger id, wins.
- * `hydra:member` `null` or `[]` is no day at all. A member that cannot be dated or has no `dataJson` object is
- * unreadable, never skipped: skipping it would turn a renamed field into a quiet day.
+ * `hydra:member` `null` is no day at all. `[]` is unreadable: the API gives it for a missing or wrong key, an unknown
+ * house or «Не входить», never for a house that passed the `building-groups` check (it is read only after one).
+ * A member that cannot be dated or has no `dataJson` object is unreadable, never skipped: skipping it would turn a
+ * renamed field into a quiet day.
  */
 export function parseGpvCollection(body: unknown): Map<string, GpvDay> {
   if (!isObj(body) || body['@type'] !== 'hydra:Collection' || typeof body['hydra:totalItems'] !== 'number') {
     fail('a_gpv_g: not a collection');
   }
+  const list = members(body, 'a_gpv_g', true);
+  if (body['hydra:member'] !== null && list.length === 0) fail('a_gpv_g: empty member list');
   const byDate = new Map<string, GpvDay>();
-  for (const m of members(body, 'a_gpv_g', true)) {
+  for (const m of list) {
     if (!isObj(m) || typeof m.dateGraph !== 'string' || !DATE_KEY.test(m.dateGraph)) return fail('a_gpv_g: member date');
     if (!isObj(m.dataJson)) return fail('a_gpv_g: member data');
     const day: GpvDay = {

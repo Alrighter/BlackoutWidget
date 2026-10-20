@@ -175,6 +175,31 @@ describe('ToeProvider address lookup', () => {
     expect(await p.listStreets('Тернопіль')).toEqual(['вул. Шевченка', 'вул. Шевченка (2)']);
   });
 
+  it('a numbered namesake keeps its record whatever order the API lists them in (R6)', async () => {
+    // Two «Київ» in the Лосинівська громада: ids 1085 and 24724. The « (2)» goes by id, not by list order.
+    const reversed = JSON.parse(CITIES);
+    reversed['hydra:member'].reverse();
+    for (const cities of [CITIES, JSON.stringify(reversed)]) {
+      const http = fakeHttp({ '/api/pw_cities': () => ok(cities), '/api/pw_streets': () => ok(hydra([])) });
+      const { p } = setup({ http });
+      const labels = await p.listCities();
+      expect(labels.filter((l) => l.startsWith('Київ'))).toEqual(['Київ (Лосинівська громада)', 'Київ (Лосинівська громада) (2)']);
+      await p.listStreets('Київ (Лосинівська громада)');
+      await p.listStreets('Київ (Лосинівська громада) (2)');
+      expect(http.to('pw_streets').map((c) => new URL(c.url).searchParams.get('city.id'))).toEqual(['1085', '24724']);
+    }
+  });
+
+  it('a numbered street keeps its record whatever order the API lists them in (R6)', async () => {
+    const shevchenka = [{ id: 1, name: 'вул. Шевченка' }, { id: 2, name: 'вул. Шевченка' }];
+    for (const streets of [shevchenka, [...shevchenka].reverse()]) {
+      const { p, http } = setup({ http: fakeHttp({ '/api/pw_streets': () => ok(hydra(streets)) }) });
+      expect(await p.listStreets('Тернопіль')).toEqual(['вул. Шевченка', 'вул. Шевченка (2)']);
+      await p.listHouses('Тернопіль', 'вул. Шевченка (2)');
+      expect(http.to('pw-accounts/building-names').map((c) => new URL(c.url).searchParams.get('streetId'))).toEqual(['2']);
+    }
+  });
+
   it('an ambiguous bare city label is not found', async () => {
     const { p } = setup();
     await expectError(p.listStreets('Ланівці'), AddressNotFoundError, NOT_FOUND);
@@ -296,12 +321,23 @@ describe('ToeProvider.fetchSnapshot', () => {
     expect('sourceUpdatedAt' in snap).toBe(false);
   });
 
-  it('an empty member list after a passed check is the quiet day too', async () => {
-    const http = fakeHttp({ '/api/a_gpv_g': () => ok(EMPTY) });
-    const { p } = setup({ http });
-    const snap = await p.fetchSnapshot(YURCHAKA);
+  it('after a passed check, a null member list is the quiet day and [] is unreadable (R4)', async () => {
+    const quiet = setup({ http: fakeHttp({ '/api/a_gpv_g': () => ok(GPV_QUIET) }) });
+    const snap = await quiet.p.fetchSnapshot(YURCHAKA);
     expect(snap.days).toEqual([{ date: '2026-10-17', slots: fill('on') }]);
     expect(snap.note).toBe(TOE_QUIET_NOTE);
+    // `[]` is what a missing or wrong key, an unknown house or «Не входить» get: it contradicts the check.
+    const empty = setup({ http: fakeHttp({ '/api/a_gpv_g': () => ok(EMPTY) }) });
+    await expectError(empty.p.fetchSnapshot(YURCHAKA), ProviderError, UNREADABLE);
+  });
+
+  it('no queue in building-groups while building-names lists a queue is unreadable, never the always-on line (R5)', async () => {
+    const http = fakeHttp({ '/api/pw-accounts/building-groups': () => ok(groups()) });
+    const { p } = setup({ http });
+    await expectError(p.houseLines('Тернопіль', 'вул. Василя Юрчака', '1'), ProviderError, UNREADABLE);
+    await expectError(p.fetchSnapshot(YURCHAKA), ProviderError, UNREADABLE);
+    await expectError(p.fetchSnapshot({ ...YURCHAKA, groupId: 'none' }), ProviderError, UNREADABLE);
+    expect(http.to('a_gpv_g')).toHaveLength(0);
   });
 
   it('adds tomorrow once its member is there; today without one is the quiet day', async () => {

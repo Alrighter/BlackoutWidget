@@ -82,7 +82,7 @@ The user's rule from step 1 applies: when a company answered normally but publis
 | Source | Quiet day (note) | Error (fail closed) |
 |---|---|---|
 | Lviv | The Today item, the archive and its structure are valid, and no revision is dated today | A non-JSON answer, an unexpected item, any group line outside the grammar, a zero-length range (the archive's placeholder item), or a missing group |
-| Ternopil | The house's queues come back first (`building-groups`) and include the saved one, then the schedule answers `null` or `[]` | The house missing from `building-names`, a collection of the wrong shape, or a member without the saved queue (after the check passed) or without exactly 48 keys |
+| Ternopil | The house's queues come back first (`building-groups`) and include the saved one, then the schedule answers `null` | The house missing from `building-names`, `[]` after the check, a collection of the wrong shape, or a member without the saved queue (after the check passed) or without exactly 48 keys |
 | Mykolaiv | `active` is a JSON array with no row for today, and the time-series (48 slots) and queue (12) dictionaries check out | Non-JSON or HTML, a body that is not an array, broken dictionaries, or an unknown slot type |
 | Zhytomyr | None. The site always publishes today's table, and an all-white table is a real «no outages» day (no note) | No table dated today, not 12 × 48 cells, a colour other than the two known, or no update stamp |
 | Chernivtsi | A valid 12 × 48 table dated before today (the operator leaves the last table up). The note names that date | No table and no emergency banner, a broken table, a date after tomorrow, or an unknown cell code |

@@ -20,11 +20,17 @@ const API = 'https://api-poweron.toe.com.ua/api';
 // Never an Origin: a wrong, `null` or `file://` Origin gets a 403 from the operator's Cloudflare rule.
 const GET: SourceInit = { method: 'GET', headers: { Accept: 'application/ld+json' } };
 
-/** A list with its labels, index-aligned: the order the API gave, which `resolveByLabel` needs. */
+/**
+ * A list with its labels, index-aligned as `resolveByLabel` needs, in id order: the « (2)» of a repeated label then
+ * follows the record, so a saved label never moves to a namesake when the API lists them in another order.
+ */
 interface Labeled<T> { items: T[]; labels: string[] }
 interface Place { cityId: number; streetId: number }
 
 const sorted = (labels: string[]): string[] => [...labels].sort((a, b) => a.localeCompare(b, 'uk'));
+const byId = <T extends { id: number }>(items: T[]): T[] => [...items].sort((a, b) => a.id - b.id);
+/** Whether any of these is an hourly-schedule queue («1.2»), by the rule `linesOf` keeps them by. */
+const hasQueue = (queues: string[]): boolean => linesOf(queues)[0].groupId !== NONE_GROUP;
 const cityGroup = (c: ToeCity): string | undefined => (c.otg ? `${c.otg} громада` : undefined);
 const noGroup = (): undefined => undefined;
 /** Rows whose house text is blank cannot be asked about: the API matches the text exactly. */
@@ -150,15 +156,21 @@ export class ToeProvider implements ScheduleProvider {
 
   /**
    * The house's queues from `building-groups`. Without a queue there, the house's row in `building-names` decides:
-   * listed means the always-on line, missing means the house is gone (`[]`). Any odd answer is an error.
+   * listed without a queue means the always-on line, missing means the house is gone (`[]`). Listed with a queue
+   * contradicts the check, so neither answer is trusted. Any odd answer is an error.
    */
   private async houseQueues(place: Place, house: string): Promise<LineInfo[]> {
     const url = `${API}/pw-accounts/building-groups?cityId=${place.cityId}&streetId=${place.streetId}`
       + `&buildingNames=${encodeURIComponent(house)}`;
     const body = await this.http.json(url, GET);
-    const lines = linesOf(this.read('building-groups', () => parseBuildingGroups(body)));
-    if (lines[0].groupId !== NONE_GROUP) return lines;
-    return usable(await this.houseRows(place)).some((r) => r.house === house) ? lines : [];
+    const groups = this.read('building-groups', () => parseBuildingGroups(body));
+    if (hasQueue(groups)) return linesOf(groups);
+    const rows = usable(await this.houseRows(place)).filter((r) => r.house === house);
+    if (rows.length === 0) return [];
+    if (hasQueue(rows.map((r) => r.queue))) {
+      throw this.http.unreadable({ what: 'building-groups', reason: 'no queue while building-names has one' });
+    }
+    return linesOf([]);
   }
 
   /** Emergency, then planned works, running now for this house. A failure here never fails the snapshot. */
@@ -191,7 +203,7 @@ export class ToeProvider implements ScheduleProvider {
   private async cityList(): Promise<Labeled<ToeCity>> {
     if (this.cities) return this.cities;
     const body = await this.http.json(`${API}/pw_cities?pagination=false&otg.id=`, GET);
-    const items = this.read('pw_cities', () => parseCities(body));
+    const items = byId(this.read('pw_cities', () => parseCities(body)));
     this.cities = { items, labels: uniqueLabels(items, (c) => c.name, cityGroup) };
     return this.cities;
   }
@@ -200,7 +212,7 @@ export class ToeProvider implements ScheduleProvider {
     const cached = this.streets.get(cityId);
     if (cached) return cached;
     const body = await this.http.json(`${API}/pw_streets?pagination=false&city.id=${cityId}`, GET);
-    const items = this.read('pw_streets', () => parseStreets(body));
+    const items = byId(this.read('pw_streets', () => parseStreets(body)));
     const list = { items, labels: uniqueLabels(items, (s) => s.name, noGroup) };
     this.streets.set(cityId, list);
     return list;

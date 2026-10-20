@@ -48,9 +48,10 @@ describe('parseGpvCollection / queueSlots', () => {
     expect(queueSlots(day, '4.1')).toEqual(outage(21));
   });
 
-  it('a null or empty member list is no day', () => {
+  it('a null member list is no day; an empty one is unreadable (R4)', () => {
     expect(parseGpvCollection(GPV_QUIET).size).toBe(0);
-    expect(parseGpvCollection({ ...(GPV_QUIET as object), 'hydra:member': [] }).size).toBe(0);
+    // `[]` is the answer for no key, a wrong key, an unknown house or «Не входить»: never a quiet day after the check.
+    expect(() => parseGpvCollection({ ...(GPV_QUIET as object), 'hydra:member': [] })).toThrow(ToeShapeError);
   });
 
   it('strips a #suffix from a queue key', () => {
