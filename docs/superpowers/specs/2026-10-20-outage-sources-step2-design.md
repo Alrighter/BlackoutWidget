@@ -50,6 +50,20 @@ The fix:
 - **`previewLines` and the refresh line check** use `houseLines` when the provider has it.
 - **Existing providers.** DTEK and Volyn do not implement `houseLines`, and their wizard path is unchanged. A test pins that.
 
+### Houses outside the hourly schedule
+
+Lviv and Ternopil mark some houses «Не входить». Zhytomyr writes «В цей час не вимикається…». Some Mykolaiv houses have only ГАВ/СГАВ queues.
+
+These houses get the line «Не входить до ГПВ» (`groupId: 'none'`), exactly as Volyn's «Не залучено до ГПВ» in step 1. The line is always `on`, and current outages still apply to it. So a Mykolaiv house on ГАВ alone still sees a switched-on ГАВ as an emergency.
+
+A house with such a line is never refused in the wizard. For a `'none'` line, the refresh checks only that the house is still in the operator's house list, and reads current outages. It does not read the schedule.
+
+### A saved queue that is gone
+
+Sometimes the operator moves a house to another queue. Ternopil is the sharp case: its schedule call answers only for the house's current queues.
+
+So when the refresh's queue check finds the saved queue gone, the snapshot carries the house's new lines and today `unknown`. The app's existing «лінія змінилась» prompt then fires (`refresh.ts`). A schedule that lacks the saved queue even though the queue check passed is still an error.
+
 ### From saved labels back to operator records
 
 `Address` stores labels only, and saved settings keep that shape. Lviv, Ternopil, Mykolaiv, Zhytomyr and Chernivtsi address their APIs by ids, so each provider maps labels back to records through the same lists the wizard showed. It caches them for the run.
@@ -68,7 +82,7 @@ The user's rule from step 1 applies: when a company answered normally but publis
 | Source | Quiet day (note) | Error (fail closed) |
 |---|---|---|
 | Lviv | The Today item, the archive and its structure are valid, and no revision is dated today | A non-JSON answer, an unexpected item, any group line outside the grammar, a zero-length range (the archive's placeholder item), or a missing group |
-| Ternopil | The house's queues come back first (`building-groups`), then the schedule answers `null` or `[]` | Empty queues for the saved house, a collection of the wrong shape, or a member without the saved queue or without exactly 48 keys |
+| Ternopil | The house's queues come back first (`building-groups`) and include the saved one, then the schedule answers `null` or `[]` | The house missing from `building-names`, a collection of the wrong shape, or a member without the saved queue (after the check passed) or without exactly 48 keys |
 | Mykolaiv | `active` is a JSON array with no row for today, and the time-series (48 slots) and queue (12) dictionaries check out | Non-JSON or HTML, a body that is not an array, broken dictionaries, or an unknown slot type |
 | Zhytomyr | None. The site always publishes today's table, and an all-white table is a real «no outages» day (no note) | No table dated today, not 12 × 48 cells, a colour other than the two known, or no update stamp |
 | Chernivtsi | A valid 12 × 48 table dated before today (the operator leaves the last table up). The note names that date | No table and no emergency banner, a broken table, a date after tomorrow, or an unknown cell code |
@@ -101,7 +115,7 @@ All six use plain HTTPS from the main process through Electron's `net`, like Vol
   - There is no «maybe» in this source.
 - **Address.** `pw_cities` (one call), then `pw_streets`, then `pw_accounts`.
   - Accept both the array and the Hydra shape.
-  - Dedupe accounts by `buildingName`. A house's lines are its distinct `chergGpv` values minus «Не входить».
+  - Dedupe accounts by `buildingName`. A house's lines are its distinct `chergGpv` values minus «Не входить». If only «Не входить» is left, the house gets the `'none'` line.
   - Read `pw_accounts` only for the fields named here.
   - Namesake settlements get « (… громада)». Rows from other oblasts (`codeOtg` not `UA46…`) are dropped.
 - **Current outage.** `pw_accidents` for the saved city and street, with the house matched in `buildingNames`.
@@ -125,7 +139,7 @@ All six use plain HTTPS from the main process through Electron's `net`, like Vol
   - Streets come from `pw_streets`.
   - Houses come from `pw-accounts/building-names` (house text kept byte for byte; the API matches it exactly).
   - Lines come from `building-groups` through `houseLines`.
-  - «Не входить» and empty mean not in the schedule.
+  - «Не входить» and empty mean not in the schedule: the `'none'` line.
 - **Every refresh.** The `building-groups` precheck runs first: it is both the fail-closed guard and the line-change check.
 - **Current outage.** `pw_accidents` (emergency) and `pw_accident_planeds` (planned) for the saved city and street, with the house in `buildingNames`.
   - Only rows running now, in Kyiv time, count.
@@ -161,7 +175,7 @@ All six use plain HTTPS from the main process through Electron's `net`, like Vol
   - The settlement list (19 РЕМ, 1,758 settlements) is bundled, with its ids. Namesakes get « (… РЕМ)».
   - Use household rows. Legal-entity rows count only when a house has no household row.
   - A house's lines are its distinct «N.M».
-  - «В цей час не вимикається…» means not in the schedule.
+  - «В цей час не вимикається…» means not in the schedule: the `'none'` line.
 - **Current outage.** It is best effort, through the inneti API (`pw_accidents`, `pw_accident_planeds`), joined by name: РЕМ, settlement, street, house.
   - `switchSubReason` 0 → emergency, 1 → other, 2 ignored. Planned works running now → planned.
   - Its failure never fails the snapshot.
@@ -220,6 +234,8 @@ All six use plain HTTPS from the main process through Electron's `net`, like Vol
 ## Calls made (mine, not the user's)
 
 - CEK is read from cek.dp.ua, not from DTEK or YASNO, which carry a different schedule under the same numbers.
+- Houses outside the hourly schedule get the always-on line «Не входить до ГПВ», as Volyn's «Не залучено» does.
+- A saved queue the operator has moved shows as «лінія змінилась» with today `unknown`, rather than as an error.
 - Zhytomyr's red cells are `off`, as every aggregator reads them. The legend says «off when Ukrenergo applies the limits», and the published table is that application.
 - A bare CEK «Черга N» becomes two lines, and the previews decide.
 - Chernivtsi's emergency banner means an emergency for everyone, with today `unknown`.
