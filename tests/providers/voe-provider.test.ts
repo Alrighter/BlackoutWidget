@@ -270,12 +270,18 @@ describe('VoeProvider soft failures in fetchSnapshot', () => {
     expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^voe /), expect.anything());
   });
 
-  it('keeps the saved line when the queue form fails', async () => {
-    const { p, log } = setup({ http: fakeHttp({ [CHERGA_URL]: () => failStatus(502) }) });
+  it('keeps the saved line when the queue form rejects', async () => {
+    const { p, log } = setup({ http: fakeHttp({ [CHERGA_URL]: () => new Error('ECONNRESET') }) });
     const snap = await p.fetchSnapshot(KOVEL);
     expect(snap.lines).toEqual([{ index: 1, groupId: '6.1', label: 'Черга 6.1' }]);
     expect(snap.currentOutage?.kind).toBe('emergency');
     expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^voe /), expect.anything());
+  });
+
+  it('keeps the saved line when the queue form returns an error status', async () => {
+    const { p } = setup({ http: fakeHttp({ [CHERGA_URL]: () => failStatus(502) }) });
+    const snap = await p.fetchSnapshot(KOVEL);
+    expect(snap.lines).toEqual([{ index: 1, groupId: '6.1', label: 'Черга 6.1' }]);
   });
 
   it('keeps the saved line when the table has no row for the house', async () => {
