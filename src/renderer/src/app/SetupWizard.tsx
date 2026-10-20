@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, ty
 import type { RendererApi } from '../../../shared/ipc';
 import { dayCells } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
-import { providerRegion, providerShortName } from '../../../shared/providers';
+import { providerRegion, providerShortName, providerSingleCity } from '../../../shared/providers';
 import type { DaySchedule, HouseInfo, LineInfo, WidgetStyle } from '../../../shared/types';
 import { Autocomplete, matches } from './Autocomplete';
 import { DayStrip } from './DayStrip';
@@ -168,8 +168,10 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   }, [step]);
 
   const providers = useLoad(() => api.listProviders(), 'providers');
+  // Only a lone provider is preselected; with several the person chooses.
   useEffect(() => {
-    if (!providerId && providers.data?.length) setProviderId(providers.data[0].id);
+    if (!providerId && providers.data?.length === 1) pickProvider(providers.data[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providers.data, providerId]);
 
   const cities = useLoad(() => (step === 'city' && providerId ? api.listCities(providerId) : Promise.resolve([] as string[])),
@@ -194,7 +196,9 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
 
   // During an outage the list holds only the outage's queues, so the line must always be chosen explicitly.
   const needsLineStep = houseLines.length > 1 || houseOutage;
-  const order: Step[] = ['provider', 'city', 'street', 'house', ...(needsLineStep ? ['line' as const] : []), 'style', 'done'];
+  // A single-city provider (Kyiv) has no city to choose, so the step is passed over.
+  const singleCity = providerId ? providerSingleCity(providerId) : undefined;
+  const order: Step[] = ['provider', ...(singleCity ? [] : ['city' as const]), 'street', 'house', ...(needsLineStep ? ['line' as const] : []), 'style', 'done'];
   const back = () => setStep(order[Math.max(0, order.indexOf(step) - 1)]);
   const next = async () => {
     if (step !== 'done') {
@@ -217,6 +221,14 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   const resetBelow = (from: 'city' | 'street') => {
     if (from === 'city') setStreet(null);
     setHouse(null); setLine(null); setHouseLines([]); setHouseOutage(false); setHouseQuery('');
+  };
+  /** A different provider drops everything chosen below it: a city of one region is never sent to another. */
+  const pickProvider = (id: string) => {
+    if (id !== providerId) {
+      resetBelow('city');
+      setCity(providerSingleCity(id) ?? null);
+    }
+    setProviderId(id);
   };
   const pickHouse = (h: HouseInfo) => { setHouse(h.house); setLine(null); setHouseLines(h.lines); setHouseOutage(!!h.outageActive); };
 
@@ -264,7 +276,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                   const region = providerRegion(p.id);
                   return (
                     <label key={p.id} className="wz-opt">
-                      <input type="radio" name="wz-provider" checked={providerId === p.id} onChange={() => setProviderId(p.id)} />
+                      <input type="radio" name="wz-provider" checked={providerId === p.id} onChange={() => pickProvider(p.id)} />
                       <span className="wz-opt-text">
                         <span className="wz-opt-name">{region ?? p.displayName}</span>
                         {region && <span className="wz-opt-sub" title={p.displayName} data-capture="provider-sub">{p.displayName}</span>}
@@ -287,8 +299,11 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
             <>
               <div className="wz-chips"><span className="sv-chip wz-chip" title={city ?? ''}>{city}</span></div>
               <Status res={streets} api={api} providerId={providerId}>{list => (
-                <Autocomplete label="Вулиця" options={list} value={street}
-                  onChange={v => { if (v !== street) resetBelow('street'); setStreet(v); }} />
+                <>
+                  <Autocomplete label="Вулиця" options={list} value={street}
+                    onChange={v => { if (v !== street) resetBelow('street'); setStreet(v); }} />
+                  {list.length === 0 && <Note text={`Для цього населеного пункту немає адрес у ${short(providerId)}`} />}
+                </>
               )}</Status>
             </>
           )}
