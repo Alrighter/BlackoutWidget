@@ -151,7 +151,12 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   const [house, setHouse] = useState<string | null>(null);
   const [line, setLine] = useState<LineInfo | null>(null);
   const [style, setStyle] = useState<WidgetStyle>(widgetStyle);
-  const [houseLines, setHouseLines] = useState<LineInfo[]>([]);
+  /** The picked house's lines; `null` while a pending house's lines are loading (or failed: see `linesError`). */
+  const [houseLines, setHouseLines] = useState<LineInfo[] | null>([]);
+  const [linesError, setLinesError] = useState<string | null>(null);
+  const [linesAttempt, setLinesAttempt] = useState(0);
+  /** The picked house, when its lines come from `api.houseLines`. */
+  const [pendingHouse, setPendingHouse] = useState<string | null>(null);
   const [houseOutage, setHouseOutage] = useState(false);
   const [houseQuery, setHouseQuery] = useState('');
   const [saving, setSaving] = useState(false);
@@ -185,25 +190,39 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
     () => (step === 'line' && providerId && city && street && house ? api.previewLines(providerId, city, street, house) : Promise.resolve([] as { line: LineInfo; today: DaySchedule | null }[])),
     `p:${step === 'line'}:${providerId}:${city}:${street}:${house}`);
 
-  const noLines = step === 'house' && house !== null && houseLines.length === 0;
+  // A pending house's lines are asked once it is picked; an answer for a house no longer picked is dropped.
+  useEffect(() => {
+    if (!pendingHouse || !providerId || !city || !street) return;
+    let alive = true;
+    setHouseLines(null); setLinesError(null);
+    api.houseLines(providerId, city, street, pendingHouse).then(
+      lines => { if (alive) setHouseLines(lines); },
+      e => { if (alive) setLinesError(unwrapIpcError(e).message); },
+    );
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingHouse, linesAttempt]);
+
+  const lineCount = houseLines?.length ?? 0;
+  const noLines = step === 'house' && house !== null && houseLines !== null && lineCount === 0;
   const canNext =
     step === 'provider' ? !!providerId
     : step === 'city' ? !!city
     : step === 'street' ? !!street
-    : step === 'house' ? house !== null && !noLines
+    : step === 'house' ? house !== null && houseLines !== null && !noLines
     : step === 'line' ? !!line
     : step === 'style' ? true
     : !saving;
 
   // During an outage the list holds only the outage's queues, so the line must always be chosen explicitly.
-  const needsLineStep = houseLines.length > 1 || houseOutage;
+  const needsLineStep = lineCount > 1 || houseOutage;
   // A single-city provider (Kyiv) has no city to choose, so the step is passed over.
   const singleCity = providerId ? providerSingleCity(providerId) : undefined;
   const order: Step[] = ['provider', ...(singleCity ? [] : ['city' as const]), 'street', 'house', ...(needsLineStep ? ['line' as const] : []), 'style', 'done'];
   const back = () => setStep(order[Math.max(0, order.indexOf(step) - 1)]);
   const next = async () => {
     if (step !== 'done') {
-      if (step === 'house' && houseLines.length === 1 && !houseOutage) setLine(houseLines[0]);
+      if (step === 'house' && houseLines?.length === 1 && !houseOutage) setLine(houseLines[0]);
       setStep(order[order.indexOf(step) + 1]);
       return;
     }
@@ -221,7 +240,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
 
   const resetBelow = (from: 'city' | 'street') => {
     if (from === 'city') setStreet(null);
-    setHouse(null); setLine(null); setHouseLines([]); setHouseOutage(false); setHouseQuery('');
+    setHouse(null); setLine(null); setHouseLines([]); setLinesError(null); setPendingHouse(null); setHouseOutage(false); setHouseQuery('');
   };
   /** A different provider drops everything chosen below it: a city of one region is never sent to another. */
   const pickProvider = (id: string) => {
@@ -231,7 +250,13 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
     }
     setProviderId(id);
   };
-  const pickHouse = (h: HouseInfo) => { setHouse(h.house); setLine(null); setHouseLines(h.lines); setHouseOutage(!!h.outageActive); };
+  const pickHouse = (h: HouseInfo) => {
+    // The same pending house again: its lines are already loading or loaded.
+    if (h.linesPending && h.house === house) return;
+    setHouse(h.house); setLine(null); setHouseOutage(!!h.outageActive); setLinesError(null);
+    setHouseLines(h.linesPending ? null : h.lines);
+    setPendingHouse(h.linesPending ? h.house : null);
+  };
 
   const num = RAIL.findIndex(r => r.step === step) + 1;
   const place = `${city}, ${street}, ${house}`;
@@ -266,7 +291,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
       <main className="wz-main" data-capture="wz-main">
         <div className="wz-count">{`Крок ${num} з 7`}</div>
         <h2 className="wz-title" ref={titleRef} tabIndex={-1}>{TITLES[step]}</h2>
-        <p className="wz-desc" data-capture="wz-desc">{subline(step, city, houseLines.length, providerId)}</p>
+        <p className="wz-desc" data-capture="wz-desc">{subline(step, city, lineCount, providerId)}</p>
 
         <div className="wz-body" data-capture="wz-body">
           {step === 'provider' && (
@@ -331,6 +356,12 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                     {found.length === 0 && <p className="wz-muted">Нічого не знайдено</p>}
                     {house !== null && houseOutage && <Note text={OUTAGE_NOTE} />}
                     {/* During an outage an empty list is expected to be temporary; the note above says what to do. */}
+                    {house !== null && houseLines === null && !linesError && <p className="wz-muted" role="status" aria-live="polite">Завантаження ліній…</p>}
+                    {linesError && (
+                      <Note text={linesError}>
+                        <button className="sv-btn" onClick={() => setLinesAttempt(a => a + 1)}>Спробувати ще раз</button>
+                      </Note>
+                    )}
                     {noLines && !houseOutage && <Note text={`Для цього будинку ${short(providerId)} не публікує графік відключень`} />}
                   </>
                 );

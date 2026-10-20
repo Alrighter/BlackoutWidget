@@ -1,4 +1,4 @@
-import { nameKey } from './names';
+import { nameKey } from '../names';
 import data from './settlements.json';
 
 type Kind = 'м' | 'с-ще' | 'с';

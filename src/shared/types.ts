@@ -2,7 +2,11 @@ export type Slot = 'on' | 'off' | 'maybe-off' | 'unknown';
 export interface DaySchedule { date: string /* YYYY-MM-DD Kyiv */; slots: Slot[] /* 48 */ }
 export interface LineInfo { index: number; groupId: string; label: string }
 /** `outageActive`: the source reports a current outage for the house, so its `lines` may list only the affected queues. */
-export interface HouseInfo { house: string; lines: LineInfo[]; outageActive: boolean }
+export interface HouseInfo {
+  house: string; lines: LineInfo[]; outageActive: boolean;
+  /** `lines` is not final: the source gives a house's lines only through `houseLines`, asked once the house is picked. */
+  linesPending?: boolean;
+}
 export interface Address { providerId: string; city: string; street: string; house: string; lineIndex: number; groupId: string }
 /** `groups`: the queues the outage applies to (DTEK `sub_type_reason` while an outage is active); empty/absent = unknown. */
 export interface CurrentOutage { kind: 'emergency' | 'planned' | 'other'; text: string; start?: string; end?: string; groups?: string[] }

@@ -41,14 +41,19 @@ const STYLES: WidgetStyle[] = ['compact', 'ring', 'timeline'];
 const isDragPhase = (v: unknown): v is DragPhase => v === 'start' || v === 'move' || v === 'end';
 const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/** The house's lines: the provider's own answer when it has one, else the house's entry in the list. */
+export async function houseLinesOf(provider: ScheduleProvider, city: string, street: string, house: string): Promise<LineInfo[]> {
+  if (provider.houseLines) return provider.houseLines(city, street, house);
+  return (await provider.listHouses(city, street)).find(h => h.house === house)?.lines ?? [];
+}
+
 export async function previewLines(
   provider: ScheduleProvider, city: string, street: string, house: string, now = new Date(),
 ): Promise<{ line: LineInfo; today: DaySchedule | null }[]> {
-  const info = (await provider.listHouses(city, street)).find(h => h.house === house);
-  if (!info) return [];
+  const lines = await houseLinesOf(provider, city, street, house);
   const today = kyivDateKey(now);
   const out: { line: LineInfo; today: DaySchedule | null }[] = [];
-  for (const line of info.lines) {
+  for (const line of lines) {
     const snap = await provider.fetchSnapshot({
       providerId: provider.id, city, street, house, lineIndex: line.index, groupId: line.groupId,
     });
@@ -74,6 +79,8 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.listCities, (id: string) => markCaptcha(provider(id).listCities()));
   handle(IPC.listStreets, (id: string, city: string) => markCaptcha(provider(id).listStreets(city)));
   handle(IPC.listHouses, (id: string, city: string, street: string) => markCaptcha(provider(id).listHouses(city, street)));
+  handle(IPC.houseLines, (id: string, city: string, street: string, house: string) =>
+    markCaptcha(houseLinesOf(provider(id), city, street, house)));
   handle(IPC.previewLines, (id: string, city: string, street: string, house: string) =>
     markCaptcha(previewLines(provider(id), city, street, house)));
   handle(IPC.saveAddress, (a: Address) => deps.service.setAddress(a));

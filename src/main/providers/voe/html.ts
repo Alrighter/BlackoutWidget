@@ -1,6 +1,6 @@
 import type { CurrentOutage, HouseInfo, LineInfo } from '../../../shared/types';
 import { kyivDateKey, parseDtekDateTime } from '../../../shared/time';
-import { normHouse, sameName } from './names';
+import { normHouse, sameName } from '../names';
 
 export interface QueueRow { raion: string; settlement: string; street: string; houses: string[]; gpv: string /* '6.1' or 'none' */ }
 export interface OutageRow {

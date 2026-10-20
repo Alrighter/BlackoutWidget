@@ -29,9 +29,21 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     name: 'ДТЕК Київські регіональні електромережі', shortName: 'ДТЕК', region: 'Київська область',
     siteUrl: 'https://www.dtek-krem.com.ua/ua/shutdowns',
   },
+  'loe': {
+    name: 'Львівобленерго', shortName: 'Львівобленерго', region: 'Львівська область',
+    siteUrl: 'https://poweron.loe.lviv.ua/',
+  },
+  'mkoe': {
+    name: 'Миколаївобленерго', shortName: 'Миколаївобленерго', region: 'Миколаївська область',
+    siteUrl: 'https://off.energy.mk.ua/',
+  },
   'dtek-oem': {
     name: 'ДТЕК Одеські електромережі', shortName: 'ДТЕК', region: 'Одеська область',
     siteUrl: 'https://www.dtek-oem.com.ua/ua/shutdowns',
+  },
+  'toe': {
+    name: 'Тернопільобленерго', shortName: 'Тернопільобленерго', region: 'Тернопільська область',
+    siteUrl: 'https://poweron.toe.com.ua/',
   },
 };
 

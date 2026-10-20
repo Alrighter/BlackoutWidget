@@ -1,0 +1,205 @@
+{
+ "@context": "/api/contexts/PwAccident",
+ "@id": "/api/pw_accidents",
+ "@type": "hydra:Collection",
+ "hydra:member": [
+  {
+   "@id": "/api/pw_accidents/316880889",
+   "@type": "PwAccident",
+   "id": 316880889,
+   "code_otg": "18",
+   "city": {
+    "@id": "/api/pw_cities/352",
+    "@type": "PwCity",
+    "id": 352,
+    "name": "Вишневе",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/43277",
+    "@type": "PwStreet",
+    "id": 43277,
+    "city": {
+     "@id": "/api/pw_cities/352",
+     "@type": "PwCity",
+     "id": 352,
+     "name": "Вишневе",
+     "codeOtg": ""
+    },
+    "name": "вулиця Десантників"
+   },
+   "dateEvent": "2026-10-20T11:15:20+00:00",
+   "datePlanIn": "2026-10-20T20:00:00+00:00",
+   "koment": "По операційній безпеці",
+   "switchSubReason": 1,
+   "otg": {
+    "@id": "/api/pw_otgs/18",
+    "@type": "PwOtg",
+    "id": 18,
+    "code": "18",
+    "name": "Черняхівський РЕМ"
+   },
+   "buildingNames": "11, 12, 15, 16, 17, 18, 2, 20, 26, 27, 28, 3, 30, 32, 34, 36, 7, 8, 9",
+   "typeOff": 1
+  },
+  {
+   "@id": "/api/pw_accidents/316880890",
+   "@type": "PwAccident",
+   "id": 316880890,
+   "code_otg": "18",
+   "city": {
+    "@id": "/api/pw_cities/352",
+    "@type": "PwCity",
+    "id": 352,
+    "name": "Вишневе",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/43278",
+    "@type": "PwStreet",
+    "id": 43278,
+    "city": {
+     "@id": "/api/pw_cities/352",
+     "@type": "PwCity",
+     "id": 352,
+     "name": "Вишневе",
+     "codeOtg": ""
+    },
+    "name": "вулиця Мельнична"
+   },
+   "dateEvent": "2026-10-20T11:15:20+00:00",
+   "datePlanIn": "2026-10-20T20:00:00+00:00",
+   "koment": "По операційній безпеці",
+   "switchSubReason": 1,
+   "otg": {
+    "@id": "/api/pw_otgs/18",
+    "@type": "PwOtg",
+    "id": 18,
+    "code": "18",
+    "name": "Черняхівський РЕМ"
+   },
+   "buildingNames": "10, 13, 14, 16, 18, 2, 20, 24, 26, 3, 4, 5, 6, 7, 8, 8а, 9",
+   "typeOff": 1
+  },
+  {
+   "@id": "/api/pw_accidents/316880891",
+   "@type": "PwAccident",
+   "id": 316880891,
+   "code_otg": "18",
+   "city": {
+    "@id": "/api/pw_cities/352",
+    "@type": "PwCity",
+    "id": 352,
+    "name": "Вишневе",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/43279",
+    "@type": "PwStreet",
+    "id": 43279,
+    "city": {
+     "@id": "/api/pw_cities/352",
+     "@type": "PwCity",
+     "id": 352,
+     "name": "Вишневе",
+     "codeOtg": ""
+    },
+    "name": "вулиця Шевченка"
+   },
+   "dateEvent": "2026-10-20T11:15:20+00:00",
+   "datePlanIn": "2026-10-20T20:00:00+00:00",
+   "koment": "По операційній безпеці",
+   "switchSubReason": 1,
+   "otg": {
+    "@id": "/api/pw_otgs/18",
+    "@type": "PwOtg",
+    "id": 18,
+    "code": "18",
+    "name": "Черняхівський РЕМ"
+   },
+   "buildingNames": "2, 3",
+   "typeOff": 1
+  }
+ ],
+ "hydra:totalItems": 53,
+ "hydra:view": {
+  "@id": "/api/pw_accidents?switchSubReason=1&page=1",
+  "@type": "hydra:PartialCollectionView",
+  "hydra:first": "/api/pw_accidents?switchSubReason=1&page=1",
+  "hydra:last": "/api/pw_accidents?switchSubReason=1&page=2",
+  "hydra:next": "/api/pw_accidents?switchSubReason=1&page=2"
+ },
+ "hydra:search": {
+  "@type": "hydra:IriTemplate",
+  "hydra:template": "/api/pw_accidents{?city.id,city.id[],street.id,street.id[],otg.id,otg.id[],typeOff,typeOff[],switchSubReason,switchSubReason[],customFilter}",
+  "hydra:variableRepresentation": "BasicRepresentation",
+  "hydra:mapping": [
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "city.id",
+    "property": "city.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "city.id[]",
+    "property": "city.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "street.id",
+    "property": "street.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "street.id[]",
+    "property": "street.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "otg.id",
+    "property": "otg.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "otg.id[]",
+    "property": "otg.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "typeOff",
+    "property": "typeOff",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "typeOff[]",
+    "property": "typeOff",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "switchSubReason",
+    "property": "switchSubReason",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "switchSubReason[]",
+    "property": "switchSubReason",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "customFilter",
+    "property": "customFilter",
+    "required": false
+   }
+  ]
+ }
+}

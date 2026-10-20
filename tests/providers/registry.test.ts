@@ -1,6 +1,6 @@
 import { createProviders } from '../../src/main/providers/registry';
 import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from '../../src/main/providers/dtek/page-scripts';
-import { providerSiteUrl } from '../../src/shared/providers';
+import { PROVIDERS, providerSiteUrl } from '../../src/shared/providers';
 import { silentLogger } from '../../src/main/log';
 import type { SessionOptions } from '../../src/main/providers/browser-session';
 
@@ -14,8 +14,20 @@ function setup() {
   const providers = createProviders(o => { made.push(o); return session as any; }, silentLogger, http);
   return { made, session, http, providers };
 }
-test('providers come out in a fixed order', () => {
-  expect(setup().providers.map(p => p.id)).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
+test('providers come out in the card order of PROVIDERS', () => {
+  const ids = setup().providers.map(p => p.id);
+  expect(ids).toEqual(Object.keys(PROVIDERS));
+  expect(ids).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'loe', 'mkoe', 'dtek-oem', 'toe']);
+});
+test('DTEK and Volyn do not implement houseLines; Ternopil and Mykolaiv do', () => {
+  const providers = setup().providers;
+  const old = providers.filter(p => p.id === 'voe' || p.id.startsWith('dtek-'));
+  expect(old.map(p => p.id)).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
+  for (const p of old) expect(p.houseLines).toBeUndefined();
+  expect(typeof providers.find(p => p.id === 'toe')?.houseLines).toBe('function');
+  expect(typeof providers.find(p => p.id === 'mkoe')?.houseLines).toBe('function');
+  // Lviv lists every house's queues with the houses.
+  expect(providers.find(p => p.id === 'loe')?.houseLines).toBeUndefined();
 });
 test('each DTEK site gets its own url, partition and host', () => {
   const { made, providers } = setup();

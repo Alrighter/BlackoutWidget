@@ -6,7 +6,7 @@ import type {
 export const IPC = {
   getState: 'state:get', state: 'state:changed', background: 'widget:background',
   listProviders: 'providers:list', listCities: 'addr:cities', listStreets: 'addr:streets', listHouses: 'addr:houses',
-  previewLines: 'addr:preview-lines', saveAddress: 'settings:address', setWidgetStyle: 'settings:style',
+  previewLines: 'addr:preview-lines', houseLines: 'addr:house-lines', saveAddress: 'settings:address', setWidgetStyle: 'settings:style',
   setAutostart: 'settings:autostart', refreshNow: 'refresh:now', solveCaptcha: 'captcha:solve',
   openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag', navigate: 'window:navigate',
   widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
@@ -53,6 +53,8 @@ export interface RendererApi {
   listCities(providerId: string): Promise<string[]>;
   listStreets(providerId: string, city: string): Promise<string[]>;
   listHouses(providerId: string, city: string, street: string): Promise<HouseInfo[]>;
+  /** The picked house's lines, for a house marked `linesPending`. */
+  houseLines(providerId: string, city: string, street: string, house: string): Promise<LineInfo[]>;
   previewLines(providerId: string, city: string, street: string, house: string): Promise<{ line: LineInfo; today: DaySchedule | null }[]>;
   saveAddress(a: Address): Promise<void>;
   setWidgetStyle(s: WidgetStyle): Promise<void>;
