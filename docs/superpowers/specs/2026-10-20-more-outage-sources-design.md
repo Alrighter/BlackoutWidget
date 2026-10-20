@@ -73,7 +73,7 @@ Id `voe`, display name «Волиньобленерго», region card «Вол�
   - `GET https://api-voe-poweron.inneti.net/api/archive_gpv_graphs?dateGraph[after]=<today, Kyiv>` lists the published images with their dates.
   - Take the newest entry for each `dateGraph`. Key by date, never by the `pw_gpv_image_today` option, which can point at an older day.
   - The `dateCreate`/`dateGraph` values are Kyiv local time mislabelled `+00:00`. `imageUrl.uploadTimestamp` is true UTC. `sourceUpdatedAt` comes from `uploadTimestamp`, shown in the same style as DTEK's.
-- **Reading the image.** Download the PNG only when its URL changed since the last fetch. Decode it with `nativeImage`, which needs no new native dependency.
+- **Reading the image.** Download the PNG only when its URL changed since the last fetch. Decode it with a small in-house PNG reader on `node:zlib` (8-bit RGB or RGBA, not interlaced, which is what the operator publishes; anything else fails closed). Revised while planning: `nativeImage` returns pixels in a platform-specific channel order and cannot run under vitest, so the same reader serves the app and the tests. No dependency is added.
   - Geometry, measured on the 1750×2250 image:
     - time columns: x = 176 … 1726;
     - top-half rows: y = 417 … 1131;
@@ -163,10 +163,10 @@ These replace the fixed texts:
 
 ## Constraints
 
-- The stack stays as is: Electron 44, TypeScript, React 19, vitest. No new runtime dependencies. PNG decoding uses Electron's `nativeImage`. HTML tables are parsed without a DOM library.
+- The stack stays as is: Electron 44, TypeScript, React 19, vitest. No new runtime dependencies. PNG decoding uses an in-house reader on `node:zlib`. HTML tables are parsed without a DOM library.
 - Main-process network code goes through Electron's `net`, so the system proxy applies. There is no CORS on these sites, so nothing runs in the renderer.
 - Tests run offline against recorded fixtures: the two Volyn images, a trimmed `cherga` table, a `chomu-nemaie` table and an archive response. The saved responses are in `docs/superpowers/research/2026-10-20-outage-sources/volyn-raw/`: `cherga-kovel-all.html`, `chomu-nemaie-kovel.html` (a day with one emergency and one planned outage) and `archive-page1.json`.
-- **Volyn encoding.** The HTML pages declare UTF-8, but the saved table text decodes cleanly only as windows-1251. The decoder is chosen from the live response bytes and pinned by a test on the saved fixtures. The request bodies stay UTF-8, which is what the research found to work.
+- **Volyn encoding.** The responses are UTF-8, and so are the request bodies. A test on the saved fixtures pins that «Ковель» reads back correctly. Cyrillic typed into Git Bash commands gets mangled, so live probes go through Node scripts, not shell literals.
 - Smoke scripts must never touch the person's real app data (`%APPDATA%\Blackout Widget`); they use a temporary user-data folder, as `smoke-dtek` does today.
 - Saved settings keep their shape: `Address.providerId` simply takes the new ids.
 
