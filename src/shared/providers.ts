@@ -33,6 +33,10 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     name: 'Львівобленерго', shortName: 'Львівобленерго', region: 'Львівська область',
     siteUrl: 'https://poweron.loe.lviv.ua/',
   },
+  'mkoe': {
+    name: 'Миколаївобленерго', shortName: 'Миколаївобленерго', region: 'Миколаївська область',
+    siteUrl: 'https://off.energy.mk.ua/',
+  },
   'dtek-oem': {
     name: 'ДТЕК Одеські електромережі', shortName: 'ДТЕК', region: 'Одеська область',
     siteUrl: 'https://www.dtek-oem.com.ua/ua/shutdowns',
