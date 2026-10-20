@@ -12,6 +12,7 @@ import {
 } from './schedule';
 
 const NAME = 'Львівобленерго';
+const TEXTS = sourceTexts(NAME);
 export const LOE_QUIET_NOTE = quietNote(NAME, 'опублікувало');
 
 /** The CMS with the schedule text, and the address and outage API. */
@@ -20,6 +21,8 @@ const API = 'https://power-api.loe.lviv.ua/api';
 const GET: SourceInit = { method: 'GET', headers: { Accept: 'application/ld+json' } };
 /** One burst of requests once got a Cloudflare 429: every LOE request starts at least this long after the last one. */
 const MIN_GAP_MS = 1500;
+/** Besides 429 (HttpSource): Cloudflare's challenge (403) and a busy origin (503) are the site not answering us. */
+const NOT_ANSWERING = new Set([403, 503]);
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -160,7 +163,8 @@ export interface LoeDeps {
 
 /**
  * Львівобленерго over plain HTTPS: the schedule text of the CMS (Today, Tomorrow and the archive), the address directory
- * with every house's queues, and current outages. The schedule is oblast-wide, so the address side is soft on refresh.
+ * with every house's queues, and current outages. The schedule is oblast-wide, so on refresh the address side is soft
+ * for a queue line; for the 'none' line it is the only proof and stays hard.
  */
 export class LoeProvider implements ScheduleProvider {
   readonly id = 'loe';
@@ -178,7 +182,7 @@ export class LoeProvider implements ScheduleProvider {
     this.now = deps.now ?? (() => new Date());
     this.clock = deps.clock ?? Date.now;
     this.http = new HttpSource({
-      fetch: deps.fetch, isOnline: deps.isOnline, log: this.log, tag: 'loe', texts: sourceTexts(NAME),
+      fetch: deps.fetch, isOnline: deps.isOnline, log: this.log, tag: 'loe', texts: TEXTS,
       minGapMs: MIN_GAP_MS, sleep: deps.sleep, clock: deps.clock,
     });
   }
@@ -245,7 +249,9 @@ export class LoeProvider implements ScheduleProvider {
 
   /**
    * The saved house's queues from its own accounts (`buildingName` matches exactly). A label or house the operator no
-   * longer has is AddressNotFoundError. Any other failure only costs the check: the saved line stays (undefined here).
+   * longer has is AddressNotFoundError. For a queue line any other failure only costs the check: the oblast-wide
+   * schedule still holds, and the saved line stays (undefined here). The 'none' line has no schedule behind it, so
+   * there the check is the only proof and its failure fails the snapshot.
    */
   private async houseCheck(address: Address): Promise<{ place: Place; lines: LineInfo[] } | undefined> {
     try {
@@ -256,7 +262,7 @@ export class LoeProvider implements ScheduleProvider {
       if (rows.length === 0) throw addressNotFound(NAME);
       return { place, lines: linesOf(rows.map((r) => r.queue)) };
     } catch (e) {
-      if (e instanceof AddressNotFoundError) throw e;
+      if (e instanceof AddressNotFoundError || address.groupId === NONE_GROUP) throw e;
       this.log.warn('loe fetchSnapshot: address check failed, keeping the saved line', loggable(e));
       return undefined;
     }
@@ -271,13 +277,13 @@ export class LoeProvider implements ScheduleProvider {
     const dates = [today, tomorrow];
     const revisions: LoeRevision[] = [];
     for (const [id, name] of [[238, 'Today'], [256, 'Tomorrow']] as const) {
-      const body = await this.http.json(`${CMS}/menu_items/${id}`, GET);
+      const body = await this.get(`${CMS}/menu_items/${id}`);
       const revision = this.read(`menu_items/${id}`, () => itemRevision(menuItemHtml(body, name)));
       if (revision) revisions.push(revision);
     }
     if (!revisions.some((r) => r.date === today)) {
       // Cloudflare keeps the menu up to 2 h: the time makes the URL new.
-      const body = await this.http.json(`${CMS}/menus?page=1&type=photo-grafic&_=${this.clock()}`, GET);
+      const body = await this.get(`${CMS}/menus?page=1&type=photo-grafic&_=${this.clock()}`);
       for (const html of this.read('menus', () => archiveHtmls(body))) {
         const revision = this.read('menus', () => archiveRevision(html, dates));
         if (revision) revisions.push(revision);
@@ -299,7 +305,7 @@ export class LoeProvider implements ScheduleProvider {
   /** The outage running now for this house. A failure here never fails the snapshot. */
   private async currentOutage(place: Place, house: string, now: Date): Promise<CurrentOutage | undefined> {
     try {
-      const body = await this.http.json(`${API}/pw_accidents?page=1&city.id=${place.cityId}&street.id=${place.streetId}`, GET);
+      const body = await this.get(`${API}/pw_accidents?page=1&city.id=${place.cityId}&street.id=${place.streetId}`);
       return currentOutageOf(this.read('pw_accidents', () => parseAccidents(body, place)), house, now);
     } catch (e) {
       this.log.warn('loe fetchSnapshot: current outage lookup failed', loggable(e));
@@ -321,7 +327,7 @@ export class LoeProvider implements ScheduleProvider {
 
   private async cityList(): Promise<Labeled<LoeCity>> {
     if (this.cities) return this.cities;
-    const body = await this.http.json(`${API}/pw_cities?pagination=false&otg.id=`, GET);
+    const body = await this.get(`${API}/pw_cities?pagination=false&otg.id=`);
     const items = byId(this.read('pw_cities', () => parseCities(body)));
     this.cities = { items, labels: uniqueLabels(items, (c) => c.name, cityGroup) };
     return this.cities;
@@ -330,7 +336,7 @@ export class LoeProvider implements ScheduleProvider {
   private async streetList(cityId: number): Promise<Labeled<LoeStreet>> {
     const cached = this.streets.get(cityId);
     if (cached) return cached;
-    const body = await this.http.json(`${API}/pw_streets?pagination=false&city.id=${cityId}`, GET);
+    const body = await this.get(`${API}/pw_streets?pagination=false&city.id=${cityId}`);
     const items = byId(this.read('pw_streets', () => parseStreets(body)));
     const list = { items, labels: uniqueLabels(items, (s) => s.name, noGroup) };
     this.streets.set(cityId, list);
@@ -338,8 +344,20 @@ export class LoeProvider implements ScheduleProvider {
   }
 
   private async accounts(url: string): Promise<LoeAccount[]> {
-    const body = await this.http.json(url, GET);
+    const body = await this.get(url);
     return this.read('pw_accounts', () => parseAccounts(body));
+  }
+
+  /** Every LOE request: JSON over GET, with 403 and 503 read as «не відповідає» (the cause, url and status, kept). */
+  private async get(url: string): Promise<unknown> {
+    try {
+      return await this.http.json(url, GET);
+    } catch (e) {
+      if (e instanceof ProviderError && isObj(e.cause) && typeof e.cause.status === 'number' && NOT_ANSWERING.has(e.cause.status)) {
+        throw new ProviderError(TEXTS.noAnswer, { cause: e.cause });
+      }
+      throw e;
+    }
   }
 
   /** A reader's shape error as «could not read»; its reason is ours, never response text. */

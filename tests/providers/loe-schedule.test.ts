@@ -155,12 +155,37 @@ describe('menu items and the archive', () => {
     expect(() => menuItemHtml(TODAY_ITEM, 'Tomorrow')).toThrow(LoeShapeError);
   });
 
+  it('a Today or Tomorrow item with only a picture is unreadable; imageUrl must be a string (R8)', () => {
+    for (const name of ['Today', 'Tomorrow'] as const) {
+      const item = name === 'Today' ? TODAY_ITEM : TOMORROW_ITEM;
+      expect(() => menuItemHtml({ ...item, imageUrl: '/media/6ad39ab31c408_GPV.png' }, name)).toThrow(`menu item: ${name} image only`);
+      expect(() => menuItemHtml({ ...item, imageUrl: undefined }, name)).toThrow(`menu item: ${name} fields`);
+      expect(() => menuItemHtml({ ...item, imageUrl: null }, name)).toThrow(`menu item: ${name} fields`);
+    }
+    // A text with its picture is the normal published item.
+    expect(menuItemHtml({ ...TODAY_ITEM, rawHtml: OCT17, imageUrl: '/media/6ad39ab31c408_GPV.png' }, 'Today')).toBe(OCT17);
+  });
+
+  it('a Today item with only a description stays empty, the quiet shape (R8)', () => {
+    expect(menuItemHtml({ ...TODAY_ITEM, description: 'Отримано вказівку НЕК «Укренерго» про відміну застосування ГПВ' }, 'Today')).toBe('');
+  });
+
   it('the archive gives the rawHtml of each child of «Arhiv», a missing one as empty', () => {
     const htmls = archiveHtmls(MENUS);
     expect(htmls).toHaveLength(9);
     expect(htmls[0]).toBe('');
     expect(htmls[1]).toBe('');
     expect(htmls[8]).toBe(OCT17);
+  });
+
+  it('archive children with only a picture (248) or only a description (372) are skipped, not unreadable (R8)', () => {
+    const [imageOnly, descriptionOnly] = [248, 372].map((id) => archive().find((c: any) => c.id === id));
+    expect(imageOnly.imageUrl).not.toBe('');
+    expect(descriptionOnly.description).not.toBe('');
+    const htmls = archiveHtmls(MENUS);
+    expect([htmls[0], htmls[1]]).toEqual(['', '']);
+    expect(archiveRevision(htmls[0], ['2024-07-23'])).toBeUndefined();
+    expect(archiveRevision(htmls[1], ['2024-11-20'])).toBeUndefined();
   });
 
   it('an archive without «Arhiv» or with an odd child is unreadable', () => {

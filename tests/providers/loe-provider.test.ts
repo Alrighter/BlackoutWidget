@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOE_QUIET_NOTE, LoeProvider } from '../../src/main/providers/loe';
 import { AddressNotFoundError } from '../../src/main/providers/resolve';
-import { ProviderError } from '../../src/main/providers/types';
+import { NetworkError, ProviderError } from '../../src/main/providers/types';
 import type { HttpFetch, HttpResponse } from '../../src/main/providers/http';
 import type { Address, Slot } from '../../src/shared/types';
 import { kyivWallTimeToInstant } from '../../src/shared/time';
@@ -22,6 +22,8 @@ const API = 'https://power-api.loe.lviv.ua/api';
 const NAME = 'Львівобленерго';
 const UNREADABLE = `Не вдалося прочитати графік ${NAME}`;
 const NO_ANSWER = `Сайт ${NAME} не відповідає`;
+const HTTP_ERROR = `Сайт ${NAME} повернув помилку`;
+const OFFLINE = `Немає з’єднання з сайтом ${NAME}`;
 const NOT_FOUND = `Адресу не знайдено у ${NAME} — оберіть її в налаштуваннях заново`;
 
 type Init = Parameters<HttpFetch>[1];
@@ -105,13 +107,13 @@ function fakeHttp(over: Record<string, Route> = {}) {
 const at = (date: string, h: number, m = 0) => kyivWallTimeToInstant(date, h * 60 + m);
 
 /** The provider with a pinned `now`, and a fake clock that the fake sleep moves on: the 1.5 s spacing costs no time. */
-function setup(opts: { http?: ReturnType<typeof fakeHttp>; now?: () => Date } = {}) {
+function setup(opts: { http?: ReturnType<typeof fakeHttp>; now?: () => Date; online?: boolean } = {}) {
   const http = opts.http ?? fakeHttp();
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   let t = 1_760_000_000_000;
   const sleep = vi.fn(async (ms: number) => { t += ms; });
   const now = opts.now ?? (() => at('2026-10-17', 20));
-  const p = new LoeProvider({ fetch: http.fetch, isOnline: () => true, log, now, sleep, clock: () => t });
+  const p = new LoeProvider({ fetch: http.fetch, isOnline: () => opts.online ?? true, log, now, sleep, clock: () => t });
   return { p, http, log };
 }
 
@@ -215,6 +217,23 @@ describe('LoeProvider schedule', () => {
     await expectError(p.fetchSnapshot(KULP), ProviderError, UNREADABLE);
   });
 
+  it('a Today or Tomorrow item with only a picture is unreadable, never a quiet day (R8)', async () => {
+    for (const [path, item] of [['menu_items/238', TODAY_ITEM], ['menu_items/256', TOMORROW_ITEM]]) {
+      const imageOnly = () => ok(JSON.stringify({ ...JSON.parse(item), imageUrl: '/media/6ad39ab31c408_GPV.png' }));
+      const { p } = setup({ http: fakeHttp({ [`${CMS}/${path}`]: imageOnly }), now: () => at('2026-10-20', 10) });
+      await expectError(p.fetchSnapshot(KULP), ProviderError, UNREADABLE);
+    }
+  });
+
+  it('a Today item with only a description stays a quiet day (R8)', async () => {
+    const description = 'Отримано вказівку НЕК «Укренерго» про відміну застосування ГПВ на 20.10.2026';
+    const http = fakeHttp({ [`${CMS}/menu_items/238`]: () => ok(JSON.stringify({ ...JSON.parse(TODAY_ITEM), description })) });
+    const { p } = setup({ http, now: () => at('2026-10-20', 10) });
+    const snap = await p.fetchSnapshot(KULP);
+    expect(snap.days).toEqual([{ date: '2026-10-20', slots: fill('on') }]);
+    expect(snap.note).toBe(LOE_QUIET_NOTE);
+  });
+
   it('a Today or Tomorrow item outside the grammar is unreadable whatever its date', async () => {
     for (const path of ['menu_items/238', 'menu_items/256']) {
       const item = path.endsWith('238') ? TODAY_ITEM : TOMORROW_ITEM;
@@ -246,6 +265,24 @@ describe('LoeProvider schedule', () => {
     const html = setup({ http: fakeHttp({ [`${CMS}/menu_items/256`]: () => ok('<html>Just a moment…</html>') }) });
     const err = await expectError(html.p.fetchSnapshot(KULP), ProviderError, UNREADABLE);
     expect(JSON.stringify(err.cause)).not.toContain('Just a moment');
+  });
+
+  it('403 and 503 (Cloudflare\'s challenge, a busy origin) are «не відповідає»; 500 stays an error of the site (R9)', async () => {
+    for (const status of [403, 503]) {
+      const schedule = setup({ http: fakeHttp({ [`${CMS}/menu_items/238`]: () => failStatus(status) }) });
+      const err = await expectError(schedule.p.fetchSnapshot(KULP), ProviderError, NO_ANSWER);
+      expect(err.cause).toEqual({ url: `${CMS}/menu_items/238`, status });
+      const archive = setup({ http: fakeHttp({ [`${CMS}/menus`]: () => failStatus(status) }), now: () => at('2026-10-20', 10) });
+      await expectError(archive.p.fetchSnapshot(KULP), ProviderError, NO_ANSWER);
+      const wizard = setup({ http: fakeHttp({ [`${API}/pw_cities`]: () => failStatus(status) }) });
+      await expectError(wizard.p.listCities(), ProviderError, NO_ANSWER);
+      const none = setup({ http: fakeHttp({ [`${API}/pw_accounts`]: () => failStatus(status) }) });
+      await expectError(none.p.fetchSnapshot({ ...KULP, groupId: 'none' }), ProviderError, NO_ANSWER);
+    }
+    const server = setup({ http: fakeHttp({ [`${CMS}/menu_items/238`]: () => failStatus(500) }) });
+    await expectError(server.p.fetchSnapshot(KULP), ProviderError, HTTP_ERROR);
+    const wizard = setup({ http: fakeHttp({ [`${API}/pw_streets`]: () => failStatus(404) }) });
+    await expectError(wizard.p.listStreets('Львів'), ProviderError, HTTP_ERROR);
   });
 
   it('a saved queue the revision lacks is unreadable', async () => {
@@ -462,12 +499,36 @@ describe('LoeProvider.fetchSnapshot address check', () => {
     expect(logged).not.toContain('Just a moment');
   });
 
-  it('a soft address failure with the none line is still all on', async () => {
-    const http = fakeHttp({ [`${API}/pw_accounts`]: () => failStatus(500) });
-    const { p } = setup({ http });
-    const snap = await p.fetchSnapshot({ ...KULP, groupId: 'none' });
-    expect(snap.days).toEqual([{ date: '2026-10-17', slots: fill('on') }]);
-    expect(snap.lines).toEqual([{ index: 1, groupId: 'none', label: 'Не входить до ГПВ' }]);
+  it('a none line whose house check fails fails the snapshot: no schedule backs it (R7)', async () => {
+    const NONE = { ...KULP, groupId: 'none' };
+    for (const [route, message] of [
+      [() => failStatus(500), HTTP_ERROR],
+      [() => new Error('ECONNRESET'), NO_ANSWER],
+      [() => ok('<html>Just a moment…</html>'), UNREADABLE],
+    ] as const) {
+      const { p, http } = setup({ http: fakeHttp({ [`${API}/pw_accounts`]: route }) });
+      await expectError(p.fetchSnapshot(NONE), ProviderError, message);
+      expect(http.calls.filter((c) => c.url.startsWith(CMS))).toHaveLength(0);
+    }
+    // The city or street list failing is the same: the house could not be checked.
+    const noCities = setup({ http: fakeHttp({ [`${API}/pw_cities`]: () => failStatus(429) }) });
+    await expectError(noCities.p.fetchSnapshot(NONE), ProviderError, NO_ANSWER);
+  });
+
+  it('offline, a none line fails with NetworkError (R7)', async () => {
+    const http = fakeHttp({ [`${API}/pw_accounts`]: () => new Error('ERR_INTERNET_DISCONNECTED') });
+    const { p } = setup({ http, online: false });
+    await expectError(p.fetchSnapshot({ ...KULP, groupId: 'none' }), NetworkError, OFFLINE);
+  });
+
+  it('offline, a queue line keeps the soft check and fails on the schedule', async () => {
+    const http = fakeHttp({
+      [`${API}/pw_accounts`]: () => new Error('ERR_INTERNET_DISCONNECTED'),
+      [`${CMS}/menu_items/238`]: () => new Error('ERR_INTERNET_DISCONNECTED'),
+    });
+    const { p, log } = setup({ http, online: false });
+    await expectError(p.fetchSnapshot(KULP), NetworkError, OFFLINE);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^loe fetchSnapshot: /), expect.any(NetworkError));
   });
 
   it('a soft address failure does not hide a broken schedule', async () => {

@@ -105,11 +105,18 @@ export function loeHeadingDate(rawHtml: string): string | undefined {
 
 const MENU = '/api/menus/9';
 
-/** `menu_items/238` (Today) or `/256` (Tomorrow): its `rawHtml`, once the item is the one we know. */
+/**
+ * `menu_items/238` (Today) or `/256` (Tomorrow): its `rawHtml`, once the item is the one we know. A picture without
+ * text is a schedule we cannot read, never an empty item; a description alone (a cancellation notice) stays empty.
+ */
 export function menuItemHtml(body: unknown, name: 'Today' | 'Tomorrow'): string {
   if (!isObj(body) || body.name !== name || body.menu !== MENU) fail(`menu item: ${name}`);
-  if (typeof body.rawHtml !== 'string' || typeof body.description !== 'string') fail(`menu item: ${name} fields`);
-  return body.rawHtml;
+  const { rawHtml, description, imageUrl } = body;
+  if (typeof rawHtml !== 'string' || typeof description !== 'string' || typeof imageUrl !== 'string') {
+    fail(`menu item: ${name} fields`);
+  }
+  if (rawHtml === '' && imageUrl !== '') fail(`menu item: ${name} image only`);
+  return rawHtml;
 }
 
 /** `menus?type=photo-grafic`: the `rawHtml` of each child of the «Arhiv» item, '' where a child has none (image-only years). */
