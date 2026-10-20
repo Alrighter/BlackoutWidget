@@ -27,15 +27,26 @@ export function uniqueLabels<T>(items: readonly T[], name: (t: T) => string, gro
   });
 }
 
-/** The spec's rule: the exact label; else the only item whose name (nameKey) equals the label or the label minus a trailing « (…)»; else AddressNotFoundError. */
+/**
+ * The spec's rule: the exact label; else the only item accepted by (a) its name equals the whole label, or (b) the label is
+ * «name (group)» with that item's name and group; a numeric « (2)» suffix never matches; else AddressNotFoundError.
+ */
 export function resolveByLabel<T>(
-  items: readonly T[], labels: readonly string[], label: string, name: (t: T) => string, company: string,
+  items: readonly T[], labels: readonly string[], label: string,
+  name: (t: T) => string, group: (t: T) => string | undefined, company: string,
 ): T {
   const exact = items.filter((_, i) => labels[i] === label);
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) throw addressNotFound(company);
-  const keys = new Set([nameKey(label), nameKey(label.replace(/\s*\([^()]*\)\s*$/, ''))]);
-  const byName = items.filter(t => keys.has(nameKey(name(t))));
-  if (byName.length === 1) return byName[0];
+  const whole = nameKey(label);
+  const m = /^(.*\S)\s+\(([^()]*)\)\s*$/.exec(label.trim());
+  const bare = m && !/^\d+$/.test(m[2].trim()) ? { name: nameKey(m[1]), group: nameKey(m[2]) } : undefined;
+  const accepted = items.filter(t => {
+    const n = nameKey(name(t));
+    if (n === whole) return true;
+    const g = group(t)?.trim();
+    return !!bare && !!g && n === bare.name && nameKey(g) === bare.group;
+  });
+  if (accepted.length === 1) return accepted[0];
   throw addressNotFound(company);
 }

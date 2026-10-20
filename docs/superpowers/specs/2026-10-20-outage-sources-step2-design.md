@@ -70,10 +70,10 @@ So when the refresh's queue check finds the saved queue gone, the snapshot carri
 
 One rule for every provider:
 1. An exact label match.
-2. Failing that, the bare name, but only if exactly one record in the current list has it.
+2. Failing that, the one record whose name equals the whole saved label, or, when the label ends in « (громада)», whose name and громада both match it. A numeric « (2)» suffix never matches here, and zero or several matches are not a match.
 3. Otherwise the error «Адресу не знайдено у {company} — оберіть її в налаштуваннях заново».
 
-Identity comes from the operator's record (its id, district or громада), never from how a label looks. That is the lesson of the Volyn namesake fix. Settlement labels carry the district or громада only for namesakes, as in Volyn, so a label can stop matching when a second settlement of that name appears. Rule 2 then finds it only while the name stays unique.
+Identity comes from the operator's record (its id, district or громада), never from how a label looks. That is the lesson of the Volyn namesake fix. Settlement labels carry the district or громада only for namesakes, as in Volyn, so a label can stop matching when a second settlement of that name appears. Rule 2 then finds a bare label only while the name stays unique, and never moves a label saved with a громада to a namesake in another one.
 
 ### Quiet days and fail-closed checks
 

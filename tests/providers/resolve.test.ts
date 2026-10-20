@@ -30,7 +30,7 @@ test('labels are index-aligned and a look-alike counts as the same name', () => 
 });
 
 const labels = uniqueLabels(LIST, name, group);
-const resolve = (label: string, list = LIST, ls = labels) => resolveByLabel(list, ls, label, name, 'Тернопільобленерго');
+const resolve = (label: string, list = LIST, ls = labels) => resolveByLabel(list, ls, label, name, group, 'Тернопільобленерго');
 
 test('the exact label picks the item', () => {
   expect(resolve('Ланівці (Борщівська громада)').id).toBe(2);
@@ -46,17 +46,29 @@ test('a label saved with a group still resolves when the name is now unique', ()
 test('an apostrophe or look-alike difference still resolves', () => {
   const items = [{ id: 7, name: 'Мар’янівка' }, { id: 8, name: 'Інше' }];
   const ls = ['Мар’янівка', 'Інше'];
-  const r = (l: string) => resolveByLabel(items, ls, l, t => t.name, 'Х').id;
+  const r = (l: string) => resolveByLabel(items, ls, l, t => t.name, () => undefined, 'Х').id;
   expect(r("Мар'янівка")).toBe(7);
   expect(r('Iнше')).toBe(8); // Latin I
   expect(resolve('Збаpаж').id).toBe(3); // Latin p
 });
 test('unknown or two exact matches is not found', () => {
   expect(() => resolve('Тернопіль')).toThrow(AddressNotFoundError);
-  expect(() => resolveByLabel(LIST, ['x', 'x', 'y'], 'x', name, 'Х')).toThrow(AddressNotFoundError);
+  expect(() => resolveByLabel(LIST, ['x', 'x', 'y'], 'x', name, group, 'Х')).toThrow(AddressNotFoundError);
 });
 test('addressNotFound is a ProviderError with the copy', () => {
   const e = addressNotFound('Тернопільобленерго');
   expect(e).toBeInstanceOf(ProviderError);
   expect(e.message).toBe(NOT_FOUND);
+});
+test('a saved group that no longer exists does not resolve to the namesake', () => {
+  const only = [LIST[1]];
+  expect(() => resolve('Ланівці (Лановецька громада)', only, uniqueLabels(only, name, group))).toThrow(AddressNotFoundError);
+});
+test('a saved group that matches the only item resolves', () => {
+  const only = [LIST[2]];
+  expect(resolve('Збараж (Збаразька громада)', only, uniqueLabels(only, name, group)).id).toBe(3);
+});
+test('a numeric suffix never matches in rule 2', () => {
+  const items = [{ n: 'вул. Шевченка' }];
+  expect(() => resolveByLabel(items, ['вул. Шевченка'], 'вул. Шевченка (2)', t => t.n, () => undefined, 'Х')).toThrow(AddressNotFoundError);
 });
