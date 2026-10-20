@@ -1,19 +1,19 @@
 // @vitest-environment jsdom
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { SetupWizard } from '../../src/renderer/src/app/SetupWizard';
 import type { RendererApi } from '../../src/shared/ipc';
 import { outageRanges } from '../../src/shared/outage-ranges';
-import type { HouseInfo } from '../../src/shared/types';
+import type { HouseInfo, LineInfo } from '../../src/shared/types';
 import { fixtureSnapshot } from '../helpers/snapshot';
 
-function mockApi(houses: HouseInfo[]) {
+function mockApi(houses: HouseInfo[], houseLines?: RendererApi['houseLines']) {
   return { listProviders: vi.fn(async () => [{ id: 'dtek-krem', displayName: 'ДТЕК Київські регіональні електромережі' }]),
     listCities: vi.fn(async () => ['м. Біла Церква', 'с-ще Козин']), listStreets: vi.fn(async () => ['бул. Грушевського Михайла']),
     listHouses: vi.fn(async () => houses),
     previewLines: vi.fn(async () => houses[0].lines.map(line => ({ line, today: fixtureSnapshot().days[0] }))),
     solveCaptcha: vi.fn(async () => {}), saveAddress: vi.fn(async () => {}), setWidgetStyle: vi.fn(async () => {}),
-    setAutostart: vi.fn(async () => {}), openProviderSite: vi.fn() } as unknown as RendererApi;
+    setAutostart: vi.fn(async () => {}), openProviderSite: vi.fn(), ...(houseLines ? { houseLines } : {}) } as unknown as RendererApi;
 }
 const two = [{ house: '40', outageActive: false, lines: [{ index: 1, groupId: 'GPV1.2', label: 'Черга 1.2' }, { index: 2, groupId: 'GPV4.2', label: 'Черга 4.2' }] }];
 const OUTAGE_NOTE = 'Зараз для цього будинку діє відключення — список ліній може бути неповним. Якщо вашої лінії немає, спробуйте пізніше.';
@@ -322,4 +322,66 @@ describe('choosing among providers', () => {
     await user.click(screen.getByRole('option', { name: 'м. Біла Церква' })); await user.click(next());
     expect(await screen.findByText('Для цього населеного пункту немає адрес у Волиньобленерго')).toBeInTheDocument();
   });
+});
+
+const pending: HouseInfo[] = [{ house: '7', outageActive: false, lines: [], linesPending: true }];
+const NO_SCHEDULE = 'Для цього будинку ДТЕК не публікує графік відключень';
+test('a pending house: the lines load after the pick, then the line step lists both', async () => {
+  let resolve!: (l: LineInfo[]) => void;
+  const houseLines = vi.fn(() => new Promise<LineInfo[]>(r => { resolve = r; }));
+  const api = mockApi(pending, houseLines); const user = userEvent.setup();
+  // The mock's preview follows the listed (empty) lines; the real one follows houseLines.
+  api.previewLines = vi.fn(async () => two[0].lines.map(line => ({ line, today: fixtureSnapshot().days[0] })));
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
+  await user.click(await screen.findByRole('radio', { name: '7' }));
+  expect(screen.getByText('Завантаження ліній…')).toBeInTheDocument();
+  expect(screen.queryByText(NO_SCHEDULE)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
+  expect(houseLines).toHaveBeenCalledWith('dtek-krem', 'м. Біла Церква', 'бул. Грушевського Михайла', '7');
+  await act(async () => { resolve(two[0].lines); });
+  expect(screen.queryByText('Завантаження ліній…')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(await screen.findByText('Лінія 1 · черга 1.2')).toBeInTheDocument();
+  expect(screen.getByText('Лінія 2 · черга 4.2')).toBeInTheDocument();
+});
+test('a pending house whose answer is empty: the no-schedule note, blocked', async () => {
+  const api = mockApi(pending, vi.fn(async () => [])); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
+  await user.click(await screen.findByRole('radio', { name: '7' }));
+  expect(await screen.findByText(NO_SCHEDULE)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
+});
+test('a pending house whose answer fails: the message and a retry that asks again', async () => {
+  const houseLines = vi.fn().mockRejectedValueOnce(new Error('Сервер недоступний')).mockResolvedValueOnce(two[0].lines);
+  const api = mockApi(pending, houseLines as unknown as RendererApi['houseLines']); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
+  await user.click(await screen.findByRole('radio', { name: '7' }));
+  expect(await screen.findByText('Сервер недоступний')).toBeInTheDocument();
+  expect(screen.queryByText(NO_SCHEDULE)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
+  expect(houseLines).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Далі' })).toBeEnabled());
+  expect(screen.queryByText('Сервер недоступний')).toBeNull();
+});
+test('a stale lines answer for a house no longer picked is dropped', async () => {
+  const resolvers: Record<string, (l: LineInfo[]) => void> = {};
+  const houseLines = vi.fn((_p: string, _c: string, _s: string, h: string) => new Promise<LineInfo[]>(r => { resolvers[h] = r; }));
+  const api = mockApi([{ house: '7', outageActive: false, lines: [], linesPending: true }, { house: '8', outageActive: false, lines: [], linesPending: true }], houseLines);
+  const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
+  await user.click(await screen.findByRole('radio', { name: '7' })); await user.click(screen.getByRole('radio', { name: '8' }));
+  await act(async () => { resolvers['8']([two[0].lines[0]]); });
+  await act(async () => { resolvers['7'](two[0].lines); });
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  // House 8 has one line, so the line step is skipped; had 7's answer won, the line step would show.
+  expect(await screen.findByText('Компакт')).toBeInTheDocument();
+});
+test('a house without linesPending never calls houseLines', async () => {
+  const houseLines = vi.fn(async () => []);
+  const api = mockApi(two, houseLines); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(await screen.findByText('Лінія 1 · черга 1.2')).toBeInTheDocument();
+  expect(houseLines).not.toHaveBeenCalled();
 });

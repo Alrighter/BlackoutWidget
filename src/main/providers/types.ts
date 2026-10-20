@@ -1,4 +1,4 @@
-import type { Address, HouseInfo, ScheduleSnapshot } from '../../shared/types';
+import type { Address, HouseInfo, LineInfo, ScheduleSnapshot } from '../../shared/types';
 
 /** Shown when the source could not be reached at all (also the message of NetworkError). */
 export const OFFLINE_MESSAGE = 'Немає з’єднання з сайтом ДТЕК';
@@ -23,6 +23,8 @@ export interface ScheduleProvider {
   listCities(): Promise<string[]>;
   listStreets(city: string): Promise<string[]>;
   listHouses(city: string, street: string): Promise<HouseInfo[]>;
+  /** Sources whose `listHouses` marks houses `linesPending` give the picked house's lines here (one request per house). */
+  houseLines?(city: string, street: string, house: string): Promise<LineInfo[]>;
   fetchSnapshot(address: Address): Promise<ScheduleSnapshot>;
   showVerification(): Promise<void>;
   dispose(): void;

@@ -15,6 +15,7 @@ const api: RendererApi = {
   listCities: providerId => ipcRenderer.invoke(IPC.listCities, providerId),
   listStreets: (providerId, city) => ipcRenderer.invoke(IPC.listStreets, providerId, city),
   listHouses: (providerId, city, street) => ipcRenderer.invoke(IPC.listHouses, providerId, city, street),
+  houseLines: (providerId, city, street, house) => ipcRenderer.invoke(IPC.houseLines, providerId, city, street, house),
   previewLines: (providerId, city, street, house) => ipcRenderer.invoke(IPC.previewLines, providerId, city, street, house),
   saveAddress: a => ipcRenderer.invoke(IPC.saveAddress, a),
   setWidgetStyle: s => ipcRenderer.invoke(IPC.setWidgetStyle, s),
