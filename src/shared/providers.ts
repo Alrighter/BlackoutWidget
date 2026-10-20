@@ -33,6 +33,10 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     name: 'ДТЕК Одеські електромережі', shortName: 'ДТЕК', region: 'Одеська область',
     siteUrl: 'https://www.dtek-oem.com.ua/ua/shutdowns',
   },
+  'toe': {
+    name: 'Тернопільобленерго', shortName: 'Тернопільобленерго', region: 'Тернопільська область',
+    siteUrl: 'https://poweron.toe.com.ua/',
+  },
 };
 
 const info = (id: string): ProviderInfo | undefined => (Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : undefined);

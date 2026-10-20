@@ -17,10 +17,14 @@ function setup() {
 test('providers come out in the card order of PROVIDERS', () => {
   const ids = setup().providers.map(p => p.id);
   expect(ids).toEqual(Object.keys(PROVIDERS));
-  expect(ids).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
+  expect(ids).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem', 'toe']);
 });
-test('DTEK and Volyn do not implement houseLines', () => {
-  for (const p of setup().providers) expect(p.houseLines).toBeUndefined();
+test('DTEK and Volyn do not implement houseLines; Ternopil does', () => {
+  const providers = setup().providers;
+  const old = providers.filter(p => p.id === 'voe' || p.id.startsWith('dtek-'));
+  expect(old.map(p => p.id)).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
+  for (const p of old) expect(p.houseLines).toBeUndefined();
+  expect(typeof providers.find(p => p.id === 'toe')?.houseLines).toBe('function');
 });
 test('each DTEK site gets its own url, partition and host', () => {
   const { made, providers } = setup();

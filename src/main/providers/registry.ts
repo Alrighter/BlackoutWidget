@@ -2,6 +2,7 @@ import { DTEK_SITES, DtekProvider } from './dtek';
 import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek/page-scripts';
 import type { SessionOptions } from './browser-session';
 import type { HttpFetch } from './http';
+import { ToeProvider } from './toe';
 import { VoeProvider } from './voe';
 import { PROVIDERS, providerSiteUrl } from '../../shared/providers';
 import type { Logger } from '../log';
@@ -28,6 +29,7 @@ export function createProviders(
   };
   const make: Record<string, () => ScheduleProvider> = {
     'voe': () => new VoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'toe': () => new ToeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
   };
   for (const site of DTEK_SITES) make[site.id] = () => dtek(site.id);
   return Object.keys(PROVIDERS).map(id => {
