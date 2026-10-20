@@ -1,22 +1,31 @@
-import { DtekKremProvider } from './dtek-krem';
-import { DTEK_URL, NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek-krem/page-scripts';
+import { DTEK_SITES, DtekProvider } from './dtek';
+import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek/page-scripts';
 import type { SessionOptions } from './browser-session';
-import { silentLogger, type Logger } from '../log';
+import type { HttpFetch } from './http';
+import { VoeProvider } from './voe';
+import { providerSiteUrl } from '../../shared/providers';
+import type { Logger } from '../log';
 import { ProviderError, type PageSession, type ScheduleProvider } from './types';
 
+/** What the plain-HTTP providers need from main: the fetch and the OS-level connectivity hint. */
+export interface ProviderHttp { fetch: HttpFetch; isOnline: () => boolean }
+
+/** Kyiv city first, then the oblasts alphabetically: Volyn, Dnipro, Kyiv oblast, Odesa. */
 export function createProviders(
-  makeSession: (o: SessionOptions) => PageSession, log: Logger = silentLogger,
+  makeSession: (o: SessionOptions) => PageSession, log: Logger, http: ProviderHttp,
 ): ScheduleProvider[] {
-  return [
-    new DtekKremProvider(makeSession({
-      url: DTEK_URL,
-      partition: 'persist:dtek-krem',
+  const [kyivCity, ...dtekRegions] = DTEK_SITES.map(site => {
+    const url = providerSiteUrl(site.id)!;
+    return new DtekProvider(site, makeSession({
+      url,
+      partition: `persist:${site.id}`,
       readyCheck: READY_CHECK,
-      allowedHosts: ['dtek-krem.com.ua'],
+      allowedHosts: [new URL(url).hostname.replace(/^www\./, '')],
       afterReady: NEUTRALIZE_TIMERS,
       blockRequest: isPagePollRequest,
-    }), log),
-  ];
+    }), log);
+  });
+  return [kyivCity, new VoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }), ...dtekRegions];
 }
 
 export function findProvider(list: ScheduleProvider[], id: string): ScheduleProvider {

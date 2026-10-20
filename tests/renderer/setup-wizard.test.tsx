@@ -13,7 +13,7 @@ function mockApi(houses: HouseInfo[]) {
     listHouses: vi.fn(async () => houses),
     previewLines: vi.fn(async () => houses[0].lines.map(line => ({ line, today: fixtureSnapshot().days[0] }))),
     solveCaptcha: vi.fn(async () => {}), saveAddress: vi.fn(async () => {}), setWidgetStyle: vi.fn(async () => {}),
-    setAutostart: vi.fn(async () => {}), openDtekSite: vi.fn() } as unknown as RendererApi;
+    setAutostart: vi.fn(async () => {}), openProviderSite: vi.fn() } as unknown as RendererApi;
 }
 const two = [{ house: '40', outageActive: false, lines: [{ index: 1, groupId: 'GPV1.2', label: 'Черга 1.2' }, { index: 2, groupId: 'GPV4.2', label: 'Черга 4.2' }] }];
 const OUTAGE_NOTE = 'Зараз для цього будинку діє відключення — список ліній може бути неповним. Якщо вашої лінії немає, спробуйте пізніше.';
@@ -174,8 +174,14 @@ test('the line step opens the schedule on the DTEK site (D11)', async () => {
   render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   await user.click(await screen.findByRole('button', { name: 'Відкрити графік на сайті ДТЕК' }));
-  expect(api.openDtekSite).toHaveBeenCalledTimes(1);
-  expect(api.openDtekSite).toHaveBeenCalledWith();
+  expect(api.openProviderSite).toHaveBeenCalledTimes(1);
+  expect(api.openProviderSite).toHaveBeenCalledWith('dtek-krem');
+});
+test('the line step subline names the provider', async () => {
+  const api = mockApi(two); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(await screen.findByText(/з сайтом ДТЕК і оберіть свою\.$/)).toBeInTheDocument();
 });
 test('«Готово» sums up the choice and switches autostart; nothing is saved before «Завершити»', async () => {
   const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const onDone = vi.fn(); const user = userEvent.setup();
@@ -193,6 +199,15 @@ test('«Готово» sums up the choice and switches autostart; nothing is sav
   // The single line was picked without the «Лінія» step.
   expect(api.saveAddress).toHaveBeenCalledWith({ providerId: 'dtek-krem', city: 'м. Біла Церква', street: 'бул. Грушевського Михайла', house: '40', lineIndex: 1, groupId: 'GPV1.2' });
   expect(api.setWidgetStyle).toHaveBeenCalledWith('compact'); expect(onDone).toHaveBeenCalled();
+});
+test('a line label is lower-cased at its first letter only: «не залучено до ГПВ» keeps the abbreviation', async () => {
+  const lines = [{ index: 1, groupId: '4.2', label: 'Черга 4.2' }, { index: 2, groupId: 'none', label: 'Не залучено до ГПВ' }];
+  const api = mockApi([{ house: '40', outageActive: false, lines }]); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  await user.click(await screen.findByText('Лінія 2 · не залучено до ГПВ')); await user.click(screen.getByRole('button', { name: 'Далі' }));
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(screen.getByText('Лінія 2 · не залучено до ГПВ · стиль «Компакт»')).toBeInTheDocument();
 });
 test('changing the address keeps the widget style: the style step starts from the saved one', async () => {
   const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const user = userEvent.setup();
@@ -214,7 +229,7 @@ test('captcha: shows prompt, solves, then retries the load', async () => {
   await user.click(await screen.findByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Сайт ДТЕК просить пройти перевірку')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Пройти перевірку' }));
-  expect(api.solveCaptcha).toHaveBeenCalled();
+  expect(api.solveCaptcha).toHaveBeenCalledWith('dtek-krem');
   expect(await screen.findByText('м. Біла Церква')).toBeInTheDocument();
   expect(api.listCities).toHaveBeenCalledTimes(2);
 });
@@ -228,4 +243,83 @@ test('other errors show the Ukrainian message and allow retry', async () => {
   expect(await screen.findByText('Сайт ДТЕК недоступний')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
   expect(await screen.findByText('м. Біла Церква')).toBeInTheDocument();
+});
+
+const FIVE = [
+  { id: 'dtek-kem', displayName: 'ДТЕК Київські електромережі' }, { id: 'voe', displayName: 'Волиньобленерго' },
+  { id: 'dtek-dnem', displayName: 'ДТЕК Дніпровські електромережі' }, { id: 'dtek-krem', displayName: 'ДТЕК Київські регіональні електромережі' },
+  { id: 'dtek-oem', displayName: 'ДТЕК Одеські електромережі' },
+];
+function fiveApi() {
+  const api = mockApi(two) as unknown as { listProviders: ReturnType<typeof vi.fn> };
+  api.listProviders = vi.fn(async () => FIVE);
+  return api as unknown as RendererApi;
+}
+const next = () => screen.getByRole('button', { name: 'Далі' });
+
+describe('choosing among providers', () => {
+  test('with several providers none is preselected, Далі waits for a pick, and the order is the list order', async () => {
+    const user = userEvent.setup();
+    render(<SetupWizard api={fiveApi()} autostart widgetStyle="compact" onDone={() => {}} />);
+    const radios = await screen.findAllByRole('radio');
+    expect(radios.map(r => (r as HTMLInputElement).checked)).toEqual([false, false, false, false, false]);
+    expect(radios.map(r => within(r.closest('label') as HTMLElement).getByText(/./, { selector: '.wz-opt-name' }).textContent))
+      .toEqual(['м. Київ', 'Волинська область', 'Дніпропетровська область', 'Київська область', 'Одеська область']);
+    expect(next()).toBeDisabled();
+    await user.click(radios[1]);
+    expect(next()).toBeEnabled();
+  });
+
+  test('Kyiv skips the city step: the chip reads м. Київ, streets are loaded for it, Назад returns to the provider', async () => {
+    const api = fiveApi(); const user = userEvent.setup();
+    render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />);
+    await user.click(await screen.findByRole('radio', { name: /м\. Київ/ }));
+    await user.click(next());
+    expect(await screen.findByRole('combobox', { name: 'Вулиця' })).toBeInTheDocument();
+    expect(screen.getByText('м. Київ', { selector: '.wz-chip' })).toBeInTheDocument();
+    expect(api.listCities).not.toHaveBeenCalled();
+    expect(api.listStreets).toHaveBeenCalledWith('dtek-kem', 'м. Київ');
+    const rail = within(screen.getByRole('navigation', { name: 'Кроки' }));
+    expect(rail.getByText('Місто').closest('li')).toHaveTextContent('пройдено');
+    await user.click(screen.getByRole('button', { name: 'Назад' }));
+    expect(screen.getByRole('heading', { name: 'Регіон і компанія' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /м\. Київ/ })).toBeChecked();
+  });
+
+  test('switching the provider clears the city: it is never sent to another provider', async () => {
+    const api = fiveApi(); const user = userEvent.setup();
+    render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />);
+    await user.click(await screen.findByRole('radio', { name: /Київська область/ })); await user.click(next());
+    await user.type(await screen.findByRole('combobox', { name: 'Місто або село' }), 'Біла');
+    await user.click(screen.getByRole('option', { name: 'м. Біла Церква' })); await user.click(next());
+    await screen.findByRole('combobox', { name: 'Вулиця' });
+    await user.click(screen.getByRole('button', { name: 'Назад' })); await user.click(screen.getByRole('button', { name: 'Назад' }));
+    await user.click(screen.getByRole('radio', { name: /Волинська область/ })); await user.click(next());
+    expect(await screen.findByRole('combobox', { name: 'Місто або село' })).toHaveValue('');
+    expect(api.listCities).toHaveBeenLastCalledWith('voe');
+    expect(api.listStreets).not.toHaveBeenCalledWith('voe', expect.anything());
+    expect(next()).toBeDisabled();
+  });
+
+  test('picking the same provider again keeps the city', async () => {
+    const user = userEvent.setup();
+    render(<SetupWizard api={fiveApi()} autostart widgetStyle="compact" onDone={() => {}} />);
+    await user.click(await screen.findByRole('radio', { name: /Київська область/ })); await user.click(next());
+    await user.type(await screen.findByRole('combobox', { name: 'Місто або село' }), 'Біла');
+    await user.click(screen.getByRole('option', { name: 'м. Біла Церква' }));
+    await user.click(screen.getByRole('button', { name: 'Назад' }));
+    await user.click(screen.getByRole('radio', { name: /Київська область/ })); await user.click(next());
+    expect(await screen.findByRole('combobox', { name: 'Місто або село' })).toHaveValue('м. Біла Церква');
+  });
+
+  test('an empty street list says the provider has no addresses there', async () => {
+    const api = fiveApi() as unknown as { listStreets: ReturnType<typeof vi.fn> };
+    api.listStreets = vi.fn(async () => []);
+    const user = userEvent.setup();
+    render(<SetupWizard api={api as unknown as RendererApi} autostart widgetStyle="compact" onDone={() => {}} />);
+    await user.click(await screen.findByRole('radio', { name: /Волинська область/ })); await user.click(next());
+    await user.type(await screen.findByRole('combobox', { name: 'Місто або село' }), 'Біла');
+    await user.click(screen.getByRole('option', { name: 'м. Біла Церква' })); await user.click(next());
+    expect(await screen.findByText('Для цього населеного пункту немає адрес у Волиньобленерго')).toBeInTheDocument();
+  });
 });

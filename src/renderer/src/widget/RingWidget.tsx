@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { StripPart } from '../../../shared/actual-view';
 import { dayCells, type DayCell } from '../../../shared/day-cells';
-import { countdownText, type WidgetView } from '../../../shared/widget-state';
+import { countdownText, lowerFirst, type WidgetView } from '../../../shared/widget-state';
 import { OutageBadge } from './OutageBadge';
 import { Caption, EcoBolt, StateDot, Status, WarnLine } from './parts';
 
@@ -79,8 +79,6 @@ function nowDot(size: number, nowFraction: number): CSSProperties {
   const angle = nowFraction * 2 * Math.PI, r = size / 2 - 6;
   return { left: `${(size / 2 + r * Math.sin(angle)).toFixed(1)}px`, top: `${(size / 2 - r * Math.cos(angle)).toFixed(1)}px` };
 }
-
-const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
 
 export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChanged: boolean }) {
   const size = lineChanged ? RING_SMALL : RING;

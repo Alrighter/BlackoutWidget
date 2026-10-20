@@ -23,7 +23,7 @@ const EVAL_GUARD_MS = 5000;
 
 // Evidence the loaded document is the real DTEK / Imperva page, not a browser error page.
 const REAL_PAGE_CHECK =
-  "(() => { const h = document.documentElement ? document.documentElement.outerHTML : ''; return h.includes('_Incapsula_Resource') || /ДТЕК|dtek-krem/i.test(document.title + h); })()";
+  "(() => { const h = document.documentElement ? document.documentElement.outerHTML : ''; return h.includes('_Incapsula_Resource') || /ДТЕК|dtek-/i.test(document.title + h); })()";
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 

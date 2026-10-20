@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseHomeNumResponse, factToDays, deriveLines } from '../../src/main/providers/dtek-krem/parse';
+import { parseHomeNumResponse, factToDays, deriveLines } from '../../src/main/providers/dtek/parse';
 import type { CurrentOutage, DaySchedule, ScheduleSnapshot } from '../../src/shared/types';
 
 export interface FixtureSnapshotOpts {
@@ -13,7 +13,7 @@ export interface FixtureSnapshotOpts {
 }
 
 export function fixtureSnapshot(opts: FixtureSnapshotOpts = {}): ScheduleSnapshot {
-  const raw = readFileSync(join(__dirname, '../fixtures/dtek-krem/getHomeNum-stale-updateFact.json'), 'utf8');
+  const raw = readFileSync(join(__dirname, '../fixtures/dtek/getHomeNum-stale-updateFact.json'), 'utf8');
   const resp = parseHomeNumResponse(JSON.parse(raw));
   const fact = resp.fact!;
   const schNames = resp.preset!.sch_names;

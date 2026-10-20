@@ -20,7 +20,7 @@ const api: RendererApi = {
   setWidgetStyle: s => ipcRenderer.invoke(IPC.setWidgetStyle, s),
   setAutostart: on => ipcRenderer.invoke(IPC.setAutostart, on),
   refreshNow: () => ipcRenderer.invoke(IPC.refreshNow),
-  solveCaptcha: () => ipcRenderer.invoke(IPC.solveCaptcha),
+  solveCaptcha: (providerId?: string) => ipcRenderer.invoke(IPC.solveCaptcha, providerId),
   onNavigate: cb => subscribe(IPC.navigate, cb),
   openMainWindow: view => ipcRenderer.send(IPC.openMainWindow, view),
   widgetContextMenu: () => ipcRenderer.send(IPC.widgetContextMenu),
@@ -33,7 +33,7 @@ const api: RendererApi = {
   ecoflowSave: (i, device) => ipcRenderer.invoke(IPC.ecoflowSave, i, device),
   actualDisconnect: () => ipcRenderer.invoke(IPC.actualDisconnect),
   openEcoflowHelp: () => ipcRenderer.send(IPC.openEcoflowHelp),
-  openDtekSite: () => ipcRenderer.send(IPC.openDtekSite),
+  openProviderSite: (providerId: string) => ipcRenderer.send(IPC.openProviderSite, providerId),
   getActualLive: () => ipcRenderer.invoke(IPC.getActualLive),
   onActualLive: cb => subscribe(IPC.actualLive, cb),
 };

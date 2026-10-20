@@ -2,8 +2,9 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, ty
 import type { RendererApi } from '../../../shared/ipc';
 import { dayCells } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
-import { providerRegion } from '../../../shared/providers';
+import { providerRegion, providerShortName, providerSingleCity } from '../../../shared/providers';
 import type { DaySchedule, HouseInfo, LineInfo, WidgetStyle } from '../../../shared/types';
+import { lowerFirst } from '../../../shared/widget-state';
 import { Autocomplete, matches } from './Autocomplete';
 import { DayStrip } from './DayStrip';
 import { unwrapIpcError } from './ipc-error';
@@ -32,7 +33,10 @@ const HOUSE_KEYS: Partial<Record<string, number>> = { ArrowLeft: -1, ArrowRight:
 /** Steps whose own field takes the focus (autoFocus) instead of the title. */
 const FIELD_STEPS: Step[] = ['city', 'street'];
 
-function subline(step: Step, city: string | null, lineCount: number): string {
+/** The provider's short name for the texts; before one is picked, the generic word. */
+const short = (providerId: string | null): string => (providerId ? providerShortName(providerId) : 'постачальника');
+
+function subline(step: Step, city: string | null, lineCount: number, providerId: string | null): string {
   switch (step) {
     case 'provider': return 'Оберіть, хто постачає світло у ваш будинок.';
     case 'city': return 'Почніть вводити назву — підкажемо варіанти.';
@@ -40,7 +44,7 @@ function subline(step: Step, city: string | null, lineCount: number): string {
     case 'street': return `Вулиці ${city ?? ''}.`;
     case 'house': return 'Оберіть номер будинку.';
     // During an outage the step shows even for one line.
-    case 'line': return `${lineCount === 2 ? 'У цьому будинку дві лінії. ' : ''}Звірте графік на сьогодні з сайтом ДТЕК і оберіть свою.`;
+    case 'line': return `${lineCount === 2 ? 'У цьому будинку дві лінії. ' : ''}Звірте графік на сьогодні з сайтом ${short(providerId)} і оберіть свою.`;
     case 'style': return 'Змінити можна будь-коли — у налаштуваннях або в меню трею.';
     case 'done': return 'Віджет уже на робочому столі.';
   }
@@ -109,7 +113,7 @@ function Note({ text, children }: { text: string; children?: ReactNode }) {
   );
 }
 
-function Status<T>({ res, api, children }: { res: Loaded<T>; api: RendererApi; children(data: T): ReactNode }) {
+function Status<T>({ res, api, providerId, children }: { res: Loaded<T>; api: RendererApi; providerId: string | null; children(data: T): ReactNode }) {
   const [busy, setBusy] = useState(false);
   if (res.loading) return <p className="wz-muted">Завантаження…</p>;
   if (res.error) {
@@ -119,7 +123,7 @@ function Status<T>({ res, api, children }: { res: Loaded<T>; api: RendererApi; c
         {captcha ? (
           <button className="sv-btn" disabled={busy} onClick={async () => {
             setBusy(true);
-            try { await api.solveCaptcha(); } catch { /* the retry below reports the problem again */ }
+            try { await api.solveCaptcha(providerId ?? undefined); } catch { /* the retry below reports the problem again */ }
             setBusy(false);
             res.retry();
           }}>Пройти перевірку</button>
@@ -165,8 +169,10 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   }, [step]);
 
   const providers = useLoad(() => api.listProviders(), 'providers');
+  // Only a lone provider is preselected; with several the person chooses.
   useEffect(() => {
-    if (!providerId && providers.data?.length) setProviderId(providers.data[0].id);
+    if (!providerId && providers.data?.length === 1) pickProvider(providers.data[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providers.data, providerId]);
 
   const cities = useLoad(() => (step === 'city' && providerId ? api.listCities(providerId) : Promise.resolve([] as string[])),
@@ -191,7 +197,9 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
 
   // During an outage the list holds only the outage's queues, so the line must always be chosen explicitly.
   const needsLineStep = houseLines.length > 1 || houseOutage;
-  const order: Step[] = ['provider', 'city', 'street', 'house', ...(needsLineStep ? ['line' as const] : []), 'style', 'done'];
+  // A single-city provider (Kyiv) has no city to choose, so the step is passed over.
+  const singleCity = providerId ? providerSingleCity(providerId) : undefined;
+  const order: Step[] = ['provider', ...(singleCity ? [] : ['city' as const]), 'street', 'house', ...(needsLineStep ? ['line' as const] : []), 'style', 'done'];
   const back = () => setStep(order[Math.max(0, order.indexOf(step) - 1)]);
   const next = async () => {
     if (step !== 'done') {
@@ -215,11 +223,19 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
     if (from === 'city') setStreet(null);
     setHouse(null); setLine(null); setHouseLines([]); setHouseOutage(false); setHouseQuery('');
   };
+  /** A different provider drops everything chosen below it: a city of one region is never sent to another. */
+  const pickProvider = (id: string) => {
+    if (id !== providerId) {
+      resetBelow('city');
+      setCity(providerSingleCity(id) ?? null);
+    }
+    setProviderId(id);
+  };
   const pickHouse = (h: HouseInfo) => { setHouse(h.house); setLine(null); setHouseLines(h.lines); setHouseOutage(!!h.outageActive); };
 
   const num = RAIL.findIndex(r => r.step === step) + 1;
   const place = `${city}, ${street}, ${house}`;
-  const choice = line ? `Лінія ${line.index} · ${line.label.toLowerCase()} · стиль «${STYLES.find(s => s.id === style)?.name}»` : '';
+  const choice = line ? `Лінія ${line.index} · ${lowerFirst(line.label)} · стиль «${STYLES.find(s => s.id === style)?.name}»` : '';
 
   return (
     <div className="wz" data-capture="wizard">
@@ -250,18 +266,18 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
       <main className="wz-main" data-capture="wz-main">
         <div className="wz-count">{`Крок ${num} з 7`}</div>
         <h2 className="wz-title" ref={titleRef} tabIndex={-1}>{TITLES[step]}</h2>
-        <p className="wz-desc" data-capture="wz-desc">{subline(step, city, houseLines.length)}</p>
+        <p className="wz-desc" data-capture="wz-desc">{subline(step, city, houseLines.length, providerId)}</p>
 
         <div className="wz-body" data-capture="wz-body">
           {step === 'provider' && (
-            <Status res={providers} api={api}>{list => (
+            <Status res={providers} api={api} providerId={providerId}>{list => (
               <fieldset className="wz-opts">
                 <legend className="st-sr">Регіон</legend>
                 {list.map(p => {
                   const region = providerRegion(p.id);
                   return (
                     <label key={p.id} className="wz-opt">
-                      <input type="radio" name="wz-provider" checked={providerId === p.id} onChange={() => setProviderId(p.id)} />
+                      <input type="radio" name="wz-provider" checked={providerId === p.id} onChange={() => pickProvider(p.id)} />
                       <span className="wz-opt-text">
                         <span className="wz-opt-name">{region ?? p.displayName}</span>
                         {region && <span className="wz-opt-sub" title={p.displayName} data-capture="provider-sub">{p.displayName}</span>}
@@ -274,7 +290,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
           )}
 
           {step === 'city' && (
-            <Status res={cities} api={api}>{list => (
+            <Status res={cities} api={api} providerId={providerId}>{list => (
               <Autocomplete label="Місто або село" options={list} value={city}
                 onChange={v => { if (v !== city) resetBelow('city'); setCity(v); }} />
             )}</Status>
@@ -283,9 +299,12 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
           {step === 'street' && (
             <>
               <div className="wz-chips"><span className="sv-chip wz-chip" title={city ?? ''}>{city}</span></div>
-              <Status res={streets} api={api}>{list => (
-                <Autocomplete label="Вулиця" options={list} value={street}
-                  onChange={v => { if (v !== street) resetBelow('street'); setStreet(v); }} />
+              <Status res={streets} api={api} providerId={providerId}>{list => (
+                <>
+                  <Autocomplete label="Вулиця" options={list} value={street}
+                    onChange={v => { if (v !== street) resetBelow('street'); setStreet(v); }} />
+                  {list.length === 0 && <Note text={`Для цього населеного пункту немає адрес у ${short(providerId)}`} />}
+                </>
               )}</Status>
             </>
           )}
@@ -293,7 +312,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
           {step === 'house' && (
             <>
               <div className="wz-chips wz-chips-house"><span className="sv-chip wz-chip" title={`${city}, ${street}`}>{`${city}, ${street}`}</span></div>
-              <Status res={houses} api={api}>{list => {
+              <Status res={houses} api={api} providerId={providerId}>{list => {
                 // A long street gets a filter field over the grid (the house search the step used to have). The picked
                 // house always stays in the grid, so the choice is never hidden.
                 const filtered = list.length > HOUSE_FILTER_FROM;
@@ -312,7 +331,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                     {found.length === 0 && <p className="wz-muted">Нічого не знайдено</p>}
                     {house !== null && houseOutage && <Note text={OUTAGE_NOTE} />}
                     {/* During an outage an empty list is expected to be temporary; the note above says what to do. */}
-                    {noLines && !houseOutage && <Note text="Для цього будинку ДТЕК не публікує графік відключень" />}
+                    {noLines && !houseOutage && <Note text={`Для цього будинку ${short(providerId)} не публікує графік відключень`} />}
                   </>
                 );
               }}</Status>
@@ -320,7 +339,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
           )}
 
           {step === 'line' && (
-            <Status res={previews} api={api}>{list => (
+            <Status res={previews} api={api} providerId={providerId}>{list => (
               <>
                 <fieldset className="wz-opts wz-lines">
                   <legend className="st-sr">Лінія</legend>
@@ -333,7 +352,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                         <div className="wz-line-head">
                           <label className="wz-line-pick">
                             <input type="radio" name="wz-line" checked={line?.index === l.index} aria-describedby={sumId} onChange={() => setLine(l)} />
-                            <span className="wz-opt-name">{`Лінія ${l.index} · ${l.label.toLowerCase()}`}</span>
+                            <span className="wz-opt-name">{`Лінія ${l.index} · ${lowerFirst(l.label)}`}</span>
                           </label>
                           <span className="wz-line-sum" id={sumId} title={ranges} data-capture="line-summary">{ranges}</span>
                         </div>
@@ -344,7 +363,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                   })}
                 </fieldset>
                 {houseOutage && <Note text={OUTAGE_NOTE} />}
-                <button type="button" className="st-link wz-link" onClick={() => api.openDtekSite()}>Відкрити графік на сайті ДТЕК</button>
+                <button type="button" className="st-link wz-link" onClick={() => providerId && api.openProviderSite(providerId)}>{`Відкрити графік на сайті ${short(providerId)}`}</button>
               </>
             )}</Status>
           )}

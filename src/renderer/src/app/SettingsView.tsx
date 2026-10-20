@@ -3,6 +3,7 @@ import { providerDisplayName } from '../../../shared/providers';
 import { formatHM } from '../../../shared/time';
 import type { AppState, WidgetStyle } from '../../../shared/types';
 import { WIDGET_SIZES } from '../../../shared/widget-sizes';
+import { lowerFirst } from '../../../shared/widget-state';
 import { ActualSettings } from './ActualSettings';
 import { StyleThumb } from './StyleThumb';
 import { STYLES } from './widget-styles';
@@ -15,7 +16,7 @@ function addressSub(state: AppState): string {
   const { address } = state.settings;
   if (!address) return '';
   const { snapshot } = state;
-  const queue = snapshot && snapshot.groupId === address.groupId ? ` · ${snapshot.groupLabel.toLowerCase()}` : '';
+  const queue = snapshot && snapshot.groupId === address.groupId ? ` · ${lowerFirst(snapshot.groupLabel)}` : '';
   return `${providerDisplayName(address.providerId)} · Лінія ${address.lineIndex}${queue}`;
 }
 
@@ -92,7 +93,7 @@ export function SettingsView({ state, api, ecoflowFormOpen = false, onChangeAddr
           <div className="st-hair" />
           <div className="st-row">
             <div className="st-row-text">
-              <span className="st-row-title">Графік ДТЕК</span>
+              <span className="st-row-title">Графік відключень</span>
               <span className="st-row-sub" data-capture="updated">{updatedText(state.snapshot)}</span>
             </div>
             <button className="sv-btn st-refresh" onClick={() => void api.refreshNow()}>

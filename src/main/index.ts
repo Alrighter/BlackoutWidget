@@ -15,7 +15,8 @@ import { broadcastState, registerIpc, throttleLive } from './ipc';
 import { consoleLogger, type Logger } from './log';
 import { MainWindow } from './main-window';
 import { BrowserSession } from './providers/browser-session';
-import { DTEK_URL } from './providers/dtek-krem/page-scripts';
+import { electronHttp } from './providers/electron-http';
+import { providerSiteUrl } from '../shared/providers';
 import { createProviders, findProvider } from './providers/registry';
 import { RefreshService } from './refresh';
 import { RefreshScheduler } from './scheduler';
@@ -64,7 +65,7 @@ async function bootstrap(log: Logger): Promise<void> {
 
   const userData = app.getPath('userData');
   const store = new AppStore(userData);
-  const providers = createProviders(o => new BrowserSession(o, log), log);
+  const providers = createProviders(o => new BrowserSession(o, log), log, { fetch: electronHttp, isOnline: () => net.isOnline() });
   const service = new RefreshService({ store, getProvider: id => findProvider(providers, id) });
   const scheduler = new RefreshScheduler(() => service.refresh());
   const secrets = new SecretStore(join(userData, 'secrets.json'), electronEncryptor);
@@ -126,10 +127,10 @@ async function bootstrap(log: Logger): Promise<void> {
     secrets, getSettings: () => store.getSettings(), updateSettings: saveSettingsOrThrow, restartActual, log,
   });
 
-  const solveCaptcha = async () => {
-    const address = store.getSettings().address;
-    const provider = address ? findProvider(providers, address.providerId) : providers[0];
-    await provider.showVerification();
+  const solveCaptcha = async (providerId?: string) => {
+    const id = providerId ?? store.getSettings().address?.providerId;
+    if (!id) return;
+    await findProvider(providers, id).showVerification();
     scheduler.trigger('manual');
   };
 
@@ -155,8 +156,10 @@ async function bootstrap(log: Logger): Promise<void> {
     openEcoflowHelp: () => {
       shell.openExternal(ECOFLOW_HELP_URL).catch(err => log.error('opening the EcoFlow developer site failed', err));
     },
-    openDtekSite: () => {
-      shell.openExternal(DTEK_URL).catch(err => log.error('opening the DTEK site failed', err));
+    openProviderSite: providerId => {
+      const url = providerSiteUrl(providerId);
+      if (!url) { log.error(`no site known for provider ${providerId}`); return; }
+      shell.openExternal(url).catch(err => log.error('opening the provider site failed', err));
     },
     getSettings: () => store.getSettings(),
     bleLive: bleLink,

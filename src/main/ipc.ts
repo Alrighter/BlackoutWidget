@@ -16,16 +16,16 @@ export interface IpcDeps {
   /** Persists the patch, applies side effects (autostart) and republishes state. */
   updateSettings(patch: Partial<Settings>): void;
   openMainWindow(view?: MainView): void;
-  /** Shows the verification window (saved address's provider, else the first one) and refreshes afterwards. */
-  solveCaptcha(): Promise<void>;
+  /** Shows the given provider's verification window (else the saved address's; none without either) and refreshes afterwards. */
+  solveCaptcha(providerId?: string): Promise<void>;
   widgetDrag(phase: DragPhase, screenX: number, screenY: number): void;
   widgetContextMenu(): void;
   /** The widget's «Готово» button. */
   endMoveMode(): void;
   actualActions: ActualActions;
   openEcoflowHelp(): void;
-  /** The wizard's «Відкрити графік на сайті ДТЕК» (D11): a fixed address, nothing from the renderer. */
-  openDtekSite(): void;
+  /** The wizard's «Відкрити графік на сайті …» (D11): the address is looked up by provider id, the renderer never passes a URL. */
+  openProviderSite(providerId: string): void;
   /** The saved settings, read on each call. */
   getSettings(): Settings;
   /** The Bluetooth link's live line; asked only while the saved source is `ecoflow-ble`. */
@@ -83,7 +83,7 @@ export function registerIpc(deps: IpcDeps): void {
   });
   handle(IPC.setAutostart, (on: boolean) => deps.updateSettings({ autostart: !!on }));
   handle(IPC.refreshNow, () => deps.scheduler.trigger('manual'));
-  handle(IPC.solveCaptcha, () => deps.solveCaptcha());
+  handle(IPC.solveCaptcha, (providerId?: unknown) => deps.solveCaptcha(typeof providerId === 'string' ? providerId : undefined));
   handle(IPC.ecoflowTest, (i: unknown) => deps.actualActions.test(i));
   // Nothing from the renderer is passed on.
   handle(IPC.ecoflowScan, () => deps.actualActions.scan());
@@ -99,7 +99,7 @@ export function registerIpc(deps: IpcDeps): void {
   });
   ipcMain.on(IPC.widgetMoveDone, () => deps.endMoveMode());
   ipcMain.on(IPC.openEcoflowHelp, () => deps.openEcoflowHelp());
-  ipcMain.on(IPC.openDtekSite, () => deps.openDtekSite());
+  ipcMain.on(IPC.openProviderSite, (_e, providerId: unknown) => { if (typeof providerId === 'string') deps.openProviderSite(providerId); });
 }
 
 export function broadcastState(state: AppState, targets: StateTarget[]): void {

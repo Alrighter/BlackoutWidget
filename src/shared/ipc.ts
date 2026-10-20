@@ -11,7 +11,7 @@ export const IPC = {
   openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag', navigate: 'window:navigate',
   widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
   ecoflowTest: 'actual:ecoflow-test', ecoflowPreview: 'actual:ecoflow-preview', ecoflowSave: 'actual:ecoflow-save',
-  actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openDtekSite: 'addr:dtek-site',
+  actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openProviderSite: 'addr:provider-site',
   actualLive: 'actual:live', getActualLive: 'actual:get-live', ecoflowScan: 'actual:ecoflow-scan',
 } as const;
 
@@ -58,7 +58,7 @@ export interface RendererApi {
   setWidgetStyle(s: WidgetStyle): Promise<void>;
   setAutostart(on: boolean): Promise<void>;
   refreshNow(): Promise<void>;
-  solveCaptcha(): Promise<void>;
+  solveCaptcha(providerId?: string): Promise<void>;
   openMainWindow(view?: MainView): void;
   /** Main process asks the open main window to switch its in-app view. */
   onNavigate(cb: (view: MainView) => void): () => void;
@@ -81,8 +81,8 @@ export interface RendererApi {
   actualDisconnect(): Promise<void>;
   /** Opens the EcoFlow developer site (a fixed address) in the browser. */
   openEcoflowHelp(): void;
-  /** Opens the DTEK outage schedule page (a fixed address) in the browser (D11). */
-  openDtekSite(): void;
+  /** Opens the given provider's outage schedule page in the browser (D11); main looks the address up by the id. */
+  openProviderSite(providerId: string): void;
   /** The Bluetooth source's live line for the first paint; null unless that source is the saved one. */
   getActualLive(): Promise<ActualLive | null>;
   /** Live line pushes to the main window, at most one a second; null once nothing is watched. */
