@@ -144,13 +144,15 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
               <span><i className="off" />Немає</span>
               <span><i className="maybe" />Можливо немає</span>
               <span><i className="unknown" />Невідомо</span>
-              {cells?.some(c => c.emergency) && <span><i className="emergency" />Аварійне</span>}
+              {cells?.some(c => c.emergency) && <span><i className="emergency" />{view.outageBadge ?? 'Аварійне'}</span>}
             </div>
           </div>
 
           <DayGrid cells={cells} actualRow={actualRow}
             emptyText={isToday ? 'Графік на сьогодні ще не отримано' : 'Графік на завтра ще не опубліковано'}
             now={nowMin === undefined ? undefined : { min: nowMin, label: formatHM(now) }} />
+
+          {isToday && snapshot.note && <div className="sv-note-line" data-capture="note">{snapshot.note}</div>}
 
           <div className="sv-foot">
             <span className="sv-outage-line" data-capture="outage-line">

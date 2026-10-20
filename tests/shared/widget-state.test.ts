@@ -105,6 +105,13 @@ test('duration formats', () => {
 const NOW = at('2026-10-17T08:50:00Z');
 const withOutage = (o: CurrentOutage, fetchedAt?: string) =>
   computeWidgetView(fixtureSnapshot({ currentOutage: o, ...(fetchedAt ? { fetchedAt } : {}) }), NOW);
+test('a planned outage at the house overrides like an emergency, with the «Планове» badge', () => {
+  const planned: CurrentOutage = { kind: 'planned', text: 'Планові ремонтні роботи', start: '20.10.2026 09:36', end: '20.10.2026 19:00' };
+  const snap = fixtureSnapshot({ currentOutage: planned, fetchedAt: '2026-10-20T06:50:00.000Z' });
+  const v = computeWidgetView(snap, at('2026-10-20T07:00:00Z')); // 10:00 Kyiv
+  expect(v.state).toBe('emergency'); expect(v.title).toBe('Світла немає'); expect(v.outageBadge).toBe('Планове');
+  expect(computeWidgetView(snap, at('2026-10-20T16:30:00Z')).outageBadge).toBeUndefined(); // 19:30 Kyiv: it has ended
+});
 test('emergency that has not started yet → schedule state', () => {
   const v = withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: '13:00 17.10.2026', end: '17:00 17.10.2026' });
   expect(v.state).toBe('on'); expect(v.outageBadge).toBeUndefined();

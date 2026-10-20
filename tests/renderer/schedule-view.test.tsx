@@ -154,6 +154,20 @@ describe('emergency', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Завтра 18.10' }));
     expect(within(legend()).queryByText('Аварійне')).toBeNull();
   });
+  test('a planned outage: banner «Планове відключення» and the «Планове» legend entry', () => {
+    const base = emergencyState();
+    const snapshot = { ...base.snapshot!, currentOutage: { kind: 'planned' as const, text: 'Планове вимкнення', start: '13:30 17.10.2026', end: '17:00 17.10.2026' } };
+    view({ ...base, snapshot }, at1420);
+    expect(screen.getByText('Планове відключення')).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Легенда' })).getByText('Планове')).toBeInTheDocument();
+  });
+  test('the snapshot note shows only on today\'s tab, in data-capture="note"', async () => {
+    const base = emergencyState();
+    const { container } = view({ ...base, snapshot: { ...fixtureSnapshot(), note: 'X' } }, at1420);
+    expect(container.querySelector('[data-capture="note"]')).toHaveTextContent('X');
+    await userEvent.click(screen.getByRole('tab', { name: 'Завтра 18.10' }));
+    expect(container.querySelector('[data-capture="note"]')).toBeNull();
+  });
   test('no emergency → no «Аварійне» in the legend', () => {
     view({ settings: DEFAULT_SETTINGS, snapshot: fixtureSnapshot(), phase: 'ok', lineChanged: false }, at1420);
     expect(within(screen.getByRole('group', { name: 'Легенда' })).getAllByText(/./).map(e => e.textContent))

@@ -17,7 +17,7 @@ export interface WidgetView {
   actual?: WidgetActual; actualUnknownReason?: string; actualStrip?: StripPart[];
 }
 export interface WidgetActual { power: 'on' | 'off'; sinceText?: string; mismatch: boolean }
-export type OutageBadgeText = 'Аварійне' | 'Екстрене';
+export type OutageBadgeText = 'Аварійне' | 'Екстрене' | 'Планове';
 
 export function formatDurationLong(min: number): string {
   const h = Math.floor(min / 60);
@@ -56,19 +56,20 @@ const TITLES: Record<PowerState, string> = {
 };
 
 function badgeFor(o: CurrentOutage): OutageBadgeText {
+  if (o.kind === 'planned') return 'Планове';
   return /екстрен/i.test(o.text) ? 'Екстрене' : 'Аварійне';
 }
 
 /**
- * The emergency outage that overrides the schedule right now, if any. Only kind 'emergency' counts ('other' is just
- * logged), and only for the saved queue when the outage names its queues. It must have started (or have no readable
+ * The emergency outage that overrides the schedule right now, if any. Only kinds 'emergency' and 'planned' count ('other'
+ * is just logged), and only for the saved queue when the outage names its queues. It must have started (or have no readable
  * start); a readable end must be in the future; without a readable end it only counts while the snapshot is fresh —
  * an old report must not keep the widget at «Світла немає».
  */
 function activeEmergency(
   o: CurrentOutage | undefined, groupId: string, now: Date, stale: boolean,
 ): { outage: CurrentOutage; start?: Date; end?: Date } | null {
-  if (!o || o.kind !== 'emergency') return null;
+  if (!o || (o.kind !== 'emergency' && o.kind !== 'planned')) return null;
   if (o.groups?.length && !o.groups.includes(groupId)) return null;
   const start = o.start ? parseDtekDateTime(o.start) : undefined;
   if (start && start.getTime() > now.getTime()) return null;
