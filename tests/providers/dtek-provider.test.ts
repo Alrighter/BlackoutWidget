@@ -3,7 +3,7 @@ import fresh from '../fixtures/dtek/getHomeNum-fresh.json';
 import { DtekProvider } from '../../src/main/providers/dtek';
 import { READ_FACT, getHomeNumScript, isPagePollRequest, readStreetsScript } from '../../src/main/providers/dtek/page-scripts';
 import { CaptchaRequiredError, NetworkError, ProviderError } from '../../src/main/providers/types';
-import { factToDays } from '../../src/main/providers/dtek/parse';
+import { factToDays, DTEK_QUIET_NOTE } from '../../src/main/providers/dtek/parse';
 import { AppStore } from '../../src/main/store';
 import { RefreshService } from '../../src/main/refresh';
 import { mkdtempSync } from 'node:fs';
@@ -13,6 +13,9 @@ const KREM = { id: 'dtek-krem', cityLevel: true };
 const KEM = { id: 'dtek-kem', cityLevel: false };
 const C = 'м. Біла Церква', S = 'бул. Грушевського Михайла';
 const addr = { providerId: 'dtek-krem', city: C, street: S, house: '40', lineIndex: 1, groupId: 'GPV1.2' };
+// The fixture is the live capture of 17.10.2026: keep "today" on that day so it is not a quiet day.
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-17T09:00:00Z')); });
+afterEach(() => { vi.useRealTimers(); });
 const oldFact = { ...stale.fact, update: '17.10.2026 09:40' };
 function fakeSession(replies: Record<string, unknown[]>) {
   return {
@@ -245,4 +248,44 @@ test('a failure is logged under the provider id', async () => {
   const log = fakeLog();
   await expect(new DtekProvider(KEM, s as any, log).fetchSnapshot({ ...addr, providerId: 'dtek-kem' })).rejects.toBeInstanceOf(ProviderError);
   expect(log.error.mock.calls[0][0]).toBe('dtek-kem fetchSnapshot failed');
+});
+
+describe('quiet day (no schedule published for today)', () => {
+  const tsOf = (iso: string) => String(Date.parse(iso) / 1000);
+  const hours = (status: string) => Object.fromEntries(Array.from({ length: 24 }, (_, i) => [String(i + 1), status]));
+  const bodyWith = (data: Record<string, unknown>) => {
+    const body = structuredClone(stale) as any;
+    body.fact = { ...body.fact, data };
+    return body;
+  };
+  async function snapshotFor(data: Record<string, unknown>) {
+    const body = bodyWith(data);
+    const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
+    return new DtekProvider(KREM, s as any).fetchSnapshot(addr);
+  }
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-20T07:00:00Z')); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  test('empty fact.data: today is all on, with the note', async () => {
+    const snap = await snapshotFor({});
+    expect(snap.days).toEqual([{ date: '2026-10-20', slots: Array(48).fill('on') }]);
+    expect(snap.note).toBe(DTEK_QUIET_NOTE);
+  });
+  test('only tomorrow published: today all on with the note, tomorrow kept', async () => {
+    const snap = await snapshotFor({ [tsOf('2026-10-21T09:00:00Z')]: { 'GPV1.2': hours('no') } });
+    expect(snap.days.map(d => d.date)).toEqual(['2026-10-20', '2026-10-21']);
+    expect(snap.days[0].slots).toEqual(Array(48).fill('on'));
+    expect(snap.days[1].slots).toEqual(Array(48).fill('off'));
+    expect(snap.note).toBe(DTEK_QUIET_NOTE);
+  });
+  test('today published for other groups only: no note and no day for today', async () => {
+    const snap = await snapshotFor({ [tsOf('2026-10-20T09:00:00Z')]: { 'GPV9.9': hours('no') } });
+    expect(snap.days).toEqual([]);
+    expect('note' in snap).toBe(false);
+  });
+  test('today published for the saved group: no note', async () => {
+    const snap = await snapshotFor({ [tsOf('2026-10-20T09:00:00Z')]: { 'GPV1.2': hours('yes') } });
+    expect(snap.days.map(d => d.date)).toEqual(['2026-10-20']);
+    expect('note' in snap).toBe(false);
+  });
 });

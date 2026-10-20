@@ -97,3 +97,14 @@ export function parseCurrentOutage(entry: DtekHouseEntry): CurrentOutage | undef
   if (entry.end_date) out.end = entry.end_date;
   return out;
 }
+
+export const DTEK_QUIET_NOTE = 'ДТЕК не опублікував графік на сьогодні — зазвичай це означає, що відключень за графіком немає';
+
+/**
+ * The source answered normally (it stamped its update) but published no schedule for today for any group:
+ * between outage waves that means no scheduled outages. A blank stamp means an unreadable answer, never a quiet day.
+ */
+export function isQuietToday(fact: DtekFact, todayKey: string): boolean {
+  if (typeof fact.update !== 'string' || fact.update.trim() === '') return false;
+  return !Object.keys(fact.data ?? {}).some(ts => kyivDateKey(new Date(Number(ts) * 1000)) === todayKey);
+}

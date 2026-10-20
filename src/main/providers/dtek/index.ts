@@ -1,11 +1,12 @@
 import { providerDisplayName, providerSingleCity } from '../../../shared/providers';
-import type { Address, HouseInfo, ScheduleSnapshot } from '../../../shared/types';
+import { kyivDateKey } from '../../../shared/time';
+import type { Address, HouseInfo, ScheduleSnapshot, Slot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import {
   CaptchaRequiredError, NetworkError, OFFLINE_MESSAGE, ProviderError, type PageSession, type ScheduleProvider,
 } from '../types';
 import {
-  deriveLines, factToDays, hasActiveOutage, hasOutageFields, parseCurrentOutage, parseHomeNumResponse, parseHouses,
+  DTEK_QUIET_NOTE, deriveLines, factToDays, hasActiveOutage, hasOutageFields, isQuietToday, parseCurrentOutage, parseHomeNumResponse, parseHouses,
   queueLabelFromId, type DtekFact, type DtekHomeNumResponse,
 } from './parse';
 import { READ_CITIES, READ_FACT, getHomeNumScript, readStreetsScript } from './page-scripts';
@@ -69,7 +70,13 @@ export class DtekProvider implements ScheduleProvider {
       // Always the saved queue: during an outage `lines` lists only the outage's queues (see hasActiveOutage).
       const groupId = address.groupId;
       const unknownStatuses = new Set<string>();
-      const days = factToDays(fact, groupId, s => unknownStatuses.add(s));
+      let days = factToDays(fact, groupId, s => unknownStatuses.add(s));
+      // Nothing published for today: power is on by schedule. Tomorrow without a schedule is simply left out.
+      const todayKey = kyivDateKey(new Date());
+      const quiet = isQuietToday(fact, todayKey);
+      if (quiet) {
+        days = [{ date: todayKey, slots: Array<Slot>(48).fill('on') }, ...days].sort((a, b) => a.date.localeCompare(b.date));
+      }
       for (const s of unknownStatuses) this.log.warn(`${this.id}: unknown hour status`, { groupId, status: s });
       return {
         providerId: this.id,
@@ -82,6 +89,7 @@ export class DtekProvider implements ScheduleProvider {
         lines,
         outageActive: hasActiveOutage(entry),
         currentOutage: parseCurrentOutage(entry),
+        ...(quiet ? { note: DTEK_QUIET_NOTE } : {}),
       };
     });
   }
