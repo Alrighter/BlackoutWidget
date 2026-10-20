@@ -344,6 +344,15 @@ test('a pending house: the lines load after the pick, then the line step lists b
   expect(await screen.findByText('Лінія 1 · черга 1.2')).toBeInTheDocument();
   expect(screen.getByText('Лінія 2 · черга 4.2')).toBeInTheDocument();
 });
+test('the lines loading line is a polite status, so a screen reader hears it', async () => {
+  const api = mockApi(pending, vi.fn(() => new Promise<LineInfo[]>(() => {}))); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);
+  await user.click(await screen.findByRole('radio', { name: '7' }));
+  const loading = screen.getByText('Завантаження ліній…');
+  expect(loading).toHaveAttribute('role', 'status');
+  expect(loading).toHaveAttribute('aria-live', 'polite');
+  expect(screen.getByRole('status')).toBe(loading);
+});
 test('a pending house whose answer is empty: the no-schedule note, blocked', async () => {
   const api = mockApi(pending, vi.fn(async () => [])); const user = userEvent.setup();
   render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await toHouseStep(user);

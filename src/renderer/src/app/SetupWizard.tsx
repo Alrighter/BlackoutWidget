@@ -356,7 +356,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                     {found.length === 0 && <p className="wz-muted">Нічого не знайдено</p>}
                     {house !== null && houseOutage && <Note text={OUTAGE_NOTE} />}
                     {/* During an outage an empty list is expected to be temporary; the note above says what to do. */}
-                    {house !== null && houseLines === null && !linesError && <p className="wz-muted">Завантаження ліній…</p>}
+                    {house !== null && houseLines === null && !linesError && <p className="wz-muted" role="status" aria-live="polite">Завантаження ліній…</p>}
                     {linesError && (
                       <Note text={linesError}>
                         <button className="sv-btn" onClick={() => setLinesAttempt(a => a + 1)}>Спробувати ще раз</button>

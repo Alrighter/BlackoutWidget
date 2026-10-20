@@ -4,8 +4,8 @@ import { addDays, kyivDateKey } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import type { HttpFetch } from '../http';
-import { HttpSource, quietNote, sourceTexts, type SourceInit } from '../http-source';
-import { NONE_GROUP, daySlots, linesOf, queueLabel } from '../lines';
+import { HttpSource, loggable, quietNote, sourceTexts, type SourceInit } from '../http-source';
+import { NONE_GROUP, QueueValueError, classifyQueue, daySlots, linesOf, queueLabel } from '../lines';
 import { addressNotFound, resolveByLabel, uniqueLabels } from '../resolve';
 import type { ScheduleProvider } from '../types';
 import {
@@ -29,8 +29,12 @@ interface Place { cityId: number; streetId: number }
 
 const sorted = (labels: string[]): string[] => [...labels].sort((a, b) => a.localeCompare(b, 'uk'));
 const byId = <T extends { id: number }>(items: T[]): T[] => [...items].sort((a, b) => a.id - b.id);
-/** Whether any of these is an hourly-schedule queue («1.2»), by the rule `linesOf` keeps them by. */
-const hasQueue = (queues: string[]): boolean => linesOf(queues)[0].groupId !== NONE_GROUP;
+/** Ternopil's `chergGpv` values for a house outside the hourly schedule. */
+const NOT_IN_SCHEDULE_VALUES = ['Не входить', '', null] as const;
+/** A `chergGpv` as a classified id: «N.M» or the 'none' line; anything else throws (read as «could not read»). */
+const queueId = (value: unknown): string => classifyQueue(value, NOT_IN_SCHEDULE_VALUES);
+/** Whether any of these classified ids is an hourly-schedule queue («1.2»). */
+const hasQueue = (ids: string[]): boolean => ids.some((id) => id !== NONE_GROUP);
 const cityGroup = (c: ToeCity): string | undefined => (c.otg ? `${c.otg} громада` : undefined);
 const noGroup = (): undefined => undefined;
 /** Rows whose house text is blank cannot be asked about: the API matches the text exactly. */
@@ -84,7 +88,7 @@ export class ToeProvider implements ScheduleProvider {
     return this.http.serial('listHouses', async () => {
       const queues = new Map<string, string[]>();
       for (const r of usable(await this.houseRows(await this.place(city, street)))) {
-        queues.set(r.house, [...(queues.get(r.house) ?? []), r.queue]);
+        queues.set(r.house, [...(queues.get(r.house) ?? []), this.read('building-names', () => queueId(r.queue))]);
       }
       return [...queues].map(([house, q]): HouseInfo => ({ house, lines: linesOf(q), outageActive: false, linesPending: true }));
     });
@@ -157,17 +161,18 @@ export class ToeProvider implements ScheduleProvider {
   /**
    * The house's queues from `building-groups`. Without a queue there, the house's row in `building-names` decides:
    * listed without a queue means the always-on line, missing means the house is gone (`[]`). Listed with a queue
-   * contradicts the check, so neither answer is trusted. Any odd answer is an error.
+   * contradicts the check, so neither answer is trusted. Any odd answer, a queue value of an unknown shape included
+   * (in either list), is an error.
    */
   private async houseQueues(place: Place, house: string): Promise<LineInfo[]> {
     const url = `${API}/pw-accounts/building-groups?cityId=${place.cityId}&streetId=${place.streetId}`
       + `&buildingNames=${encodeURIComponent(house)}`;
     const body = await this.http.json(url, GET);
-    const groups = this.read('building-groups', () => parseBuildingGroups(body));
+    const groups = this.read('building-groups', () => parseBuildingGroups(body).map(queueId));
     if (hasQueue(groups)) return linesOf(groups);
     const rows = usable(await this.houseRows(place)).filter((r) => r.house === house);
     if (rows.length === 0) return [];
-    if (hasQueue(rows.map((r) => r.queue))) {
+    if (hasQueue(this.read('building-names', () => rows.map((r) => queueId(r.queue))))) {
       throw this.http.unreadable({ what: 'building-groups', reason: 'no queue while building-names has one' });
     }
     return linesOf([]);
@@ -183,7 +188,7 @@ export class ToeProvider implements ScheduleProvider {
       const planned = this.read('pw_accident_planeds', () => parseOutageRows(plannedBody, 'planned', place));
       return currentOutageOf(emergency, planned, house, now);
     } catch (e) {
-      this.log.warn('toe fetchSnapshot: current outage lookup failed', e);
+      this.log.warn('toe fetchSnapshot: current outage lookup failed', loggable(e));
       return undefined;
     }
   }
@@ -228,7 +233,7 @@ export class ToeProvider implements ScheduleProvider {
     try {
       return parse();
     } catch (e) {
-      if (e instanceof ToeShapeError) throw this.http.unreadable({ what, reason: e.message });
+      if (e instanceof ToeShapeError || e instanceof QueueValueError) throw this.http.unreadable({ what, reason: e.message });
       throw e;
     }
   }

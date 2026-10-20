@@ -26,7 +26,8 @@ function members(body: unknown, what: string, allowNull = false): unknown[] {
 
 export interface ToeCity { id: number; name: string; otg?: string }
 export interface ToeStreet { id: number; name: string }
-export interface ToeHouseRow { house: string; queue: string }
+/** `queue` is `chergGpv` as written (missing → undefined): the provider classifies it, so a missing one is never «empty». */
+export interface ToeHouseRow { house: string; queue: string | null | undefined }
 
 const isId = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 
@@ -58,7 +59,7 @@ export function parseBuildingNames(body: unknown): ToeHouseRow[] {
     if (!isObj(r) || typeof r.buildingName !== 'string') return fail('building-names: row');
     const queue = r.chergGpv;
     if (queue !== null && queue !== undefined && typeof queue !== 'string') return fail('building-names: queue');
-    return { house: r.buildingName, queue: queue ?? '' };
+    return { house: r.buildingName, queue };
   });
 }
 
@@ -74,7 +75,11 @@ export function parseBuildingGroups(body: unknown): string[] {
 /** One published day: `date` is `dateGraph`'s date part, a Kyiv date whatever its «Z» says. */
 export interface GpvDay { id: number; date: string; dateCreate: string; queues: Obj }
 
-const DATE_KEY = /^(\d{4})-(\d{2})-(\d{2})/;
+/**
+ * `dateGraph` as every observed value writes it: a date at midnight, labelled «Z» or «+00:00». Anything else (a real
+ * instant such as «…16T21:00:00Z», another offset, a bare date) would move the member to another day: unreadable.
+ */
+const DATE_GRAPH = /^\d{4}-\d{2}-\d{2}T00:00:00(?:Z|\+00:00)$/;
 
 const later = (a: GpvDay, b: GpvDay): boolean => a.dateCreate > b.dateCreate || (a.dateCreate === b.dateCreate && a.id > b.id);
 
@@ -93,7 +98,7 @@ export function parseGpvCollection(body: unknown): Map<string, GpvDay> {
   if (body['hydra:member'] !== null && list.length === 0) fail('a_gpv_g: empty member list');
   const byDate = new Map<string, GpvDay>();
   for (const m of list) {
-    if (!isObj(m) || typeof m.dateGraph !== 'string' || !DATE_KEY.test(m.dateGraph)) return fail('a_gpv_g: member date');
+    if (!isObj(m) || typeof m.dateGraph !== 'string' || !DATE_GRAPH.test(m.dateGraph)) return fail('a_gpv_g: member date');
     if (!isObj(m.dataJson)) return fail('a_gpv_g: member data');
     const day: GpvDay = {
       id: typeof m.id === 'number' ? m.id : -1,

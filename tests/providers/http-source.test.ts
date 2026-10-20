@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HttpFetch, HttpResponse } from '../../src/main/providers/http';
-import { HttpSource, quietNote, sourceTexts } from '../../src/main/providers/http-source';
+import { HttpSource, loggable, quietNote, sourceTexts } from '../../src/main/providers/http-source';
 import { NetworkError, ProviderError } from '../../src/main/providers/types';
 import { VOE_QUIET_NOTE } from '../../src/main/providers/voe';
 import type { Logger } from '../../src/main/log';
@@ -41,6 +41,19 @@ describe('texts', () => {
   it('quietNote matches the Volyn note byte for byte', () => {
     expect(quietNote('Волиньобленерго', 'опублікувало')).toBe(VOE_QUIET_NOTE);
     expect(quietNote('Х', 'опублікував')).toBe('Х не опублікував графік на сьогодні — зазвичай це означає, що відключень за графіком немає');
+  });
+});
+
+describe('loggable', () => {
+  it('keeps a ProviderError (its message and cause are ours) and reduces anything else to its kind', () => {
+    const provider = new ProviderError(texts.unreadable, { cause: { what: 'x', reason: 'y' } });
+    expect(loggable(provider)).toBe(provider);
+    const offline = new NetworkError(texts.offline);
+    expect(loggable(offline)).toBe(offline);
+    // A foreign error's message may quote a response body: only its name goes to the log.
+    expect(loggable(new TypeError('Замовник Петренко'))).toEqual({ error: 'TypeError' });
+    expect(loggable('Замовник Петренко')).toEqual({ error: 'string' });
+    expect(JSON.stringify(loggable(new Error('Замовник Петренко')))).not.toContain('Петренко');
   });
 });
 

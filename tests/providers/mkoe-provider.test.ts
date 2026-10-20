@@ -28,6 +28,7 @@ const NO_ANSWER = `Сайт ${NAME} не відповідає`;
 const HTTP_ERROR = `Сайт ${NAME} повернув помилку`;
 const OFFLINE = `Немає з’єднання з сайтом ${NAME}`;
 const NOT_FOUND = `Адресу не знайдено у ${NAME} — оберіть її в налаштуваннях заново`;
+const ODD_QUEUES_NOTE = 'Миколаївобленерго повідомило черги будинку в незнайомому вигляді — графік на сьогодні невідомий';
 
 type Init = Parameters<HttpFetch>[1];
 type Route = (init: Init) => HttpResponse | Error;
@@ -369,19 +370,19 @@ describe('MkoeProvider schedule', () => {
     expect(http.to('addr/dom/124212/outage-queue')).toHaveLength(1);
   });
 
-  it('a house answer of an unknown shape gives today unknown, never the none line\'s all on (R11)', async () => {
+  it('a house answer of an unknown shape gives today unknown with the note, never the none line\'s all on (R11, final M1)', async () => {
     for (const [, body] of ODD_HOUSES) {
       const none = setup({ http: withSynthetic({ '/api/addr/dom/124212/outage-queue': () => ok(body) }) });
       const a = await none.p.fetchSnapshot(SHEVCHENKA_1);
       expect(a.days).toEqual([{ date: '2026-10-20', slots: fill('unknown') }]);
       // Only the queues it can read: never the always-on line it cannot prove.
       expect(a.lines).toEqual([]);
-      expect('note' in a).toBe(false);
+      expect(a.note).toBe(ODD_QUEUES_NOTE);
       expect(none.http.schedule()).toHaveLength(0);
       const queue = setup({ http: withSynthetic({ '/api/addr/dom/115392/outage-queue': () => ok(body) }) });
       const b = await queue.p.fetchSnapshot(MARIUPOLSKA);
       expect(b.days).toEqual([{ date: '2026-10-20', slots: fill('unknown') }]);
-      expect('note' in b).toBe(false);
+      expect(b.note).toBe(ODD_QUEUES_NOTE);
       expect(queue.http.schedule()).toHaveLength(0);
     }
     // Next to a known queue, the known one stays in lines and today is still unknown.
@@ -390,6 +391,7 @@ describe('MkoeProvider schedule', () => {
     const snap = await p.fetchSnapshot(MARIUPOLSKA);
     expect(snap.days).toEqual([{ date: '2026-10-20', slots: fill('unknown') }]);
     expect(snap.lines).toEqual([{ index: 1, groupId: '2.2', label: 'Черга 2.2' }]);
+    expect(snap.note).toBe(ODD_QUEUES_NOTE);
     expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^mkoe fetchSnapshot: /), { what: 'outage-queue', reason: 'queue name' });
   });
 
@@ -499,17 +501,29 @@ describe('MkoeProvider.fetchSnapshot address check', () => {
     await expectError(p.fetchSnapshot(SHEVCHENKA_1), NetworkError, OFFLINE);
   });
 
-  it('a none line whose outage-queue fails stays on with the saved line and no current outage (R7)', async () => {
-    for (const route of [() => new Error('ECONNRESET'), () => ok('<html>Server Error</html>')]) {
+  it('a none line whose outage-queue fails or cannot be read fails the snapshot with that error (R7, final I1)', async () => {
+    // The house list only proves the house exists; its outage-queue proves it is still outside the schedule.
+    for (const [route, message] of [
+      [() => new Error('ECONNRESET'), NO_ANSWER],
+      [() => failStatus(500), HTTP_ERROR],
+      [() => ok('<html>Server Error</html>'), UNREADABLE],
+      [() => ok('[{"outage":null}]'), UNREADABLE],
+      [() => ok(JSON.stringify([patched(queueRow(12, '2', 2), { deleted: null })])), UNREADABLE],
+    ] as const) {
       const { p, http, log } = setup({ http: fakeHttp({ '/api/addr/dom/124212/outage-queue': route }) });
-      const snap = await p.fetchSnapshot(SHEVCHENKA_1);
-      expect(snap.days).toEqual([{ date: '2026-10-20', slots: fill('on') }]);
-      expect(snap.lines).toEqual(NONE_LINE);
-      expect('currentOutage' in snap).toBe(false);
+      const err = await expectError(p.fetchSnapshot(SHEVCHENKA_1), ProviderError, message);
+      expect(JSON.stringify(err.cause)).not.toContain('Server Error');
       expect(http.schedule()).toHaveLength(0);
-      expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^mkoe fetchSnapshot: /), expect.anything());
       expect(logged(log)).not.toContain('Server Error');
     }
+  });
+
+  it('offline, a none line whose house list answered but outage-queue did not fails with NetworkError (final I1)', async () => {
+    const http = fakeHttp({ '/api/addr/dom/124212/outage-queue': () => new Error('ERR_INTERNET_DISCONNECTED') });
+    const { p } = setup({ http, online: false });
+    await expectError(p.fetchSnapshot(SHEVCHENKA_1), NetworkError, OFFLINE);
+    expect(http.to('addr/street/2968/dom')).toHaveLength(1);
+    expect(http.schedule()).toHaveLength(0);
   });
 
   it('offline, a queue line keeps the soft check and fails on the schedule', async () => {

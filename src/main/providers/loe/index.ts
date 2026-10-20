@@ -3,8 +3,8 @@ import { addDays, formatHM, kyivDateKey } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot, Slot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import type { HttpFetch } from '../http';
-import { HttpSource, quietNote, sourceTexts, type SourceInit } from '../http-source';
-import { NONE_GROUP, daySlots, linesOf, queueLabel } from '../lines';
+import { HttpSource, loggable, quietNote, sourceTexts, type SourceInit } from '../http-source';
+import { NONE_GROUP, QueueValueError, classifyQueue, daySlots, linesOf, queueLabel } from '../lines';
 import { AddressNotFoundError, addressNotFound, resolveByLabel, uniqueLabels } from '../resolve';
 import { ProviderError, type ScheduleProvider } from '../types';
 import {
@@ -67,6 +67,11 @@ function parseStreets(body: unknown): LoeStreet[] {
   }
   return streets;
 }
+
+/** Lviv's only `chergGpv` for a house outside the hourly schedule (never empty: lviv.md, 0 of 7,560 rows). */
+const NOT_IN_SCHEDULE_VALUES = ['Не входить'] as const;
+/** A `chergGpv` as a classified id: «N.M» or the 'none' line; anything else throws (read as «could not read»). */
+const queueId = (value: string): string => classifyQueue(value, NOT_IN_SCHEDULE_VALUES);
 
 /** `pw_accounts`: one row per customer account. Only the house text (byte for byte) and its ГПВ queue are read. */
 function parseAccounts(body: unknown): LoeAccount[] {
@@ -149,8 +154,6 @@ const byId = <T extends { id: number }>(items: T[]): T[] => [...items].sort((a, 
 const houseOrder = new Intl.Collator('uk', { numeric: true });
 const cityGroup = (c: LoeCity): string | undefined => (c.otg ? `${c.otg} громада` : undefined);
 const noGroup = (): undefined => undefined;
-/** Only the kind of a non-provider error goes to the log: an error's message may quote a response. */
-const loggable = (e: unknown): unknown => (e instanceof ProviderError ? e : { error: e instanceof Error ? e.name : typeof e });
 
 export interface LoeDeps {
   fetch: HttpFetch;
@@ -176,6 +179,11 @@ export class LoeProvider implements ScheduleProvider {
   private cities: Labeled<LoeCity> | undefined;
   /** Streets by city id; like the city list, kept for the run. */
   private readonly streets = new Map<number, Labeled<LoeStreet>>();
+  /**
+   * A street's houses with their lines, by «cityId/streetId», kept for the run: the wizard's line previews ask for the
+   * list again and must not download the whole street again. A refresh's house check never reads it.
+   */
+  private readonly houses = new Map<string, HouseInfo[]>();
 
   constructor(deps: LoeDeps) {
     this.log = deps.log ?? silentLogger;
@@ -197,15 +205,7 @@ export class LoeProvider implements ScheduleProvider {
 
   /** Each house once, its text byte for byte, with the distinct queues of all its accounts. */
   listHouses(city: string, street: string): Promise<HouseInfo[]> {
-    return this.http.serial('listHouses', async () => {
-      const place = await this.place(city, street);
-      const queues = new Map<string, string[]>();
-      for (const r of await this.accounts(`${API}/pw_accounts?pagination=false&city.id=${place.cityId}&street.id=${place.streetId}`)) {
-        if (r.house.trim() !== '') queues.set(r.house, [...(queues.get(r.house) ?? []), r.queue]);
-      }
-      return [...queues.keys()].sort(houseOrder.compare)
-        .map((house): HouseInfo => ({ house, lines: linesOf(queues.get(house)!), outageActive: false }));
-    });
+    return this.http.serial('listHouses', async () => [...await this.streetHouses(await this.place(city, street))]);
   }
 
   fetchSnapshot(address: Address): Promise<ScheduleSnapshot> {
@@ -260,7 +260,7 @@ export class LoeProvider implements ScheduleProvider {
         + `&buildingName=${encodeURIComponent(address.house)}`;
       const rows = (await this.accounts(url)).filter((r) => r.house === address.house);
       if (rows.length === 0) throw addressNotFound(NAME);
-      return { place, lines: linesOf(rows.map((r) => r.queue)) };
+      return { place, lines: this.lines(rows.map((r) => r.queue)) };
     } catch (e) {
       if (e instanceof AddressNotFoundError || address.groupId === NONE_GROUP) throw e;
       this.log.warn('loe fetchSnapshot: address check failed, keeping the saved line', loggable(e));
@@ -343,9 +343,29 @@ export class LoeProvider implements ScheduleProvider {
     return list;
   }
 
+  /** The street's houses (rows with an empty house are skipped), in house order; kept only once every queue was read. */
+  private async streetHouses(place: Place): Promise<HouseInfo[]> {
+    const key = `${place.cityId}/${place.streetId}`;
+    const cached = this.houses.get(key);
+    if (cached) return cached;
+    const queues = new Map<string, string[]>();
+    for (const r of await this.accounts(`${API}/pw_accounts?pagination=false&city.id=${place.cityId}&street.id=${place.streetId}`)) {
+      if (r.house.trim() !== '') queues.set(r.house, [...(queues.get(r.house) ?? []), r.queue]);
+    }
+    const list = [...queues.keys()].sort(houseOrder.compare)
+      .map((house): HouseInfo => ({ house, lines: this.lines(queues.get(house)!), outageActive: false }));
+    this.houses.set(key, list);
+    return list;
+  }
+
   private async accounts(url: string): Promise<LoeAccount[]> {
     const body = await this.get(url);
     return this.read('pw_accounts', () => parseAccounts(body));
+  }
+
+  /** A house's lines from its accounts' `chergGpv`: distinct queues, else the 'none' line; an unknown value is unreadable. */
+  private lines(queues: string[]): LineInfo[] {
+    return this.read('pw_accounts', () => linesOf(queues.map(queueId)));
   }
 
   /** Every LOE request: JSON over GET, with 403 and 503 read as «не відповідає» (the cause, url and status, kept). */
@@ -365,7 +385,7 @@ export class LoeProvider implements ScheduleProvider {
     try {
       return parse();
     } catch (e) {
-      if (e instanceof LoeShapeError) throw this.http.unreadable({ what, reason: e.message });
+      if (e instanceof LoeShapeError || e instanceof QueueValueError) throw this.http.unreadable({ what, reason: e.message });
       throw e;
     }
   }

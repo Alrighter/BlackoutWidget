@@ -37,6 +37,9 @@ export interface HttpSourceOptions {
 /** Only the kind of a failure goes into a cause: an error's message may quote the response body. */
 const kind = (e: unknown): string => (e instanceof Error ? e.name : typeof e);
 
+/** An error as it may go to the log: a ProviderError (message and cause are ours) as it is, anything else by its kind only. */
+export const loggable = (e: unknown): unknown => (e instanceof ProviderError ? e : { error: kind(e) });
+
 /** The request plumbing shared by the plain-HTTPS providers: one request at a time, a timeout, and the four error texts. */
 export class HttpSource {
   private readonly timeoutMs: number;

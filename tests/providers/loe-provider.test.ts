@@ -538,6 +538,84 @@ describe('LoeProvider.fetchSnapshot address check', () => {
   });
 });
 
+describe('LoeProvider queue values (final I2)', () => {
+  /** pw_accounts answering these rows for Кульпарківська, whatever the buildingName filter. */
+  const rowsOf = (rows: [string, string][]) => fakeHttp({ [`${API}/pw_accounts`]: () => ok(hydra(accountRows(693, rows))) });
+  const ODD = ['5.1, 5.2', 'Черга 1.2', ''];
+
+  it('a queue with a stray space is that queue, in the wizard and on refresh', async () => {
+    const wizard = setup({ http: rowsOf([['95', '5.1 '], ['95', 'Не входить']]) });
+    expect(await wizard.p.listHouses('Львів', 'Кульпарківська')).toEqual([
+      { house: '95', lines: [{ index: 1, groupId: '5.1', label: 'Черга 5.1' }], outageActive: false },
+    ]);
+    const refresh = setup({ http: rowsOf([['95', '5.1 ']]) });
+    const snap = await refresh.p.fetchSnapshot(KULP);
+    expect(snap.days).toEqual([{ date: '2026-10-17', slots: OCT17_5_1 }]);
+    expect(snap.lines).toEqual([{ index: 1, groupId: '5.1', label: 'Черга 5.1' }]);
+  });
+
+  it('an unknown chergGpv is unreadable in the wizard, never the always-on line, and the error carries no value', async () => {
+    for (const odd of ODD) {
+      const { p, log } = setup({ http: rowsOf([['95', odd], ['32-А', '3.1']]) });
+      const err = await expectError(p.listHouses('Львів', 'Кульпарківська'), ProviderError, UNREADABLE);
+      expect(err.cause).toEqual({ what: 'pw_accounts', reason: expect.any(String) });
+      const text = JSON.stringify([err.cause, log.error.mock.calls], (_k, v: unknown) => (v instanceof Error ? { m: v.message, c: v.cause } : v));
+      if (odd !== '') expect(text).not.toContain(odd);
+    }
+  });
+
+  it('a saved none line whose house has an unknown chergGpv fails the snapshot (R7)', async () => {
+    for (const odd of ODD) {
+      const { p, http } = setup({ http: rowsOf([['95', odd], ['95', 'Не входить']]) });
+      await expectError(p.fetchSnapshot({ ...KULP, groupId: 'none' }), ProviderError, UNREADABLE);
+      expect(http.calls.filter((c) => c.url.startsWith(CMS))).toHaveLength(0);
+    }
+  });
+
+  it('a saved queue line whose house has an unknown chergGpv keeps the saved line and the schedule (R2)', async () => {
+    for (const odd of ODD) {
+      const { p, http, log } = setup({ http: rowsOf([['95', odd]]) });
+      const snap = await p.fetchSnapshot(KULP);
+      expect(snap.days).toEqual([{ date: '2026-10-17', slots: OCT17_5_1 }]);
+      expect(snap.lines).toEqual([{ index: 1, groupId: '5.1', label: 'Черга 5.1' }]);
+      expect('currentOutage' in snap).toBe(false);
+      expect(http.to('pw_accidents')).toHaveLength(0);
+      expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^loe fetchSnapshot: /), expect.any(ProviderError));
+    }
+  });
+});
+
+describe('LoeProvider street houses cache (final M2)', () => {
+  it('keeps a street\'s houses for the run; a refresh still asks for the house\'s own accounts', async () => {
+    const { p, http } = setup();
+    const houses = await p.listHouses('Львів', 'Кульпарківська');
+    expect(await p.listHouses('Львів', 'Кульпарківська')).toEqual(houses);
+    expect(http.to('pw_accounts')).toHaveLength(1);
+    await p.fetchSnapshot(KULP);
+    const urls = http.to('pw_accounts').map((c) => new URL(c.url));
+    expect(urls).toHaveLength(2);
+    expect(urls[1].searchParams.get('buildingName')).toBe('95');
+  });
+
+  it('keys the cache by city and street', async () => {
+    const { p, http } = setup();
+    await p.listHouses('Львів', 'Кульпарківська');
+    await p.listHouses('Старий Яр', 'І.Вахули');
+    await p.listHouses('Старий Яр', 'І.Вахули');
+    expect(http.to('pw_accounts').map((c) => new URL(c.url).searchParams.get('street.id'))).toEqual(['12448', '10874']);
+  });
+
+  it('an answer that could not be read is not kept: the next call asks again', async () => {
+    let odd = true;
+    const http = fakeHttp({ [`${API}/pw_accounts`]: () => ok(hydra(accountRows(693, [['95', odd ? 'Черга 1.2' : '5.1']]))) });
+    const { p } = setup({ http });
+    await expectError(p.listHouses('Львів', 'Кульпарківська'), ProviderError, UNREADABLE);
+    odd = false;
+    expect((await p.listHouses('Львів', 'Кульпарківська'))[0].lines).toEqual([{ index: 1, groupId: '5.1', label: 'Черга 5.1' }]);
+    expect(http.to('pw_accounts')).toHaveLength(2);
+  });
+});
+
 describe('LoeProvider current outage', () => {
   it('a typeOff 1 row covering now is an emergency with Kyiv-formatted times', async () => {
     const { p, http } = setup({ now: () => at('2026-10-20', 15) });

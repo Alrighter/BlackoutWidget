@@ -3,15 +3,17 @@ import { addDays, kyivDateKey } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import type { HttpFetch } from '../http';
-import { HttpSource, quietNote, sourceTexts, type SourceInit } from '../http-source';
+import { HttpSource, loggable, quietNote, sourceTexts, type SourceInit } from '../http-source';
 import { NONE_GROUP, daySlots, linesOf, queueLabel } from '../lines';
 import { AddressNotFoundError, resolveByLabel, uniqueLabels } from '../resolve';
-import { ProviderError, type ScheduleProvider } from '../types';
+import type { ScheduleProvider } from '../types';
 import { MkoeShapeError, mkoeDay } from './schedule';
 import { mkoeSettlements, type MkoeSettlement } from './settlements';
 
 const NAME = 'Миколаївобленерго';
 export const MKOE_QUIET_NOTE = quietNote(NAME, 'опублікувало');
+/** Why today is unknown when the house's queues came in a shape we do not know (R11/R13). */
+export const MKOE_ODD_QUEUES_NOTE = `${NAME} повідомило черги будинку в незнайомому вигляді — графік на сьогодні невідомий`;
 
 const API = 'https://off.energy.mk.ua/api';
 const GET: SourceInit = { method: 'GET', headers: { Accept: 'application/json' } };
@@ -101,8 +103,6 @@ const byId = <T extends { id: number }>(items: T[]): T[] => [...items].sort((a, 
 const houseOrder = new Intl.Collator('uk', { numeric: true });
 const recName = (r: Rec): string => r.name;
 const noGroup = (): undefined => undefined;
-/** Only the kind of a non-provider error goes to the log: an error's message may quote a response. */
-const loggable = (e: unknown): unknown => (e instanceof ProviderError ? e : { error: e instanceof Error ? e.name : typeof e });
 
 export interface MkoeDeps {
   fetch: HttpFetch;
@@ -117,7 +117,7 @@ export interface MkoeDeps {
  * Миколаївобленерго over plain HTTPS (off.energy.mk.ua): the bundled settlements, then streets and houses, each house's
  * queues, the oblast-wide half-hourly schedule (three joined answers) and switched-on ГАВ/СГАВ queues. No browser window.
  * On refresh the address side is soft for a queue line (the schedule holds without it); for the 'none' line the house
- * list is the only proof and stays hard.
+ * list and the house's queues are the only proof and stay hard.
  */
 export class MkoeProvider implements ScheduleProvider {
   readonly id = 'mkoe';
@@ -170,7 +170,7 @@ export class MkoeProvider implements ScheduleProvider {
       const now = this.now();
       const today = kyivDateKey(now);
       const iddom = await this.houseCheck(address);
-      const queues = iddom === undefined ? undefined : await this.softHouseQueues(iddom);
+      const queues = iddom === undefined ? undefined : await this.checkedHouseQueues(address, iddom);
       const read = queues ? linesOfQueues(queues) : undefined;
       const lines = read
         ? read.lines
@@ -183,6 +183,7 @@ export class MkoeProvider implements ScheduleProvider {
         // The house's queues came in a shape we do not know: neither its line nor the always-on line is proven.
         this.log.warn('mkoe fetchSnapshot: house queues of an unknown shape', { what: 'outage-queue', reason: read.unknown });
         days = [{ date: today, slots: daySlots('unknown') }];
+        note = MKOE_ODD_QUEUES_NOTE;
       } else if (!lines.some((l) => l.groupId === address.groupId)) {
         // The operator moved the house to another queue (or in or out of the schedule): the app asks to pick again.
         days = [{ date: today, slots: daySlots('unknown') }];
@@ -228,11 +229,16 @@ export class MkoeProvider implements ScheduleProvider {
     }
   }
 
-  /** The house's queues for the lines and the current outage. A failure keeps the saved line and drops the outage. */
-  private async softHouseQueues(iddom: number): Promise<HouseQueue[] | undefined> {
+  /**
+   * The house's queues for the lines and the current outage. For a queue line a failure keeps the saved line and drops
+   * the outage. For the 'none' line this answer is the only proof that the house is still outside the schedule (the
+   * house list proves only that it exists), so there the failure fails the snapshot.
+   */
+  private async checkedHouseQueues(address: Address, iddom: number): Promise<HouseQueue[] | undefined> {
     try {
       return await this.houseQueues(iddom);
     } catch (e) {
+      if (address.groupId === NONE_GROUP) throw e;
       this.log.warn('mkoe fetchSnapshot: house queues failed, keeping the saved line', loggable(e));
       return undefined;
     }

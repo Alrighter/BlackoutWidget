@@ -118,6 +118,17 @@ describe('parseGpvCollection / queueSlots', () => {
   it('dateGraph is a Kyiv date as written, never shifted by its Z', () => {
     const body = withMember((m) => { m.dateGraph = '2026-10-18T00:00:00Z'; });
     expect([...parseGpvCollection(body).keys()]).toEqual(['2026-10-18']);
+    const offset = withMember((m) => { m.dateGraph = '2026-10-18T00:00:00+00:00'; });
+    expect([...parseGpvCollection(offset).keys()]).toEqual(['2026-10-18']);
+  });
+
+  it('a dateGraph other than midnight with Z or +00:00 is unreadable, never a member of another day (final M3)', () => {
+    for (const dateGraph of [
+      '2026-10-16T21:00:00Z', '2026-10-17T00:00:00+03:00', '2026-10-17T12:00:00Z', '2026-10-17', '2026-10-17T00:00:00',
+      '2026-10-17T00:00:00.000Z', '2026-10-17T00:00Z', ' 2026-10-17T00:00:00Z',
+    ]) {
+      expect(() => parseGpvCollection(withMember((m) => { m.dateGraph = dateGraph; }))).toThrow(ToeShapeError);
+    }
   });
 });
 

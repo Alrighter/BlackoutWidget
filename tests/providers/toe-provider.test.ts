@@ -413,10 +413,96 @@ describe('ToeProvider.fetchSnapshot', () => {
     await expectError(shape.p.fetchSnapshot(YURCHAKA), ProviderError, UNREADABLE);
   });
 
+  it('a member dated by a real instant (…16T21:00:00Z) is unreadable, never yesterday\'s or today\'s schedule (final M3)', async () => {
+    const shifted = JSON.parse(GPV_1_2);
+    shifted['hydra:member'][0].dateGraph = '2026-10-16T21:00:00Z';
+    for (const now of [at('2026-10-16', 21), at('2026-10-17', 12)]) {
+      const { p } = setup({ http: fakeHttp({ '/api/a_gpv_g': () => ok(JSON.stringify(shifted)) }), now: () => now });
+      const err = await expectError(p.fetchSnapshot(YURCHAKA), ProviderError, UNREADABLE);
+      expect(err.cause).toEqual({ what: 'a_gpv_g', reason: 'a_gpv_g: member date' });
+    }
+  });
+
   it('today\'s member without the saved queue is unreadable', async () => {
     const http = fakeHttp({ '/api/a_gpv_g': () => ok(GPV_TWO) });
     const { p } = setup({ http });
     await expectError(p.fetchSnapshot(YURCHAKA), ProviderError, UNREADABLE);
+  });
+});
+
+describe('ToeProvider queue values (final I2)', () => {
+  const ODD = ['5.1, 5.2', 'Черга 1.2'];
+  /** building-groups and building-names answering these for every house of every street. */
+  const answers = (groupValues: string[], nameRows: [string, unknown][]) => fakeHttp({
+    '/api/pw-accounts/building-groups': () => ok(groups(...groupValues)),
+    '/api/pw-accounts/building-names': () => ok(JSON.stringify({
+      buildingNames: nameRows.map(([buildingName, chergGpv]) => ({ id: 1, buildingName, ...(chergGpv === undefined ? {} : { chergGpv }) })),
+    })),
+  });
+  const noValue = (err: Error, odd: string) => expect(JSON.stringify([err.message, err.cause])).not.toContain(odd);
+
+  it('a queue with a stray space is that queue, in the wizard and on refresh', async () => {
+    const { p } = setup({ http: answers(['1.2 '], [['1', '1.2 ']]) });
+    expect((await p.listHouses('Тернопіль', 'вул. Василя Юрчака'))[0].lines).toEqual([{ index: 1, groupId: '1.2', label: 'Черга 1.2' }]);
+    expect(await p.houseLines('Тернопіль', 'вул. Василя Юрчака', '1')).toEqual([{ index: 1, groupId: '1.2', label: 'Черга 1.2' }]);
+    const snap = await p.fetchSnapshot(YURCHAKA);
+    expect(snap.days).toEqual([{ date: '2026-10-17', slots: OCT17_1_2 }]);
+    expect(snap.lines).toEqual([{ index: 1, groupId: '1.2', label: 'Черга 1.2' }]);
+  });
+
+  it('an unknown chergGpv in building-names is unreadable in listHouses, never the always-on line', async () => {
+    for (const odd of ODD) {
+      const { p } = setup({ http: answers([], [['1', odd], ['2', '1.2']]) });
+      const err = await expectError(p.listHouses('Тернопіль', 'вул. Василя Юрчака'), ProviderError, UNREADABLE);
+      expect(err.cause).toEqual({ what: 'building-names', reason: expect.any(String) });
+      noValue(err, odd);
+    }
+    // A row without the field is a shape we do not know too; null is the API's «not in the schedule».
+    const missing = setup({ http: answers([], [['1', undefined]]) });
+    await expectError(missing.p.listHouses('Тернопіль', 'вул. Василя Юрчака'), ProviderError, UNREADABLE);
+    const nul = setup({ http: answers([], [['1', null], ['2', '']]) });
+    expect((await nul.p.listHouses('Тернопіль', 'вул. Василя Юрчака')).map((h) => h.lines)).toEqual([
+      [{ index: 1, groupId: 'none', label: 'Не входить до ГПВ' }], [{ index: 1, groupId: 'none', label: 'Не входить до ГПВ' }],
+    ]);
+  });
+
+  it('an unknown chergGpv in building-groups or in the building-names fallback is unreadable in houseLines', async () => {
+    for (const odd of ODD) {
+      for (const http of [answers([odd], [['1', 'Не входить']]), answers([], [['1', odd]]), answers([odd, '1.2'], [['1', '1.2']])]) {
+        const { p } = setup({ http });
+        const err = await expectError(p.houseLines('Тернопіль', 'вул. Василя Юрчака', '1'), ProviderError, UNREADABLE);
+        noValue(err, odd);
+      }
+    }
+  });
+
+  it('a saved none line whose house answers an unknown chergGpv fails the snapshot (R7)', async () => {
+    for (const odd of ODD) {
+      for (const http of [answers([odd], [['1', 'Не входить']]), answers([], [['1', odd]])]) {
+        const { p } = setup({ http });
+        await expectError(p.fetchSnapshot({ ...YURCHAKA, groupId: 'none' }), ProviderError, UNREADABLE);
+        expect(http.to('a_gpv_g')).toHaveLength(0);
+      }
+    }
+  });
+
+  it('a saved queue line whose house answers an unknown chergGpv fails too: the precheck is hard for Ternopil (R2)', async () => {
+    for (const odd of ODD) {
+      const http = answers([odd], [['1', 'Не входить']]);
+      const { p } = setup({ http });
+      await expectError(p.fetchSnapshot(YURCHAKA), ProviderError, UNREADABLE);
+      expect(http.to('a_gpv_g')).toHaveLength(0);
+    }
+  });
+
+  it('building-groups answering [{"chergGpv":"Не входить"}] is the none line when building-names agrees, else unreadable (R5)', async () => {
+    const agree = setup({ http: fakeHttp({ '/api/pw-accounts/building-groups': () => ok(groups('Не входить')) }) });
+    expect(await agree.p.houseLines('Тернопіль', OBIZNA, '3')).toEqual([{ index: 1, groupId: 'none', label: 'Не входить до ГПВ' }]);
+    const snap = await agree.p.fetchSnapshot({ ...YURCHAKA, street: OBIZNA, house: '3', groupId: 'none' });
+    expect(snap.days).toEqual([{ date: '2026-10-17', slots: fill('on') }]);
+    expect(snap.lines).toEqual([{ index: 1, groupId: 'none', label: 'Не входить до ГПВ' }]);
+    // House 1 on Об’їзна is on 1.2 in building-names: the two answers contradict each other.
+    await expectError(agree.p.houseLines('Тернопіль', OBIZNA, '1'), ProviderError, UNREADABLE);
   });
 });
 
@@ -462,7 +548,7 @@ describe('ToeProvider current outage', () => {
     const snap = await p.fetchSnapshot(YURCHAKA);
     expect(snap.days).toEqual([{ date: '2026-10-17', slots: OCT17_1_2 }]);
     expect('currentOutage' in snap).toBe(false);
-    expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^toe /), expect.anything());
+    expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^toe /), expect.any(ProviderError));
   });
 
   it('an outage answer of another shape still delivers the schedule', async () => {
@@ -472,6 +558,22 @@ describe('ToeProvider current outage', () => {
     expect(snap.days).toEqual([{ date: '2026-10-20', slots: fill('on') }]);
     expect('currentOutage' in snap).toBe(false);
     expect(log.warn).toHaveBeenCalled();
+  });
+
+  it('a foreign error in the outage lookup is logged by its kind only, never its message (final M5)', async () => {
+    // A clock whose getTime throws stands for any non-provider failure inside the lookup (its message could quote a body).
+    class TrapDate extends Date {
+      override getTime(): number { throw new Error('Пошкодження кабелю'); }
+    }
+    const http = fakeHttp();
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const p = new ToeProvider({ fetch: http.fetch, isOnline: () => true, log, now: () => new TrapDate(at('2026-10-20', 10).valueOf()) });
+    const snap = await p.fetchSnapshot(ZBARAZH);
+    expect(snap.days).toEqual([{ date: '2026-10-20', slots: fill('on') }]);
+    expect('currentOutage' in snap).toBe(false);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/^toe fetchSnapshot: /), { error: 'Error' });
+    const logged = JSON.stringify(log.warn.mock.calls, (_k, v: unknown) => (v instanceof Error ? { m: v.message, c: v.cause } : v));
+    expect(logged).not.toContain('Пошкодження');
   });
 
   it('never carries koment', async () => {
