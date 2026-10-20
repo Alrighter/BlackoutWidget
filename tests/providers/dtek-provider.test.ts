@@ -231,6 +231,13 @@ test('Kyiv listStreets reads the flat streets array', async () => {
   expect(await new DtekProvider(KEM, s as any).listStreets('м. Київ')).toEqual(['вул. Хрещатик']);
   expect(s.ensureReady).toHaveBeenCalled();
 });
+test('a site with a city level passes the city into the streets script', async () => {
+  // Dnipro, Odesa and Kyiv oblast: without the city the wizard would list no streets there.
+  const s = fakeSession({ [READ_FACT]: [factReply()], [readStreetsScript(C)]: [[S]] });
+  expect(await new DtekProvider(KREM, s as any).listStreets(C)).toEqual([S]);
+  expect(s.evaluate).toHaveBeenCalledWith(readStreetsScript(C));
+  expect(readStreetsScript(C)).not.toBe(readStreetsScript(null));
+});
 test('Kyiv listHouses sends no city field', async () => {
   const script = getHomeNumScript(null, 'вул. Хрещатик', '17.10.2026 11:55');
   const s = fakeSession({ [READ_FACT]: [factReply()], [script]: [{ status: 200, body: JSON.stringify(stale) }] });
@@ -253,12 +260,12 @@ test('a failure is logged under the provider id', async () => {
 describe('quiet day (no schedule published for today)', () => {
   const tsOf = (iso: string) => String(Date.parse(iso) / 1000);
   const hours = (status: string) => Object.fromEntries(Array.from({ length: 24 }, (_, i) => [String(i + 1), status]));
-  const bodyWith = (data: Record<string, unknown>) => {
+  const bodyWith = (data: Record<string, unknown> | unknown[]) => {
     const body = structuredClone(stale) as any;
     body.fact = { ...body.fact, data };
     return body;
   };
-  async function snapshotFor(data: Record<string, unknown>) {
+  async function snapshotFor(data: Record<string, unknown> | unknown[]) {
     const body = bodyWith(data);
     const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
     return new DtekProvider(KREM, s as any).fetchSnapshot(addr);
@@ -270,6 +277,12 @@ describe('quiet day (no schedule published for today)', () => {
     const snap = await snapshotFor({});
     expect(snap.days).toEqual([{ date: '2026-10-20', slots: Array(48).fill('on') }]);
     expect(snap.note).toBe(DTEK_QUIET_NOTE);
+  });
+  test('fact.data as an empty array (the live quiet shape): today is all on, with the note', async () => {
+    const snap = await snapshotFor([]);
+    expect(snap.days).toEqual([{ date: '2026-10-20', slots: Array(48).fill('on') }]);
+    expect(snap.note).toBe(DTEK_QUIET_NOTE);
+    expect(snap.lines.map(l => l.groupId)).toEqual(['GPV1.2', 'GPV4.2']);
   });
   test('only tomorrow published: today all on with the note, tomorrow kept', async () => {
     const snap = await snapshotFor({ [tsOf('2026-10-21T09:00:00Z')]: { 'GPV1.2': hours('no') } });
