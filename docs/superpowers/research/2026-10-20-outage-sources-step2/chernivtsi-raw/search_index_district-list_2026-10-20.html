@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="uk">
+    <head>
+        <title>Пошук групи - Відключення - АТ &quot;Чернівціобленерго&quot;</title>
+        <meta charset="utf-8">
+        <meta name="description" content="Графік стабілізаційних відключень АТ &quot;Чернівціобленерго&quot;" />
+        <base href="https://oblenergo.cv.ua/" />
+        <meta http-equiv="Content-Language" content="uk">
+        <meta name="format-detection" content="telephone=no"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"/>
+        <meta name="theme-color" content="#283f9f">
+
+        <link rel="shortcut icon" href="/d/favicon.png" type="image/x-icon">
+        <meta property="og:title" content="Пошук групи - Відключення - АТ &quot;Чернівціобленерго&quot;" />
+        <meta property="og:description" content="Графік стабілізаційних відключень АТ &quot;Чернівціобленерго&quot;" />
+        <meta property="og:image" content="https://oblenergo.cv.ua/d/og_image_shutdowns-group-search.jpg" />
+        <meta property="og:image:width" content="480" />
+        <meta property="og:image:height" content="360" />
+        <meta property="og:url" content="https://oblenergo.cv.ua/shutdowns-search/" />
+
+        <meta name="google" value="notranslate">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name=apple-mobile-web-app-capable content=yes>
+        <meta name=apple-mobile-web-app-status-bar-style content=black>
+
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.css" rel="stylesheet">
+        <link href="/shutdowns-search/inc/materialize_cvu.css" rel="stylesheet" type="text/css" media="screen" />
+        <link rel="stylesheet" href="main.css" media="screen">
+        <link href="/css/style.css?v=1.03>" rel="stylesheet"/>
+        <link href="/css/style2.css?v=1.03>" rel="stylesheet"/>
+        <link href="/css/style3.css?v=1.03>" rel="stylesheet"/>
+        <link href="/shutdowns-search/style.css?v=1.03>" rel="stylesheet"/>
+        <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900&amp;subset=cyrillic,cyrillic-ext,latin-ext" rel="stylesheet" type="text/css">
+        <link href="https://fonts.googleapis.com/css?family=Roboto+Condensed:300,400,700&amp;subset=cyrillic,cyrillic-ext,latin-ext" rel="stylesheet" type="text/css">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="preload" as="style" onload="this.rel='stylesheet'">
+        <noscript><link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"></noscript>
+
+        <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+        <script src="/shutdowns-search/inc/jquery.cookie.js"></script>
+        <script src="/shutdowns-search/inc/materialize.min.js"></script>
+        <script src="/shutdowns-search/inc/materialize.select.patch.js"></script>
+
+        <script src="/shutdowns-search/script.js?v=1.03"></script>
+
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-3HVG2PTMW7"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-3HVG2PTMW7');
+        </script>
+    </head>
+    <body id="p_shutdowns">
+        <header id="cvu_h">
+            <a href="/">
+                <img src="/images/logo-header.svg" alt="АТ &quot;Ченівціобленерго&quot;">
+            </a>
+        </header>
+        <main><div>
+                <a class="cvu_btn" href="/shutdowns/">
+                    <i>arrow_back</i>
+                    <b>Назад до графіку</b>
+                </a>
+
+                <p id="s_header">
+                    Скористайтесь пошуком, щоб дізнатися, до якої групи споживачів увійшла Ваша адреса:
+                </p>
+
+                <div id="fltrs""><div id="diln" class="input-field col"><i class="prefix">location_on</i><select name="diln"><option value="0" selected disabled>Оберіть дільницю</option><option value="1">ЧЕРНІВЦІ</option><option value="2">Вижницька</option><option value="3">Герцаївська</option><option value="4">Глибоцька</option><option value="5">Заставнівська</option><option value="7">Кельменецька</option><option value="6">Кіцманська</option><option value="8">Новоселицька</option><option value="9">Путильська</option><option value="10">Сокирянська</option><option value="11">Сторожинецька</option><option value="12">Хотинська</option></select></div><div id="city" class="input-field col"><input type="text" name="city" id="city_input" value="" autocomplete="none"><label for="city_input">Населений пункт</label></div><div id="street" class="input-field col"><input type="text" name="street" id="street_input" value="" autocomplete="none"><label for="street_input">Вулиця</label></div><div id="house" class="input-field col"><input type="text" name="house" id="house_input" value="" autocomplete="none"><label for="house_input">Будинок</label></div></div><div class="info_cont" id="need_region"><p><i>north</i><span>Для пошуку групи, будь ласка, <b>оберіть дільницю</b></span></p></div><div class="info_cont" id="need_city"><p><i>map</i><span>Введіть <b>населений пункт</b>, <b>вулицю</b> та <b>будинок</b></span><i>upload</i></p></div><div class="info_cont" id="search_zero"><p><i>search_off</i><span>Нічого не знайдено</span></p></div><div class="info_cont" id="need_street"><p><i>map</i><span>Введіть <b>вулицю</b> та <b>будинок</b></span><i>upload</i></p></div></div></main>    </body>
+</html>

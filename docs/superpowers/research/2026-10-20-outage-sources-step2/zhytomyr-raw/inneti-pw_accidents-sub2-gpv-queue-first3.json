@@ -1,0 +1,205 @@
+{
+ "@context": "/api/contexts/PwAccident",
+ "@id": "/api/pw_accidents",
+ "@type": "hydra:Collection",
+ "hydra:member": [
+  {
+   "@id": "/api/pw_accidents/316876207",
+   "@type": "PwAccident",
+   "id": 316876207,
+   "code_otg": "1",
+   "city": {
+    "@id": "/api/pw_cities/1",
+    "@type": "PwCity",
+    "id": 1,
+    "name": "Андрушівка",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/1",
+    "@type": "PwStreet",
+    "id": 1,
+    "city": {
+     "@id": "/api/pw_cities/1",
+     "@type": "PwCity",
+     "id": 1,
+     "name": "Андрушівка",
+     "codeOtg": ""
+    },
+    "name": "вул. Київська"
+   },
+   "dateEvent": "2026-10-20T11:00:34+00:00",
+   "datePlanIn": "2026-10-20T14:00:00+00:00",
+   "koment": "3.1",
+   "switchSubReason": 2,
+   "otg": {
+    "@id": "/api/pw_otgs/1",
+    "@type": "PwOtg",
+    "id": 1,
+    "code": "1",
+    "name": "Андрушівський РЕМ"
+   },
+   "buildingNames": "23, 25, 29, 31, 73, 75, 77, 81, 83, 85, 89, 91, 93, 95",
+   "typeOff": 1
+  },
+  {
+   "@id": "/api/pw_accidents/316876208",
+   "@type": "PwAccident",
+   "id": 316876208,
+   "code_otg": "1",
+   "city": {
+    "@id": "/api/pw_cities/1",
+    "@type": "PwCity",
+    "id": 1,
+    "name": "Андрушівка",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/2",
+    "@type": "PwStreet",
+    "id": 2,
+    "city": {
+     "@id": "/api/pw_cities/1",
+     "@type": "PwCity",
+     "id": 1,
+     "name": "Андрушівка",
+     "codeOtg": ""
+    },
+    "name": "вул. Житомирська"
+   },
+   "dateEvent": "2026-10-20T11:00:34+00:00",
+   "datePlanIn": "2026-10-20T14:00:00+00:00",
+   "koment": "3.1",
+   "switchSubReason": 2,
+   "otg": {
+    "@id": "/api/pw_otgs/1",
+    "@type": "PwOtg",
+    "id": 1,
+    "code": "1",
+    "name": "Андрушівський РЕМ"
+   },
+   "buildingNames": "0, 1, 10, 11, 12, 124, 13, 14, 15, 16, 2, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 3, 31, 32, 33, 34, 35, 36, 38, 39, 4, 41, 42, 43, 43А, 43Б, 45, 46, 47, 48, 5, 50, 51, 51а, 52, 53, 54, 55, 57, 58, 59, 6, 61, 7, 8, 9",
+   "typeOff": 1
+  },
+  {
+   "@id": "/api/pw_accidents/316876209",
+   "@type": "PwAccident",
+   "id": 316876209,
+   "code_otg": "1",
+   "city": {
+    "@id": "/api/pw_cities/1",
+    "@type": "PwCity",
+    "id": 1,
+    "name": "Андрушівка",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/3",
+    "@type": "PwStreet",
+    "id": 3,
+    "city": {
+     "@id": "/api/pw_cities/1",
+     "@type": "PwCity",
+     "id": 1,
+     "name": "Андрушівка",
+     "codeOtg": ""
+    },
+    "name": "вул. Івана Франка"
+   },
+   "dateEvent": "2026-10-20T11:00:34+00:00",
+   "datePlanIn": "2026-10-20T14:00:00+00:00",
+   "koment": "3.1",
+   "switchSubReason": 2,
+   "otg": {
+    "@id": "/api/pw_otgs/1",
+    "@type": "PwOtg",
+    "id": 1,
+    "code": "1",
+    "name": "Андрушівський РЕМ"
+   },
+   "buildingNames": "0, 1, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 27, 28, 29, 3, 30, 31, 32, 33, 34, 35а, 36, 37, 38, 39, 4, 41, 42, 43, 44, 45, 46, 47, 48, 49, 5, 50, 51, 52, 53, 54, 55, 56, 58, 6, 60, 62, 65, 66, 67, 68, 7, 70, 72, 74, 76, 78, 8, 80, 9, 9а",
+   "typeOff": 1
+  }
+ ],
+ "hydra:totalItems": 4611,
+ "hydra:view": {
+  "@id": "/api/pw_accidents?switchSubReason=2&page=1",
+  "@type": "hydra:PartialCollectionView",
+  "hydra:first": "/api/pw_accidents?switchSubReason=2&page=1",
+  "hydra:last": "/api/pw_accidents?switchSubReason=2&page=154",
+  "hydra:next": "/api/pw_accidents?switchSubReason=2&page=2"
+ },
+ "hydra:search": {
+  "@type": "hydra:IriTemplate",
+  "hydra:template": "/api/pw_accidents{?city.id,city.id[],street.id,street.id[],otg.id,otg.id[],typeOff,typeOff[],switchSubReason,switchSubReason[],customFilter}",
+  "hydra:variableRepresentation": "BasicRepresentation",
+  "hydra:mapping": [
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "city.id",
+    "property": "city.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "city.id[]",
+    "property": "city.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "street.id",
+    "property": "street.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "street.id[]",
+    "property": "street.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "otg.id",
+    "property": "otg.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "otg.id[]",
+    "property": "otg.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "typeOff",
+    "property": "typeOff",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "typeOff[]",
+    "property": "typeOff",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "switchSubReason",
+    "property": "switchSubReason",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "switchSubReason[]",
+    "property": "switchSubReason",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "customFilter",
+    "property": "customFilter",
+    "required": false
+   }
+  ]
+ }
+}
