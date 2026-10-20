@@ -1,6 +1,6 @@
 import { createProviders } from '../../src/main/providers/registry';
 import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from '../../src/main/providers/dtek/page-scripts';
-import { providerSiteUrl } from '../../src/shared/providers';
+import { PROVIDERS, providerSiteUrl } from '../../src/shared/providers';
 import { silentLogger } from '../../src/main/log';
 import type { SessionOptions } from '../../src/main/providers/browser-session';
 
@@ -14,8 +14,13 @@ function setup() {
   const providers = createProviders(o => { made.push(o); return session as any; }, silentLogger, http);
   return { made, session, http, providers };
 }
-test('providers come out in a fixed order', () => {
-  expect(setup().providers.map(p => p.id)).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
+test('providers come out in the card order of PROVIDERS', () => {
+  const ids = setup().providers.map(p => p.id);
+  expect(ids).toEqual(Object.keys(PROVIDERS));
+  expect(ids).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
+});
+test('DTEK and Volyn do not implement houseLines', () => {
+  for (const p of setup().providers) expect(p.houseLines).toBeUndefined();
 });
 test('each DTEK site gets its own url, partition and host', () => {
   const { made, providers } = setup();
