@@ -412,7 +412,7 @@
   - `groupId 'none'` gives the same dates, all `on`.
   - `sourceUpdatedAt` is today's image `uploadTimestamp` (UTC) shown in Kyiv time as `HH:MM DD.MM.YYYY`. On a quiet day it is left out.
 - **Step 4: the lines.** They come from the queue table of the saved city, cached per label for the run.
-  - If that request fails, use `lines = [{index: address.lineIndex, groupId: address.groupId, label}]` and `log.warn`.
+  - If that request fails, or the table has no row for the saved house, use `lines = [{index: address.lineIndex, groupId: address.groupId, label}]` and `log.warn`. Only a house that is found with different queues changes `lines`.
   - Cities are resolved by `findSettlement(label)`, falling back to `bareName(label)` (Review Focus 3).
   - The district filter applies only when the operator's rows for that name include the settlement's district.
 - **Step 5: the current outage.** `POST https://energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni/chomu-nemaie-elektropostachannia/` with the form `formCity=<operator city>&formStreet=<street>&searchForm=searchFromForm`, then `matchOutage`. A failure is logged, and the snapshot comes without `currentOutage`.
@@ -432,7 +432,7 @@
     - no `note`;
     - `sourceUpdatedAt: '22:26 19.10.2026'`;
     - `currentOutage.kind === 'emergency'`.
-  - Now 2026-10-17 12:00, group `'1.1'`: today's slots 20–27 are `off`.
+  - Now 2026-10-17 12:00, group `'1.1'`: today's slots 20–27 are `off`. If the saved archive page holds no 17.10 member, add one to a copy of the fixture inside the test, pointing at the 17.10 PNG.
   - Now 2026-10-21 10:00, with no member for that date: today is all `on`, `note === VOE_QUIET_NOTE`, and there is no tomorrow.
   - Now 2026-10-19 21:00: two days, 19.10 and 20.10.
   - Review Focus 2: now 2026-10-20 00:05 → today is 20.10, from its image, with no note.
@@ -441,7 +441,7 @@
   - Fetch rejects with `isOnline` false → `NetworkError`; with it true → «Сайт Волиньобленерго не відповідає». An HTTP 500 → «… повернув помилку».
   - The outage form rejects → the snapshot still arrives, without `currentOutage`.
   - The queue form rejects during `fetchSnapshot` → `lines` is the saved line.
-  - Review Focus 3: a label that is not in the bundled list (`'м. Ковель (старий)'` → `bareName` 'Ковель (старий)'… use `'м. Ковель'` removed from a stubbed list) still yields the schedule.
+  - Review Focus 3: address city `'м. Ковель (Старий р-н)'`, which is not in the bundled list. The POST bodies carry `formCity=Ковель` (from `bareName`), and the snapshot has the schedule and the emergency outage for Самійла Величка 7А.
   - `listStreets('м. Ковель')` has 300 streets. `listHouses('м. Ковель','Незалежності')` matches Task 7.
   - `groupId 'none'` → all `on`.
   - Registry: the ids are `dtek-kem, voe, dtek-dnem, dtek-krem, dtek-oem`.
@@ -459,6 +459,6 @@
 - Modify: nothing unless a check fails.
 
 - [ ] **Step 1: Build the installer.** Run `npm run dist:win` and confirm `dist\Blackout Widget Setup 1.0.0.exe` is built.
-- [ ] **Step 2: Check the package contents.** Confirm `app.asar` contains `out/main/index.js` and that `settings.json` is not needed at runtime. The settlement JSON must be bundled into the main chunk or emitted next to it: check with `npx asar list` (one-off, nothing installed) that it is present, or that it is inlined in `index.js`.
+- [ ] **Step 2: Check that the settlement list is in the bundle.** It should be inlined into the built main chunks. After `npm run build`, run a Node script file that reads `out/main/*.js` and checks for «Нововолинськ». Use a script file, because Cyrillic in shell literals gets garbled.
 - [ ] **Step 3: Run the full suite and the typecheck one last time.**
 - [ ] **Step 4: Commit any fixes.** Subject: «Package the new providers».
