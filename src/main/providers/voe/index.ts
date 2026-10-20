@@ -47,7 +47,11 @@ function isDateKey(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
 }
 
-/** The archive page, newest first. Empty, or a newest entry without a sane date, means the source is dead or moved. */
+/**
+ * The archive page, newest first. Empty, a first entry that is not the newest (the highest id), or a newest entry
+ * without a sane date means the source is dead or moved: page 1 in another order would hold old days, and every day
+ * would read as quiet.
+ */
 function parseArchive(text: string): ArchiveEntry[] {
   const members = (JSON.parse(text) as { 'hydra:member'?: unknown })['hydra:member'];
   if (!Array.isArray(members) || members.length === 0) throw unreadable({ archive: 'empty' });
@@ -57,7 +61,9 @@ function parseArchive(text: string): ArchiveEntry[] {
     contentUrl: typeof m?.imageUrl?.contentUrl === 'string' ? m.imageUrl.contentUrl : undefined,
     uploadTimestamp: typeof m?.imageUrl?.uploadTimestamp === 'string' ? m.imageUrl.uploadTimestamp : undefined,
   }));
-  const newest = entries.reduce((a, b) => (b.id > a.id ? b : a));
+  const newest = entries[0];
+  // A NaN id anywhere makes Math.max NaN, so this fails closed too.
+  if (newest.id !== Math.max(...entries.map((e) => e.id))) throw unreadable({ archive: 'not newest first', id: newest.id });
   if (!isDateKey(newest.date)) throw unreadable({ archive: 'newest dateGraph', value: newest.date });
   return entries;
 }

@@ -206,6 +206,14 @@ describe('VoeProvider.fetchSnapshot', () => {
     await expectError(p.fetchSnapshot(KOVEL), ProviderError, UNREADABLE);
   });
 
+  it('fails as unreadable when the newest picture is not first on the page', async () => {
+    // Page 1 in another order would hold old days, and every day would read as a quiet «світло є».
+    const reversed = setup({ http: fakeHttp({ [ARCHIVE_URL]: () => archiveWith((m) => [...m].reverse()) }) });
+    await expectError(reversed.p.fetchSnapshot(KOVEL), ProviderError, UNREADABLE);
+    const noId = setup({ http: fakeHttp({ [ARCHIVE_URL]: () => archiveWith((m) => [{ ...m[0], id: undefined }, ...m.slice(1)]) }) });
+    await expectError(noId.p.fetchSnapshot(KOVEL), ProviderError, UNREADABLE);
+  });
+
   it('fails as unreadable when the archive is not JSON', async () => {
     const { p } = setup({ http: fakeHttp({ [ARCHIVE_URL]: () => okText('<html>maintenance</html>') }) });
     await expectError(p.fetchSnapshot(KOVEL), ProviderError, UNREADABLE);
@@ -291,6 +299,12 @@ describe('VoeProvider.fetchSnapshot', () => {
     const { p } = setup({ http: fakeHttp({ [CHOMU_URL]: () => okText(CHOMU.replace(VELYCHKA_ROW, row)) }) });
     const snap = await p.fetchSnapshot(KOVEL);
     expect(snap.currentOutage).toMatchObject({ kind: 'emergency', text: 'Аварійний випадок в мережах' });
+  });
+
+  it('a half-uploaded picture for today fails as unreadable, never a quiet day (Review Focus 1)', async () => {
+    const cut = PNG20.subarray(0, Math.floor(PNG20.length * 0.7));
+    const { p } = setup({ http: fakeHttp({ [IMG.d20]: () => okBytes(cut) }) });
+    await expectError(p.fetchSnapshot(KOVEL), ProviderError, UNREADABLE);
   });
 
   it('a city missing from the bundled list still refreshes by its bare name (Review Focus 3)', async () => {

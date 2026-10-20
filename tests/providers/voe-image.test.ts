@@ -29,6 +29,48 @@ describe('decodePng', () => {
     expect(() => decodePng(cut)).toThrow(new ProviderError(MSG));
   });
 
+  // Review Focus 1: a half-uploaded or damaged picture is unreadable, never an all-on day.
+  const chunks = (b: Uint8Array) => {
+    const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    const out: { type: string; start: number; data: number; end: number }[] = [];
+    for (let p = 8; p + 8 <= b.length; p += 12 + view.getUint32(p)) {
+      const len = view.getUint32(p);
+      out.push({ type: String.fromCharCode(...b.subarray(p + 4, p + 8)), start: p, data: p + 8, end: p + 8 + len });
+    }
+    return out;
+  };
+  const causeOf = (f: () => unknown) => {
+    try {
+      f();
+    } catch (e) {
+      expect(e).toBeInstanceOf(ProviderError);
+      expect((e as Error).message).toBe(MSG);
+      return (e as Error).cause as NodeJS.ErrnoException;
+    }
+    throw new Error('did not throw');
+  };
+
+  it('throws on a file cut just before IEND', () => {
+    const buf = fx('gpv-2026-10-20.png');
+    const iend = chunks(buf).find((c) => c.type === 'IEND')!;
+    expect(causeOf(() => decodePng(buf.slice(0, iend.start))).message).toBe('incomplete PNG');
+  });
+
+  it('throws on a corrupted IDAT byte (zlib error)', () => {
+    const buf = fx('gpv-2026-10-20.png').slice();
+    const idats = chunks(buf).filter((c) => c.type === 'IDAT');
+    // The last byte of the zlib stream is its Adler-32 checksum: CRCs are not checked, so inflate is what notices.
+    buf[idats[idats.length - 1].end - 1] ^= 0xff;
+    expect(causeOf(() => decodePng(buf)).code).toBe('Z_DATA_ERROR');
+  });
+
+  it('throws on a run of damaged bytes inside IDAT', () => {
+    const buf = fx('gpv-2026-10-20.png').slice();
+    const idat = chunks(buf).find((c) => c.type === 'IDAT')!;
+    for (let i = idat.data + 2; i < idat.data + 52; i++) buf[i] ^= 0xff;
+    expect(() => decodePng(buf)).toThrow(new ProviderError(MSG));
+  });
+
   it('throws on a palette PNG (colour type 3)', () => {
     const buf = fx('gpv-2026-10-17.png').slice();
     buf[25] = 3; // IHDR colour type byte
