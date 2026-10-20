@@ -28,6 +28,12 @@ test('the address card: the address, then source · line · queue; «Зміни�
   expect(onChangeAddress).toHaveBeenCalledTimes(1);
 });
 
+test('the queue label keeps its abbreviation: «не залучено до ГПВ»', () => {
+  const snapshot = { ...fixtureSnapshot(), groupLabel: 'Не залучено до ГПВ' };
+  render(<SettingsView state={stateOf({}, snapshot)} api={mockApi()} onChangeAddress={() => {}} />);
+  expect(screen.getByText('ДТЕК Київські регіональні електромережі · Лінія 1 · не залучено до ГПВ')).toBeInTheDocument();
+});
+
 test('the queue is left out while the schedule is for another queue', () => {
   const address = { ...fixtureSnapshot().address, lineIndex: 2, groupId: 'GPV4.2' };
   render(<SettingsView state={stateOf({ address })} api={mockApi()} onChangeAddress={() => {}} />);

@@ -4,6 +4,7 @@ import { dayCells } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
 import { providerRegion, providerShortName, providerSingleCity } from '../../../shared/providers';
 import type { DaySchedule, HouseInfo, LineInfo, WidgetStyle } from '../../../shared/types';
+import { lowerFirst } from '../../../shared/widget-state';
 import { Autocomplete, matches } from './Autocomplete';
 import { DayStrip } from './DayStrip';
 import { unwrapIpcError } from './ipc-error';
@@ -234,7 +235,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
 
   const num = RAIL.findIndex(r => r.step === step) + 1;
   const place = `${city}, ${street}, ${house}`;
-  const choice = line ? `Лінія ${line.index} · ${line.label.toLowerCase()} · стиль «${STYLES.find(s => s.id === style)?.name}»` : '';
+  const choice = line ? `Лінія ${line.index} · ${lowerFirst(line.label)} · стиль «${STYLES.find(s => s.id === style)?.name}»` : '';
 
   return (
     <div className="wz" data-capture="wizard">
@@ -351,7 +352,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                         <div className="wz-line-head">
                           <label className="wz-line-pick">
                             <input type="radio" name="wz-line" checked={line?.index === l.index} aria-describedby={sumId} onChange={() => setLine(l)} />
-                            <span className="wz-opt-name">{`Лінія ${l.index} · ${l.label.toLowerCase()}`}</span>
+                            <span className="wz-opt-name">{`Лінія ${l.index} · ${lowerFirst(l.label)}`}</span>
                           </label>
                           <span className="wz-line-sum" id={sumId} title={ranges} data-capture="line-summary">{ranges}</span>
                         </div>

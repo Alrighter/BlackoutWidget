@@ -168,6 +168,17 @@ describe('emergency', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Завтра 18.10' }));
     expect(container.querySelector('[data-capture="note"]')).toBeNull();
   });
+  test('the note belongs to the day it was fetched: a 23:50 note is gone at 00:10', () => {
+    const state = (fetchedAt: string): AppState => ({
+      settings: DEFAULT_SETTINGS, phase: 'ok', lineChanged: false, snapshot: { ...fixtureSnapshot({ fetchedAt }), note: 'X' },
+    });
+    const at0010 = new Date('2026-10-16T21:10:00Z'); // 00:10 on 17.10 in Kyiv
+    const { container, unmount } = view(state('2026-10-16T20:50:00.000Z'), at0010); // fetched 23:50 on 16.10
+    expect(container.querySelector('[data-capture="note"]')).toBeNull();
+    unmount();
+    const same = view(state('2026-10-16T21:05:00.000Z'), at0010); // fetched 00:05 on 17.10
+    expect(same.container.querySelector('[data-capture="note"]')).toHaveTextContent('X');
+  });
   test('no emergency → no «Аварійне» in the legend', () => {
     view({ settings: DEFAULT_SETTINGS, snapshot: fixtureSnapshot(), phase: 'ok', lineChanged: false }, at1420);
     expect(within(screen.getByRole('group', { name: 'Легенда' })).getAllByText(/./).map(e => e.textContent))

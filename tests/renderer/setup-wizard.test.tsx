@@ -200,6 +200,15 @@ test('«Готово» sums up the choice and switches autostart; nothing is sav
   expect(api.saveAddress).toHaveBeenCalledWith({ providerId: 'dtek-krem', city: 'м. Біла Церква', street: 'бул. Грушевського Михайла', house: '40', lineIndex: 1, groupId: 'GPV1.2' });
   expect(api.setWidgetStyle).toHaveBeenCalledWith('compact'); expect(onDone).toHaveBeenCalled();
 });
+test('a line label is lower-cased at its first letter only: «не залучено до ГПВ» keeps the abbreviation', async () => {
+  const lines = [{ index: 1, groupId: '4.2', label: 'Черга 4.2' }, { index: 2, groupId: 'none', label: 'Не залучено до ГПВ' }];
+  const api = mockApi([{ house: '40', outageActive: false, lines }]); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  await user.click(await screen.findByText('Лінія 2 · не залучено до ГПВ')); await user.click(screen.getByRole('button', { name: 'Далі' }));
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(screen.getByText('Лінія 2 · не залучено до ГПВ · стиль «Компакт»')).toBeInTheDocument();
+});
 test('changing the address keeps the widget style: the style step starts from the saved one', async () => {
   const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const user = userEvent.setup();
   render(<SetupWizard api={api} autostart widgetStyle="ring" onDone={() => {}} onCancel={() => {}} />); await pickAddress(user);

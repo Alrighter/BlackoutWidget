@@ -19,6 +19,9 @@ export interface WidgetView {
 export interface WidgetActual { power: 'on' | 'off'; sinceText?: string; mismatch: boolean }
 export type OutageBadgeText = 'Аварійне' | 'Екстрене' | 'Планове';
 
+/** Lower-cases the first letter only, so abbreviations stay: «Не залучено до ГПВ» → «не залучено до ГПВ». */
+export const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+
 export function formatDurationLong(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
@@ -110,7 +113,7 @@ function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
   const base = {
     todayKey, today, tomorrow,
     nowFraction: nowMin / 1440,
-    lineLabel: `Лінія ${snapshot.address.lineIndex} · ${snapshot.groupLabel.toLowerCase()}`,
+    lineLabel: `Лінія ${snapshot.address.lineIndex} · ${lowerFirst(snapshot.groupLabel)}`,
     updatedText: `оновлено ${fetchedValid ? formatHM(fetchedAt) : '--:--'}`,
     stale,
   };

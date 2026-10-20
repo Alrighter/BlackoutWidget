@@ -4,7 +4,7 @@ import { outageParts, recentOutages } from '../../../shared/actual-view';
 import { dayCells, type DayCell } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
 import { providerShortName } from '../../../shared/providers';
-import { addDays, formatDM, formatHM, parseDtekDateTime } from '../../../shared/time';
+import { addDays, formatDM, formatHM, kyivDateKey, parseDtekDateTime } from '../../../shared/time';
 import type { AppState, DaySchedule } from '../../../shared/types';
 import { computeWidgetView, countdownText } from '../../../shared/widget-state';
 import { ActualStrip } from './ActualStrip';
@@ -82,6 +82,9 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
   const cells = day ? dayCells(day.slots, nowMin, emergency) : null;
   const emergencyStart = emergency && snapshot?.currentOutage?.start ? parseDtekDateTime(snapshot.currentOutage.start) : undefined;
   const count = view ? countdownText(view) : undefined;
+  // A note speaks of the day it was fetched on: a quiet day fetched at 23:50 says nothing about the day after midnight.
+  const fetchedAt = snapshot ? new Date(snapshot.fetchedAt) : null;
+  const noteToday = !!snapshot?.note && !!fetchedAt && !Number.isNaN(fetchedAt.getTime()) && kyivDateKey(fetchedAt) === todayKey;
 
   const connectNote = (
     <RowNote>
@@ -152,7 +155,7 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
             emptyText={isToday ? 'Графік на сьогодні ще не отримано' : 'Графік на завтра ще не опубліковано'}
             now={nowMin === undefined ? undefined : { min: nowMin, label: formatHM(now) }} />
 
-          {isToday && snapshot.note && <div className="sv-note-line" data-capture="note">{snapshot.note}</div>}
+          {isToday && noteToday && <div className="sv-note-line" data-capture="note">{snapshot.note}</div>}
 
           <div className="sv-foot">
             <span className="sv-outage-line" data-capture="outage-line">

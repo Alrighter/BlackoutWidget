@@ -3,6 +3,7 @@ import { providerDisplayName } from '../../../shared/providers';
 import { formatHM } from '../../../shared/time';
 import type { AppState, WidgetStyle } from '../../../shared/types';
 import { WIDGET_SIZES } from '../../../shared/widget-sizes';
+import { lowerFirst } from '../../../shared/widget-state';
 import { ActualSettings } from './ActualSettings';
 import { StyleThumb } from './StyleThumb';
 import { STYLES } from './widget-styles';
@@ -15,7 +16,7 @@ function addressSub(state: AppState): string {
   const { address } = state.settings;
   if (!address) return '';
   const { snapshot } = state;
-  const queue = snapshot && snapshot.groupId === address.groupId ? ` · ${snapshot.groupLabel.toLowerCase()}` : '';
+  const queue = snapshot && snapshot.groupId === address.groupId ? ` · ${lowerFirst(snapshot.groupLabel)}` : '';
   return `${providerDisplayName(address.providerId)} · Лінія ${address.lineIndex}${queue}`;
 }
 

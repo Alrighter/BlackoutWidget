@@ -12,6 +12,10 @@ test('11:50 Kyiv: light on, outage at 15:00', () => {
   expect(v.lineLabel).toBe('Лінія 1 · черга 1.2'); expect(v.updatedText).toBe('оновлено 11:48');
   expect(v.stale).toBe(false); expect(v.tomorrow).toBeNull();
 });
+test('the line label lower-cases only the first letter of the queue label', () => {
+  const snap = { ...fixtureSnapshot({ lineIndex: 2 }), groupLabel: 'Не залучено до ГПВ' };
+  expect(computeWidgetView(snap, at('2026-10-17T08:50:00Z')).lineLabel).toBe('Лінія 2 · не залучено до ГПВ');
+});
 test('08:10: off until 08:30 ("first" half hour)', () =>
   expect(computeWidgetView(fixtureSnapshot(), at('2026-10-17T05:10:00Z')).nextText).toBe('Увімкнуть о 08:30 · через 20 хв'));
 test('16:00: off until 19:00', () => {
