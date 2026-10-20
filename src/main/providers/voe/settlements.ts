@@ -40,9 +40,16 @@ export function findSettlement(label: string): VoeSettlement | undefined {
   return voeSettlements().find((s) => s.label === label);
 }
 
+const RAION_SUFFIX = /\s*\([^()]*р-н\)\s*$/;
+
+/** Whether the label ends in « (… р-н)», which only a name found in more than one district gets. */
+export function hasRaionSuffix(label: string): boolean {
+  return RAION_SUFFIX.test(label);
+}
+
 /** The settlement name without the «м.» / «с.» / «с-ще» prefix and the « (… р-н)» suffix. */
 export function bareName(label: string): string {
-  return label.replace(/\s*\([^()]*р-н\)\s*$/, '').replace(/^(?:м\.|с-ще|с\.)\s+/, '').trim();
+  return label.replace(RAION_SUFFIX, '').replace(/^(?:м\.|с-ще|с\.)\s+/, '').trim();
 }
 
 export function operatorCity(s: VoeSettlement): string {

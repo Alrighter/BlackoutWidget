@@ -261,8 +261,10 @@ describe('VoeProvider.fetchSnapshot', () => {
     expect(Object.fromEntries(form(cherga.init))).toEqual({ formCity: 'Ковель', formStreet: '%' });
     const chomu = http.calls.find((c) => c.url === CHOMU_URL)!;
     expect(chomu.init).toMatchObject({ method: 'POST', headers: urlencoded });
+    // The street is left blank, as in the browser form: the whole settlement comes back and the street is matched here,
+    // whatever apostrophe or look-alike letter the operator wrote it with.
     expect(Object.fromEntries(form(chomu.init))).toEqual({
-      formCity: 'Ковель', formStreet: 'Самійла Величка', searchForm: 'searchFromForm',
+      formCity: 'Ковель', formStreet: '', searchForm: 'searchFromForm',
     });
   });
 
@@ -273,6 +275,22 @@ describe('VoeProvider.fetchSnapshot', () => {
     expect(snap.groupLabel).toBe('Не залучено до ГПВ');
     expect(snap.sourceUpdatedAt).toBe('18:47 17.10.2026');
     expect(http.count(IMG.d17)).toBe(0);
+  });
+
+  it('finds the outage when the operator writes the street\'s apostrophe and the house letter differently', async () => {
+    // The outage row: U+0027 in the street and a Latin «A» in «7A»; the saved address: U+2019 and the Cyrillic «7А».
+    const row = VELYCHKA_ROW.replace('<td>Самійла Величка</td>', "<td>Левка Лук'яненка</td>").replace(', 7А,', ', 7A,');
+    const { p } = setup({ http: fakeHttp({ [CHOMU_URL]: () => okText(CHOMU.replace(VELYCHKA_ROW, row)) }) });
+    const snap = await p.fetchSnapshot({ ...KOVEL, street: 'Левка Лук’яненка' });
+    expect(snap.currentOutage).toMatchObject({ kind: 'emergency', text: 'Аварійний випадок в мережах' });
+  });
+
+  it('a unique settlement takes its outage whatever district the row names', async () => {
+    // м. Ковель has no « (… р-н)» in its label: the district plays no part, even though the queue table has one.
+    const row = VELYCHKA_ROW.replace('<td>Ковельський</td>', '<td>Луцький</td>');
+    const { p } = setup({ http: fakeHttp({ [CHOMU_URL]: () => okText(CHOMU.replace(VELYCHKA_ROW, row)) }) });
+    const snap = await p.fetchSnapshot(KOVEL);
+    expect(snap.currentOutage).toMatchObject({ kind: 'emergency', text: 'Аварійний випадок в мережах' });
   });
 
   it('a city missing from the bundled list still refreshes by its bare name (Review Focus 3)', async () => {
@@ -432,6 +450,32 @@ describe('VoeProvider address lookup', () => {
   it('throws when the queue lookup fails in the wizard', async () => {
     const { p } = setup({ http: fakeHttp({ [CHERGA_URL]: () => failStatus(500) }) });
     await expectError(p.listStreets('м. Ковель'), ProviderError, HTTP_ERROR);
+  });
+
+  it('lists a street once when the operator writes its apostrophe two ways, with the houses of both rows', async () => {
+    const rows = [
+      ['Ковельський', 'Ковель', 'Левка Лук’яненка', '1, 2a', '1.1'],
+      ['Ковельський', 'Ковель', "Левка Лук'яненка", '2А, 3', '1.2'],
+    ];
+    const { p } = setup({ http: fakeHttp({ [CHERGA_URL]: () => queueTable(rows) }) });
+    await expect(p.listStreets('м. Ковель')).resolves.toEqual(['Левка Лук’яненка']);
+    const houses = await p.listHouses('м. Ковель', 'Левка Лук’яненка');
+    expect(houses.map((h) => h.house)).toEqual(['1', '2А', '3']);
+    expect(houses.find((h) => h.house === '2А')?.lines.map((l) => l.groupId)).toEqual(['1.1', '1.2']);
+  });
+
+  it('takes a settlement\'s rows whichever apostrophe the operator writes in its name', async () => {
+    const rows = [['Камінь-Каширський', "В'язівне", 'Шкільна', '1', '1.1']];
+    const { p, http } = setup({ http: fakeHttp({ [CHERGA_URL]: () => queueTable(rows) }) });
+    await expect(p.listStreets('с. В’язівне')).resolves.toEqual(['Шкільна']);
+    // Sent as bundled (U+2019): the live form finds the village with either apostrophe (settlements.source.md).
+    expect(form(http.calls[0].init).get('formCity')).toBe('В’язівне');
+  });
+
+  it('keeps a unique settlement\'s rows of every district', async () => {
+    const rows = [['Ковельський', 'Ковель', 'Незалежності', '1', '1.1'], ['Луцький', 'Ковель', 'Шевченка', '2', '1.2']];
+    const { p } = setup({ http: fakeHttp({ [CHERGA_URL]: () => queueTable(rows) }) });
+    await expect(p.listStreets('м. Ковель')).resolves.toEqual(['Незалежності', 'Шевченка']);
   });
 
   it('does not keep an empty answer for the run', async () => {

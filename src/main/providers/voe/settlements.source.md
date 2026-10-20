@@ -47,3 +47,14 @@ One-off, no change to `package.json`. A throwaway Node script (not committed):
 | Заріччя (name in 3 districts of the list) | 82: Володимирський 48, Ковельський 20, Луцький 14 | `Володимирcький`, Ковельський, Луцький | OK; the operator's three districts match the three in the list, so a district filter can tell them apart |
 
 District note: the operator uses the post-2020 districts (Луцький, Ковельський, Володимирський, Камінь-Каширський), but writes Володимирський with a Latin `c` in the middle (`Володимир` + `c` U+0063 + `ький`). Compare «Район» normalized (map Latin look-alikes to Cyrillic) or fall back to the name alone. No `operatorName` was needed, because every checked name returned rows. Other names were not checked (no crawling).
+
+## Apostrophes (live check 2026-10-20)
+
+All 25 bundled names with an apostrophe use U+2019 (`’`), as КАТОТТГ does. One village was sent to the same `cherga` form twice, `formStreet=%`:
+
+| `formCity` sent | HTTP | Table rows | Rows whose «Нас. пункт» is the name verbatim | «Нас. пункт» as the operator writes it | «Район» |
+| --- | --- | --- | --- | --- | --- |
+| `В’язівне` (U+2019) | 200 | 17 | 17 | `В’язівне` (U+2019) | Камінь-Каширський |
+| `В'язівне` (U+0027) | 200 | 17 | 0 | `В’язівне` (U+2019) | Камінь-Каширський |
+
+The operator stores this name with U+2019, like the list, and its search finds it with either apostrophe (the same 43,631-byte answer). So the bundled names are sent as they are, with no `operatorName`. The rows still come back with U+2019 when U+0027 is sent, so the provider compares settlement, street and house names through `names.ts` (one apostrophe, Latin look-alikes as Cyrillic), never verbatim. In the saved Kovel table the streets mix both apostrophes too (`В'ячеслава Хурсенка` with U+0027, `Левка Лук’яненка` with U+2019).

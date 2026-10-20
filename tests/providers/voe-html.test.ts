@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { housesOf, isHouseNumber, matchOutage, parseOutageTable, parseQueueTable } from '../../src/main/providers/voe/html';
+import {
+  housesOf, isHouseNumber, matchOutage, parseOutageTable, parseQueueTable, type OutageRow,
+} from '../../src/main/providers/voe/html';
 import { kyivWallTimeToInstant } from '../../src/shared/time';
 
 const cherga = readFileSync('tests/fixtures/voe/cherga-kovel-all.html', 'utf8');
@@ -27,6 +29,11 @@ describe('parseQueueTable', () => {
     expect(rows).toContainEqual({
       raion: 'Ковельський', settlement: 'Ковель', street: 'Незалежності', houses: ['101', '101А', '89'], gpv: '2.2',
     });
+  });
+
+  it('writes a house letter in one form, once per row («12-A, 12-А, 12А» → «12А»)', () => {
+    const row = rows.find((r) => r.street === 'Тараса Бульби-Боровця' && r.houses.includes('12А'))!;
+    expect(row.houses).toEqual(['12А']);
   });
 
   it('drops junk house entries', () => {
@@ -68,6 +75,25 @@ describe('housesOf', () => {
   it('sorts houses numerically', () => {
     const names = houses.map((h) => h.house);
     expect(names.indexOf('2')).toBeLessThan(names.indexOf('10'));
+  });
+
+  it('offers one house for a Latin and a Cyrillic letter (Грушевського: «2a, 2А»)', () => {
+    const names = housesOf(rows, 'Грушевського').map((h) => h.house);
+    expect(names.filter((h) => /^2(-?[AaАа])?$/.test(h))).toEqual(['2', '2А']);
+  });
+
+  it('offers one house for «12-A, 12-А, 12А» (Тараса Бульби-Боровця), in the form «12А»', () => {
+    const list = housesOf(rows, 'Тараса Бульби-Боровця');
+    expect(list.map((h) => h.house).filter((h) => /^12(-?[AaАа])?$/.test(h))).toEqual(['12', '12А']);
+    expect(list.find((h) => h.house === '12А')?.lines).toEqual([{ index: 1, groupId: '1.1', label: 'Черга 1.1' }]);
+  });
+
+  it('finds a street by either apostrophe', () => {
+    const rows2 = [
+      { raion: 'Р', settlement: 'А', street: 'Левка Лук’яненка', houses: ['1'], gpv: '1.1' },
+      { raion: 'Р', settlement: 'А', street: "Левка Лук'яненка", houses: ['2'], gpv: '1.2' },
+    ];
+    expect(housesOf(rows2, "Левка Лук'яненка").map((h) => h.house)).toEqual(['1', '2']);
   });
 });
 
@@ -130,5 +156,47 @@ describe('parseOutageTable and matchOutage', () => {
     const addr = { settlement: 'А', street: 'Б', house: '1' };
     expect(matchOutage([mk('Відключення за графіком')], addr, now)).toBeUndefined();
     expect(matchOutage([mk('Щось інше')], addr, now)?.kind).toBe('other');
+  });
+
+  describe('names written differently by the operator', () => {
+    const row = (over: Partial<OutageRow>): OutageRow => ({
+      raion: 'Ковельський', settlement: 'Ковель', street: 'Самійла Величка', houses: ['7А'],
+      type: 'Аварійне вимкнення', reason: 'r', start: '20.10.2026 09:00', end: '20.10.2026 12:00', ...over,
+    });
+
+    it('matches a house saved as «2А» to an outage row listing «2a»', () => {
+      expect(matchOutage([row({ houses: ['2a'] })], { settlement: 'Ковель', street: 'Самійла Величка', house: '2А' }, now)?.kind)
+        .toBe('emergency');
+    });
+
+    it('matches «12А» to «12-A» in a parsed outage table', () => {
+      const parsed = parseOutageTable(chomu.replace('<td>16, 1, 1В, 6, 7А,', '<td>16, 1, 1В, 6, 12-A, 7А,'));
+      expect(matchOutage(parsed, { settlement: 'Ковель', street: 'Самійла Величка', house: '12А' }, now)?.kind).toBe('emergency');
+    });
+
+    it('matches a street saved with U+2019 to an outage row written with U+0027', () => {
+      const rows2 = [row({ street: "В'ячеслава Хурсенка" })];
+      expect(matchOutage(rows2, { settlement: 'Ковель', street: 'В’ячеслава Хурсенка', house: '7А' }, now)?.kind).toBe('emergency');
+    });
+
+    it('matches a settlement with an apostrophe or a Latin look-alike letter', () => {
+      const addr = { settlement: 'В’язівне', street: 'Самійла Величка', house: '7А' };
+      expect(matchOutage([row({ settlement: "В'язівне" })], addr, now)?.kind).toBe('emergency');
+      expect(matchOutage([row({ settlement: 'В’язiвне' /* Latin i */ })], addr, now)?.kind).toBe('emergency');
+    });
+  });
+
+  it('reads reworded outage types by their stem', () => {
+    const mk = (type: string) => ({
+      raion: 'Р', settlement: 'А', street: 'Б', houses: ['1'], type, reason: 'r', start: '20.10.2026 09:00', end: '20.10.2026 12:00',
+    });
+    const addr = { settlement: 'А', street: 'Б', house: '1' };
+    const kind = (type: string) => matchOutage([mk(type)], addr, now)?.kind;
+    expect(kind('Аварійне відключення')).toBe('emergency');
+    expect(kind('аварійне вимкнення')).toBe('emergency');
+    expect(kind('Екстрене відключення')).toBe('emergency');
+    expect(kind('планове вимкнення (ремонт)')).toBe('planned');
+    expect(kind('Планове відключення')).toBe('planned');
+    expect(kind('Застосування графіків обмеження')).toBeUndefined();
   });
 });

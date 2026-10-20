@@ -1,5 +1,6 @@
 import type { CurrentOutage, HouseInfo, LineInfo } from '../../../shared/types';
 import { kyivDateKey, parseDtekDateTime } from '../../../shared/time';
+import { normHouse, sameName } from './names';
 
 export interface QueueRow { raion: string; settlement: string; street: string; houses: string[]; gpv: string /* '6.1' or 'none' */ }
 export interface OutageRow {
@@ -35,8 +36,9 @@ function tableRows(html: string): string[][] {
   return rows;
 }
 
+/** The cell's house numbers in their one shown form (see `normHouse`), each once. */
 function splitHouses(cell: string): string[] {
-  return cell.split(',').map((h) => h.trim()).filter(isHouseNumber);
+  return [...new Set(cell.split(',').map((h) => h.trim()).filter(isHouseNumber).map(normHouse))];
 }
 
 export function parseQueueTable(html: string): QueueRow[] {
@@ -53,11 +55,12 @@ export function parseQueueTable(html: string): QueueRow[] {
 
 const collator = new Intl.Collator('uk', { numeric: true });
 
+/** The street's houses, each once in its shown form, from every row of that street however the operator spelled it. */
 export function housesOf(rows: QueueRow[], street: string): HouseInfo[] {
   const byHouse = new Map<string, Set<string>>();
   for (const r of rows) {
-    if (r.street !== street) continue;
-    for (const h of r.houses) {
+    if (!sameName(r.street, street)) continue;
+    for (const h of r.houses.map(normHouse)) {
       let set = byHouse.get(h);
       if (!set) byHouse.set(h, (set = new Set()));
       set.add(r.gpv);
@@ -89,10 +92,11 @@ export function parseOutageTable(html: string): OutageRow[] {
   return out;
 }
 
+/** By stem, not by the exact wording: «Аварійне відключення» or «планове вимкнення (ремонт)» must not turn into 'other'. */
 function kindOf(type: string): CurrentOutage['kind'] | undefined {
   if (/графік/i.test(type)) return undefined;
-  if (type === 'Аварійне вимкнення') return 'emergency';
-  if (type === 'Планове вимкнення') return 'planned';
+  if (/аварій|екстрен/i.test(type)) return 'emergency';
+  if (/планов/i.test(type)) return 'planned';
   return 'other';
 }
 
@@ -102,10 +106,12 @@ export function matchOutage(
   rows: OutageRow[], at: { settlement: string; street: string; house: string }, now: Date,
 ): CurrentOutage | undefined {
   const today = kyivDateKey(now);
+  const house = normHouse(at.house);
   const active: { o: CurrentOutage; start: Date }[] = [];
   const later: { o: CurrentOutage; start: Date }[] = [];
   for (const r of rows) {
-    if (r.settlement !== at.settlement || r.street !== at.street || !r.houses.includes(at.house)) continue;
+    if (!sameName(r.settlement, at.settlement) || !sameName(r.street, at.street)) continue;
+    if (!r.houses.some((h) => normHouse(h) === house)) continue;
     const kind = kindOf(r.type);
     if (!kind) continue;
     const start = parseDtekDateTime(r.start);

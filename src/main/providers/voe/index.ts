@@ -6,8 +6,9 @@ import type { HttpFetch, HttpResponse } from '../http';
 import { NetworkError, ProviderError, type ScheduleProvider } from '../types';
 import { readGpvGrid } from './gpv-image';
 import { housesOf, matchOutage, parseOutageTable, parseQueueTable, type QueueRow } from './html';
+import { nameKey, normHouse, sameName } from './names';
 import { decodePng } from './png';
-import { bareName, findSettlement, operatorCity, voeSettlements } from './settlements';
+import { bareName, findSettlement, hasRaionSuffix, operatorCity, voeSettlements } from './settlements';
 
 export const VOE_QUIET_NOTE =
   'Волиньобленерго не опублікувало графік на сьогодні — зазвичай це означає, що відключень за графіком немає';
@@ -76,18 +77,10 @@ function kyivStamp(iso: string | undefined): string | undefined {
   return `${formatHM(d)} ${day}.${m}.${y}`;
 }
 
-// The operator writes one district with Latin look-alikes («Володимирcький», Latin c): compare in Cyrillic.
-const LOOK_ALIKES: Record<string, string> = {
-  a: 'а', c: 'с', e: 'е', i: 'і', o: 'о', p: 'р', x: 'х', y: 'у',
-  A: 'А', B: 'В', C: 'С', E: 'Е', H: 'Н', I: 'І', K: 'К', M: 'М', O: 'О', P: 'Р', T: 'Т', X: 'Х', Y: 'У',
-};
-const normRaion = (s: string): string => s.trim().replace(/[aceiopxyABCEHIKMOPTXY]/g, (ch) => LOOK_ALIKES[ch]);
-
 /** Whether any of these rows is in the place's district. */
 function hasRaion(rows: ReadonlyArray<{ raion: string }>, place: OperatorPlace): boolean {
-  if (!place.raion) return false;
-  const want = normRaion(place.raion);
-  return rows.some((r) => normRaion(r.raion) === want);
+  const { raion } = place;
+  return !!raion && rows.some((r) => sameName(r.raion, raion));
 }
 
 /**
@@ -95,10 +88,10 @@ function hasRaion(rows: ReadonlyArray<{ raion: string }>, place: OperatorPlace):
  * or when `raionKnown` (the operator files the name under it elsewhere): then rows of other districts never pass.
  */
 function rowsOf<R extends { raion: string; settlement: string }>(all: R[], place: OperatorPlace, raionKnown = false): R[] {
-  const same = all.filter((r) => r.settlement === place.city);
-  if (!place.raion) return same;
-  const want = normRaion(place.raion);
-  const inRaion = same.filter((r) => normRaion(r.raion) === want);
+  const same = all.filter((r) => sameName(r.settlement, place.city));
+  const { raion } = place;
+  if (!raion) return same;
+  const inRaion = same.filter((r) => sameName(r.raion, raion));
   return inRaion.length > 0 || raionKnown ? inRaion : same;
 }
 
@@ -132,10 +125,12 @@ export class VoeProvider implements ScheduleProvider {
     return Promise.resolve(voeSettlements().map((s) => s.label));
   }
 
+  /** Each street once, in the operator's first spelling: two apostrophes or a look-alike letter make no second street. */
   listStreets(city: string): Promise<string[]> {
     return this.serial('listStreets', async () => {
-      const rows = await this.queueRows(city);
-      return [...new Set(rows.map((r) => r.street))].sort((a, b) => a.localeCompare(b, 'uk'));
+      const byKey = new Map<string, string>();
+      for (const r of await this.queueRows(city)) if (!byKey.has(nameKey(r.street))) byKey.set(nameKey(r.street), r.street);
+      return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'uk'));
     });
   }
 
@@ -230,7 +225,7 @@ export class VoeProvider implements ScheduleProvider {
   private lines(address: Address, queue: QueueRow[] | undefined): LineInfo[] {
     const saved = [{ index: address.lineIndex, groupId: address.groupId, label: queueLabel(address.groupId) }];
     if (!queue) return saved;
-    const house = housesOf(queue, address.street).find((h) => h.house === address.house);
+    const house = housesOf(queue, address.street).find((h) => h.house === normHouse(address.house));
     if (!house) {
       this.log.warn('voe fetchSnapshot: no queue row for the saved house, keeping the saved line', {
         city: address.city, street: address.street, house: address.house,
@@ -244,6 +239,8 @@ export class VoeProvider implements ScheduleProvider {
    * The outage listed for the saved house. For same-named villages the district decides: when the operator files the
    * name under the saved district (in its queue table, or in these outage rows), rows of other districts never match.
    * The queue table counts too because a quiet district has no outage rows while its namesake may have one.
+   * The street is left blank, as the browser form allows: the whole settlement comes back, and the street is matched
+   * here, so a different apostrophe or look-alike letter in the operator's outage rows cannot hide the outage.
    */
   private async currentOutage(address: Address, now: Date, queue: QueueRow[]): Promise<CurrentOutage | undefined> {
     const place = this.place(address.city);
@@ -251,7 +248,7 @@ export class VoeProvider implements ScheduleProvider {
     try {
       const html = await this.text(OUTAGE_URL, {
         method: 'POST', headers: FORM_HEADERS,
-        body: new URLSearchParams({ formCity: place.city, formStreet: address.street, searchForm: 'searchFromForm' }).toString(),
+        body: new URLSearchParams({ formCity: place.city, formStreet: '', searchForm: 'searchFromForm' }).toString(),
       });
       const rows = rowsOf(parseOutageTable(html), place, hasRaion(queue, place));
       return matchOutage(rows, { settlement: place.city, street: address.street, house: address.house }, now);
@@ -264,7 +261,10 @@ export class VoeProvider implements ScheduleProvider {
   private place(label: string): OperatorPlace {
     const s = findSettlement(label);
     // A label missing from the bundled list (the list was regenerated) still works by its bare name.
-    return s ? { city: operatorCity(s), raion: s.raion } : { city: bareName(label) };
+    if (!s) return { city: bareName(label) };
+    // Only a same-named village's label carries « (… р-н)», and only there does the district tell places apart. For a
+    // unique name it would only add risk: a row the operator files under another district must still count.
+    return hasRaionSuffix(label) ? { city: operatorCity(s), raion: s.raion } : { city: operatorCity(s) };
   }
 
   private async queueRows(label: string): Promise<QueueRow[]> {
