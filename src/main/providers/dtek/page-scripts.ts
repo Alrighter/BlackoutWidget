@@ -1,4 +1,3 @@
-export const DTEK_URL = 'https://www.dtek-krem.com.ua/ua/shutdowns';
 export const READY_CHECK = "typeof DisconSchedule !== 'undefined' && !!DisconSchedule.fact";
 
 // `DisconSchedule` is a global lexical binding (not on `window`), so it is
@@ -25,15 +24,19 @@ export function isPagePollRequest(req: { method: string; url: string; body: stri
   }
 }
 
-export function readStreetsScript(city: string): string {
+/** `city` null: the site has no city level (Kyiv), `DisconSchedule.streets` is a flat array. */
+export function readStreetsScript(city: string | null): string {
+  if (city === null) return '(DisconSchedule.streets || []).slice()';
   return `(DisconSchedule.streets[${JSON.stringify(city)}] || []).slice()`;
 }
 
-export function getHomeNumScript(city: string, street: string, updateFact: string): string {
+/** `city` null: no `city` field is sent (Kyiv has none). */
+export function getHomeNumScript(city: string | null, street: string, updateFact: string): string {
+  const cityField = city === null ? '' : `['city', ${JSON.stringify(city)}], `;
   return `(async () => {
   const params = new URLSearchParams();
   params.append('method', 'getHomeNum');
-  const fields = [['city', ${JSON.stringify(city)}], ['street', ${JSON.stringify(street)}], ['updateFact', ${JSON.stringify(updateFact)}]];
+  const fields = [${cityField}['street', ${JSON.stringify(street)}], ['updateFact', ${JSON.stringify(updateFact)}]];
   fields.forEach(([name, value], i) => {
     params.append('data[' + i + '][name]', name);
     params.append('data[' + i + '][value]', value);

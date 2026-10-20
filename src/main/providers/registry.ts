@@ -1,22 +1,24 @@
-import { DtekKremProvider } from './dtek-krem';
-import { DTEK_URL, NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek-krem/page-scripts';
+import { DTEK_SITES, DtekProvider } from './dtek';
+import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek/page-scripts';
 import type { SessionOptions } from './browser-session';
+import { providerSiteUrl } from '../../shared/providers';
 import { silentLogger, type Logger } from '../log';
 import { ProviderError, type PageSession, type ScheduleProvider } from './types';
 
 export function createProviders(
   makeSession: (o: SessionOptions) => PageSession, log: Logger = silentLogger,
 ): ScheduleProvider[] {
-  return [
-    new DtekKremProvider(makeSession({
-      url: DTEK_URL,
-      partition: 'persist:dtek-krem',
+  return DTEK_SITES.map(site => {
+    const url = providerSiteUrl(site.id)!;
+    return new DtekProvider(site, makeSession({
+      url,
+      partition: `persist:${site.id}`,
       readyCheck: READY_CHECK,
-      allowedHosts: ['dtek-krem.com.ua'],
+      allowedHosts: [new URL(url).hostname.replace(/^www\./, '')],
       afterReady: NEUTRALIZE_TIMERS,
       blockRequest: isPagePollRequest,
-    }), log),
-  ];
+    }), log);
+  });
 }
 
 export function findProvider(list: ScheduleProvider[], id: string): ScheduleProvider {

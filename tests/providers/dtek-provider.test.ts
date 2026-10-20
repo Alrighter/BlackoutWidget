@@ -1,14 +1,16 @@
-import stale from '../fixtures/dtek-krem/getHomeNum-stale-updateFact.json';
-import fresh from '../fixtures/dtek-krem/getHomeNum-fresh.json';
-import { DtekKremProvider } from '../../src/main/providers/dtek-krem';
-import { READ_FACT, getHomeNumScript, isPagePollRequest } from '../../src/main/providers/dtek-krem/page-scripts';
+import stale from '../fixtures/dtek/getHomeNum-stale-updateFact.json';
+import fresh from '../fixtures/dtek/getHomeNum-fresh.json';
+import { DtekProvider } from '../../src/main/providers/dtek';
+import { READ_FACT, getHomeNumScript, isPagePollRequest, readStreetsScript } from '../../src/main/providers/dtek/page-scripts';
 import { CaptchaRequiredError, NetworkError, ProviderError } from '../../src/main/providers/types';
-import { factToDays } from '../../src/main/providers/dtek-krem/parse';
+import { factToDays } from '../../src/main/providers/dtek/parse';
 import { AppStore } from '../../src/main/store';
 import { RefreshService } from '../../src/main/refresh';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+const KREM = { id: 'dtek-krem', cityLevel: true };
+const KEM = { id: 'dtek-kem', cityLevel: false };
 const C = 'м. Біла Церква', S = 'бул. Грушевського Михайла';
 const addr = { providerId: 'dtek-krem', city: C, street: S, house: '40', lineIndex: 1, groupId: 'GPV1.2' };
 const oldFact = { ...stale.fact, update: '17.10.2026 09:40' };
@@ -20,7 +22,7 @@ function fakeSession(replies: Record<string, unknown[]>) {
 test('first fetch sends cached updateFact and adopts fresh fact', async () => {
   const s = fakeSession({ [READ_FACT]: [{ fact: oldFact, schNames: stale.preset.sch_names }],
     [getHomeNumScript(C, S, '17.10.2026 09:40')]: [{ status: 200, body: JSON.stringify(stale) }] });
-  const snap = await new DtekKremProvider(s as any).fetchSnapshot(addr);
+  const snap = await new DtekProvider(KREM, s as any).fetchSnapshot(addr);
   expect(snap.sourceUpdatedAt).toBe('17.10.2026 11:55');
   expect(snap.groupId).toBe('GPV1.2'); expect(snap.groupLabel).toBe('Черга 1.2');
   expect(snap.days.map(d => d.date)).toEqual(['2026-10-17']);
@@ -29,7 +31,7 @@ test('first fetch sends cached updateFact and adopts fresh fact', async () => {
 test('second fetch reuses cached fact when response has none', async () => {
   const s = fakeSession({ [READ_FACT]: [{ fact: stale.fact, schNames: stale.preset.sch_names }],
     [getHomeNumScript(C, S, '17.10.2026 11:55')]: [{ status: 200, body: JSON.stringify(stale) }, { status: 200, body: JSON.stringify(fresh) }] });
-  const p = new DtekKremProvider(s as any);
+  const p = new DtekProvider(KREM, s as any);
   await p.fetchSnapshot(addr);
   const snap = await p.fetchSnapshot(addr);
   expect(snap.days[0].slots[12]).toBe('off');
@@ -38,30 +40,30 @@ test('non-200 → reload and retry once, then ProviderError', async () => {
   const bad = { status: 403, body: '<html>' };
   const s = fakeSession({ [READ_FACT]: [{ fact: stale.fact, schNames: stale.preset.sch_names }, { fact: stale.fact, schNames: stale.preset.sch_names }],
     [getHomeNumScript(C, S, '17.10.2026 11:55')]: [bad, bad] });
-  await expect(new DtekKremProvider(s as any).fetchSnapshot(addr)).rejects.toThrow(ProviderError);
+  await expect(new DtekProvider(KREM, s as any).fetchSnapshot(addr)).rejects.toThrow(ProviderError);
   expect(s.reload).toHaveBeenCalledTimes(1);
   expect(s.evaluate.mock.calls.filter(c => c[0] === READ_FACT)).toHaveLength(2);
 });
 test('house missing → ProviderError', async () => {
   const s = fakeSession({ [READ_FACT]: [{ fact: stale.fact, schNames: stale.preset.sch_names }],
     [getHomeNumScript(C, S, '17.10.2026 11:55')]: [{ status: 200, body: JSON.stringify(stale) }] });
-  await expect(new DtekKremProvider(s as any).fetchSnapshot({ ...addr, house: '999' })).rejects.toThrow(/Будинок не знайдено/);
+  await expect(new DtekProvider(KREM, s as any).fetchSnapshot({ ...addr, house: '999' })).rejects.toThrow(/Будинок не знайдено/);
 });
 test('captcha propagates', async () => {
   const s = fakeSession({}); s.ensureReady.mockRejectedValue(new CaptchaRequiredError('x'));
-  await expect(new DtekKremProvider(s as any).fetchSnapshot(addr)).rejects.toBeInstanceOf(CaptchaRequiredError);
+  await expect(new DtekProvider(KREM, s as any).fetchSnapshot(addr)).rejects.toBeInstanceOf(CaptchaRequiredError);
 });
 test('listHouses parses lines', async () => {
   const s = fakeSession({ [READ_FACT]: [{ fact: stale.fact, schNames: stale.preset.sch_names }],
     [getHomeNumScript(C, S, '17.10.2026 11:55')]: [{ status: 200, body: JSON.stringify(stale) }] });
-  const houses = await new DtekKremProvider(s as any).listHouses(C, S);
+  const houses = await new DtekProvider(KREM, s as any).listHouses(C, S);
   expect(houses.find(h => h.house === '40')!.lines).toHaveLength(2);
 });
 test('unexpected parse exception is wrapped in ProviderError', async () => {
   const broken = { result: true, data: { '40': { sub_type_reason: 5 } } };
   const s = fakeSession({ [READ_FACT]: [{ fact: stale.fact, schNames: stale.preset.sch_names }],
     [getHomeNumScript(C, S, '17.10.2026 11:55')]: [{ status: 200, body: JSON.stringify(broken) }] });
-  await expect(new DtekKremProvider(s as any).fetchSnapshot(addr)).rejects.toBeInstanceOf(ProviderError);
+  await expect(new DtekProvider(KREM, s as any).fetchSnapshot(addr)).rejects.toBeInstanceOf(ProviderError);
 });
 test('concurrent fetches never overlap evaluate calls', async () => {
   const script = getHomeNumScript(C, S, '17.10.2026 11:55');
@@ -77,7 +79,7 @@ test('concurrent fetches never overlap evaluate calls', async () => {
       throw new Error('unexpected');
     } finally { active--; }
   }) as any);
-  const p = new DtekKremProvider(s as any);
+  const p = new DtekProvider(KREM, s as any);
   const a = p.fetchSnapshot(addr), b = p.fetchSnapshot(addr);
   await new Promise(r => setTimeout(r, 20));
   expect(homeNumCalls).toBe(1); // second waits for the first
@@ -94,7 +96,7 @@ const factReply = () => ({ fact: stale.fact, schNames: stale.preset.sch_names })
 const homeNum = getHomeNumScript(C, S, '17.10.2026 11:55');
 test('status 0 on both attempts while online (DTEK slow / reset) → plain ProviderError, not offline', async () => {
   const s = fakeSession({ [READ_FACT]: [factReply(), factReply()], [homeNum]: [{ status: 0, body: '' }, { status: 0, body: '' }] });
-  const err = await new DtekKremProvider(s as any).fetchSnapshot(addr).catch(e => e);
+  const err = await new DtekProvider(KREM, s as any).fetchSnapshot(addr).catch(e => e);
   expect(err).toBeInstanceOf(ProviderError);
   expect(err).not.toBeInstanceOf(NetworkError);
   expect(err.message).toBe('Сайт ДТЕК не відповідає');
@@ -103,13 +105,13 @@ test('status 0 on both attempts while online (DTEK slow / reset) → plain Provi
 test('status 0 on both attempts while offline → NetworkError with the offline message', async () => {
   const s = fakeSession({ [READ_FACT]: [factReply(), factReply()], [homeNum]: [{ status: 0, body: '' }, { status: 0, body: '' }] });
   s.isOnline.mockReturnValue(false);
-  const err = await new DtekKremProvider(s as any).fetchSnapshot(addr).catch(e => e);
+  const err = await new DtekProvider(KREM, s as any).fetchSnapshot(addr).catch(e => e);
   expect(err).toBeInstanceOf(NetworkError);
   expect(err.message).toBe('Немає з’єднання з сайтом ДТЕК');
 });
 test('status 0 then 403 → plain ProviderError (the site answered)', async () => {
   const s = fakeSession({ [READ_FACT]: [factReply(), factReply()], [homeNum]: [{ status: 0, body: '' }, { status: 403, body: '<html>' }] });
-  const err = await new DtekKremProvider(s as any).fetchSnapshot(addr).catch(e => e);
+  const err = await new DtekProvider(KREM, s as any).fetchSnapshot(addr).catch(e => e);
   expect(err).toBeInstanceOf(ProviderError);
   expect(err).not.toBeInstanceOf(NetworkError);
 });
@@ -117,7 +119,7 @@ test('NetworkError from the session passes through unchanged', async () => {
   const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 0, body: '' }] });
   const offline = new NetworkError('Немає з’єднання з сайтом ДТЕК');
   s.reload.mockRejectedValue(offline);
-  await expect(new DtekKremProvider(s as any).fetchSnapshot(addr)).rejects.toBe(offline);
+  await expect(new DtekProvider(KREM, s as any).fetchSnapshot(addr)).rejects.toBe(offline);
 });
 
 function fakeLog() { return { info: vi.fn(), warn: vi.fn(), error: vi.fn() }; }
@@ -128,7 +130,7 @@ test('logs the raw house entry when outage fields are filled, and each unknown h
   body.data['40'] = { ...body.data['40'], type: 'Аварійне відключення', end_date: '17:00 17.10.2026' };
   const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
   const log = fakeLog();
-  await new DtekKremProvider(s as any, log).fetchSnapshot(addr);
+  await new DtekProvider(KREM, s as any, log).fetchSnapshot(addr);
   expect(log.info).toHaveBeenCalledWith('dtek-krem: outage fields for house', { house: '40', entry: body.data['40'] });
   expect(log.warn.mock.calls).toEqual([
     ['dtek-krem: unknown hour status', { groupId: 'GPV1.2', status: 'weird' }],
@@ -138,7 +140,7 @@ test('logs the raw house entry when outage fields are filled, and each unknown h
 test('quiet house entry is not logged; provider errors are logged with their cause', async () => {
   const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(stale) }] });
   const log = fakeLog();
-  const p = new DtekKremProvider(s as any, log);
+  const p = new DtekProvider(KREM, s as any, log);
   await p.fetchSnapshot(addr);
   expect(log.info).not.toHaveBeenCalled();
   s.evaluate.mockRejectedValueOnce(new TypeError('boom'));
@@ -179,7 +181,7 @@ function withHouse40(patch: Record<string, unknown>) {
 const line2 = { ...addr, lineIndex: 2, groupId: 'GPV4.2' };
 async function viaService(body: unknown, address: typeof addr) {
   const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
-  const provider = new DtekKremProvider(s as any);
+  const provider = new DtekProvider(KREM, s as any);
   const store = new AppStore(mkdtempSync(join(tmpdir(), 'bw-')));
   store.updateSettings({ address });
   const svc = new RefreshService({ store, getProvider: () => provider });
@@ -212,5 +214,35 @@ test('queue label falls back to «Черга X.Y» when the source has no name f
   const body = withHouse40({}) as any;
   delete body.preset.sch_names['GPV4.2'];
   const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
-  expect((await new DtekKremProvider(s as any).fetchSnapshot(line2)).groupLabel).toBe('Черга 4.2');
+  expect((await new DtekProvider(KREM, s as any).fetchSnapshot(line2)).groupLabel).toBe('Черга 4.2');
+});
+
+test('a site without a city level lists its single city without touching the session', async () => {
+  const s = fakeSession({});
+  expect(await new DtekProvider(KEM, s as any).listCities()).toEqual(['м. Київ']);
+  expect(s.ensureReady).not.toHaveBeenCalled();
+  expect(s.evaluate).not.toHaveBeenCalled();
+});
+test('Kyiv listStreets reads the flat streets array', async () => {
+  const s = fakeSession({ [READ_FACT]: [factReply()], [readStreetsScript(null)]: [['вул. Хрещатик']] });
+  expect(await new DtekProvider(KEM, s as any).listStreets('м. Київ')).toEqual(['вул. Хрещатик']);
+  expect(s.ensureReady).toHaveBeenCalled();
+});
+test('Kyiv listHouses sends no city field', async () => {
+  const script = getHomeNumScript(null, 'вул. Хрещатик', '17.10.2026 11:55');
+  const s = fakeSession({ [READ_FACT]: [factReply()], [script]: [{ status: 200, body: JSON.stringify(stale) }] });
+  const houses = await new DtekProvider(KEM, s as any).listHouses('м. Київ', 'вул. Хрещатик');
+  expect(houses.length).toBeGreaterThan(0);
+  expect(script).not.toContain("'city'");
+  expect(await bodyOf(script)).not.toContain('city');
+});
+test('getHomeNumScript keeps the city field when the site has a city level', async () => {
+  expect(getHomeNumScript('м. Буча', 'вул. Х', 'u')).toContain("'city'");
+  expect(getHomeNumScript(null, 'вул. Хрещатик', 'u')).not.toContain("'city'");
+});
+test('a failure is logged under the provider id', async () => {
+  const s = fakeSession({}); s.ensureReady.mockRejectedValue(new Error('x'));
+  const log = fakeLog();
+  await expect(new DtekProvider(KEM, s as any, log).fetchSnapshot({ ...addr, providerId: 'dtek-kem' })).rejects.toBeInstanceOf(ProviderError);
+  expect(log.error.mock.calls[0][0]).toBe('dtek-kem fetchSnapshot failed');
 });

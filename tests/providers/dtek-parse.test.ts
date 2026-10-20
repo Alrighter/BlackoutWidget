@@ -1,5 +1,5 @@
-import stale from '../fixtures/dtek-krem/getHomeNum-stale-updateFact.json';
-import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage, hasOutageFields, hasActiveOutage, queueLabelFromId } from '../../src/main/providers/dtek-krem/parse';
+import stale from '../fixtures/dtek/getHomeNum-stale-updateFact.json';
+import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage, hasOutageFields, hasActiveOutage, queueLabelFromId } from '../../src/main/providers/dtek/parse';
 import { ProviderError } from '../../src/main/providers/types';
 const resp = parseHomeNumResponse(stale);
 const fact = resp.fact!; const names = resp.preset!.sch_names;

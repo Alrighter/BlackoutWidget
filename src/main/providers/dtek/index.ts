@@ -1,4 +1,4 @@
-import { providerDisplayName } from '../../../shared/providers';
+import { providerDisplayName, providerSingleCity } from '../../../shared/providers';
 import type { Address, HouseInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import {
@@ -12,15 +12,31 @@ import { READ_CITIES, READ_FACT, getHomeNumScript, readStreetsScript } from './p
 
 interface FactState { fact: DtekFact; schNames: Record<string, string> }
 
-export class DtekKremProvider implements ScheduleProvider {
-  readonly id = 'dtek-krem';
-  readonly displayName = providerDisplayName(this.id);
+export interface DtekSite { id: string; cityLevel: boolean }
+
+/** The four DTEK sites that run the same /ua/shutdowns page; Kyiv city has no city level. */
+export const DTEK_SITES: ReadonlyArray<DtekSite> = [
+  { id: 'dtek-kem', cityLevel: false },
+  { id: 'dtek-dnem', cityLevel: true },
+  { id: 'dtek-krem', cityLevel: true },
+  { id: 'dtek-oem', cityLevel: true },
+];
+
+export class DtekProvider implements ScheduleProvider {
+  readonly id: string;
+  readonly displayName: string;
   private state: FactState | null = null;
 
-  constructor(private readonly session: PageSession, private readonly log: Logger = silentLogger) {}
+  constructor(
+    private readonly site: DtekSite, private readonly session: PageSession, private readonly log: Logger = silentLogger,
+  ) {
+    this.id = site.id;
+    this.displayName = providerDisplayName(site.id);
+  }
 
   listCities(): Promise<string[]> {
     return this.serial('listCities', async () => {
+      if (!this.site.cityLevel) return [providerSingleCity(this.id) ?? ''];
       await this.ready();
       return this.session.evaluate<string[]>(READ_CITIES);
     });
@@ -29,7 +45,7 @@ export class DtekKremProvider implements ScheduleProvider {
   listStreets(city: string): Promise<string[]> {
     return this.serial('listStreets', async () => {
       await this.ready();
-      return this.session.evaluate<string[]>(readStreetsScript(city));
+      return this.session.evaluate<string[]>(readStreetsScript(this.site.cityLevel ? city : null));
     });
   }
 
@@ -48,13 +64,13 @@ export class DtekKremProvider implements ScheduleProvider {
       const entry = resp.data[address.house];
       if (!entry) throw new ProviderError('Будинок не знайдено у відповіді ДТЕК');
       // These fields have never been seen filled (spec §4.3): keep the raw values for later parsing work.
-      if (hasOutageFields(entry)) this.log.info('dtek-krem: outage fields for house', { house: address.house, entry });
+      if (hasOutageFields(entry)) this.log.info(`${this.id}: outage fields for house`, { house: address.house, entry });
       const lines = deriveLines(entry.sub_type_reason ?? [], fact, schNames);
       // Always the saved queue: during an outage `lines` lists only the outage's queues (see hasActiveOutage).
       const groupId = address.groupId;
       const unknownStatuses = new Set<string>();
       const days = factToDays(fact, groupId, s => unknownStatuses.add(s));
-      for (const s of unknownStatuses) this.log.warn('dtek-krem: unknown hour status', { groupId, status: s });
+      for (const s of unknownStatuses) this.log.warn(`${this.id}: unknown hour status`, { groupId, status: s });
       return {
         providerId: this.id,
         address,
@@ -94,8 +110,8 @@ export class DtekKremProvider implements ScheduleProvider {
       const err = e instanceof ProviderError || e instanceof CaptchaRequiredError
         ? e
         : new ProviderError('Не вдалося отримати дані з сайту ДТЕК', { cause: e });
-      if (err instanceof CaptchaRequiredError) this.log.warn(`dtek-krem ${op}: verification required`, err);
-      else this.log.error(`dtek-krem ${op} failed`, err);
+      if (err instanceof CaptchaRequiredError) this.log.warn(`${this.id} ${op}: verification required`, err);
+      else this.log.error(`${this.id} ${op} failed`, err);
       throw err;
     }
   }
@@ -139,7 +155,7 @@ export class DtekKremProvider implements ScheduleProvider {
   private async tryHomeNum(
     city: string, street: string, updateFact: string,
   ): Promise<{ resp: DtekHomeNumResponse | null; status: number }> {
-    const reply = await this.session.evaluate<{ status: number; body: string }>(getHomeNumScript(city, street, updateFact));
+    const reply = await this.session.evaluate<{ status: number; body: string }>(getHomeNumScript(this.site.cityLevel ? city : null, street, updateFact));
     if (reply.status !== 200) return { resp: null, status: reply.status };
     try {
       return { resp: parseHomeNumResponse(JSON.parse(reply.body)), status: reply.status };
