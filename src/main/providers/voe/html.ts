@@ -95,7 +95,7 @@ export function parseOutageTable(html: string): OutageRow[] {
 /** By stem, not by the exact wording: «Аварійне відключення» or «планове вимкнення (ремонт)» must not turn into 'other'. */
 function kindOf(type: string): CurrentOutage['kind'] | undefined {
   if (/графік/i.test(type)) return undefined;
-  if (/аварій|екстрен/i.test(type)) return 'emergency';
+  if (/аварій|екстрен|позаплан/i.test(type)) return 'emergency';
   if (/планов/i.test(type)) return 'planned';
   return 'other';
 }

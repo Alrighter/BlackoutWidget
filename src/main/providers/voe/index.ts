@@ -8,7 +8,7 @@ import { readGpvGrid } from './gpv-image';
 import { housesOf, matchOutage, parseOutageTable, parseQueueTable, type QueueRow } from './html';
 import { nameKey, normHouse, sameName } from './names';
 import { decodePng } from './png';
-import { bareName, findSettlement, hasRaionSuffix, operatorCity, voeSettlements } from './settlements';
+import { bareName, findSettlement, hasNamesake, operatorCity, voeSettlements } from './settlements';
 
 export const VOE_QUIET_NOTE =
   'Волиньобленерго не опублікувало графік на сьогодні — зазвичай це означає, що відключень за графіком немає';
@@ -268,9 +268,9 @@ export class VoeProvider implements ScheduleProvider {
     const s = findSettlement(label);
     // A label missing from the bundled list (the list was regenerated) still works by its bare name.
     if (!s) return { city: bareName(label) };
-    // Only a same-named village's label carries « (… р-н)», and only there does the district tell places apart. For a
-    // unique name it would only add risk: a row the operator files under another district must still count.
-    return hasRaionSuffix(label) ? { city: operatorCity(s), raion: s.raion } : { city: operatorCity(s) };
+    // Only for a name the operator knows in several districts does the district tell places apart. For a unique name
+    // it would only add risk: a row the operator files under another district must still count.
+    return hasNamesake(s) ? { city: operatorCity(s), raion: s.raion } : { city: operatorCity(s) };
   }
 
   private async queueRows(label: string): Promise<QueueRow[]> {

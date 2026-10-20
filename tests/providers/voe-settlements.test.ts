@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bareName, findSettlement, operatorCity, voeSettlements } from '../../src/main/providers/voe/settlements';
+import { bareName, findSettlement, hasNamesake, operatorCity, voeSettlements } from '../../src/main/providers/voe/settlements';
 
 describe('voeSettlements', () => {
   const all = voeSettlements();
@@ -49,6 +49,20 @@ describe('findSettlement / operatorCity', () => {
   it('sends the operator name when it differs, else the name', () => {
     expect(operatorCity({ label: 'м. Луцьк', name: 'Луцьк', raion: 'Луцький' })).toBe('Луцьк');
     expect(operatorCity({ label: 'с. Х', name: 'Х', raion: 'Луцький', operatorName: 'Y' })).toBe('Y');
+  });
+});
+
+describe('hasNamesake', () => {
+  const namesake = (label: string) => hasNamesake(findSettlement(label)!);
+
+  it('is true for a name the operator knows in another district, with or without « (… р-н)» in the label', () => {
+    for (const l of ['с. Заріччя (Ковельський р-н)', 'с. Луків', 'с-ще Луків', 'с-ще Заболоття', 'с-ще Мар’янівка']) {
+      expect(namesake(l), l).toBe(true);
+    }
+  });
+
+  it('is false for a name found in one district only', () => {
+    for (const l of ['м. Ковель', 'м. Луцьк', 'м. Нововолинськ']) expect(namesake(l), l).toBe(false);
   });
 });
 

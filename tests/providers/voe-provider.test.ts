@@ -64,11 +64,11 @@ const ZARICHCHIA = [
 ];
 // The fixture's Самійла Величка emergency (09:50-11:51 on 20.10, houses incl. 7А), moved to Заріччя, Польова.
 const VELYCHKA_ROW = /<tr><td>Ковельський<\/td><td>Ковель<\/td><td>Самійла Величка<\/td>[\s\S]*?<\/tr>/.exec(CHOMU)![0];
-const zarichchiaOutages = (variants: { raion: string; planned?: boolean }[]) => okText(CHOMU.replace(
+const zarichchiaOutages = (variants: { raion: string; planned?: boolean }[], settlement = 'Заріччя') => okText(CHOMU.replace(
   VELYCHKA_ROW,
   variants.map((v) => {
     const row = VELYCHKA_ROW.replace(
-      '<td>Ковельський</td><td>Ковель</td><td>Самійла Величка</td>', `<td>${v.raion}</td><td>Заріччя</td><td>Польова</td>`,
+      '<td>Ковельський</td><td>Ковель</td><td>Самійла Величка</td>', `<td>${v.raion}</td><td>${settlement}</td><td>Польова</td>`,
     );
     return v.planned
       ? row.replace('Аварійне вимкнення', 'Планове вимкнення').replace('Аварійний випадок в мережах', 'Планові ремонтні роботи')
@@ -294,7 +294,7 @@ describe('VoeProvider.fetchSnapshot', () => {
   });
 
   it('a unique settlement takes its outage whatever district the row names', async () => {
-    // м. Ковель has no « (… р-н)» in its label: the district plays no part, even though the queue table has one.
+    // No other district has a Ковель: the district plays no part, even though the queue table has one.
     const row = VELYCHKA_ROW.replace('<td>Ковельський</td>', '<td>Луцький</td>');
     const { p } = setup({ http: fakeHttp({ [CHOMU_URL]: () => okText(CHOMU.replace(VELYCHKA_ROW, row)) }) });
     const snap = await p.fetchSnapshot(KOVEL);
@@ -379,6 +379,18 @@ describe('VoeProvider current outage in same-named villages', () => {
     });
     const { p } = setup({ http });
     const snap = await p.fetchSnapshot(KOVELSKYI);
+    expect(snap.lines).toEqual([{ index: 1, groupId: '4.1', label: 'Черга 4.1' }]);
+    expect('currentOutage' in snap).toBe(false);
+  });
+
+  it('ignores a namesake\'s outage for a village whose label names no district', async () => {
+    // с. Луків is in Луцький; the outage is in с-ще Луків, Ковельський. The labels differ by kind only.
+    const http = fakeHttp({
+      [CHERGA_URL]: () => queueTable([['Луцький', 'Луків', 'Польова', '7А', '4.1']]),
+      [CHOMU_URL]: () => zarichchiaOutages([{ raion: 'Ковельський' }], 'Луків'),
+    });
+    const { p } = setup({ http });
+    const snap = await p.fetchSnapshot({ ...KOVELSKYI, city: 'с. Луків' });
     expect(snap.lines).toEqual([{ index: 1, groupId: '4.1', label: 'Черга 4.1' }]);
     expect('currentOutage' in snap).toBe(false);
   });
@@ -506,6 +518,14 @@ describe('VoeProvider address lookup', () => {
       await expect(p.listStreets('с. Заріччя (Володимирський р-н)')).resolves.toEqual(['Шкільна']);
       await expect(p.listStreets('с. Заріччя (Ковельський р-н)')).resolves.toEqual(['Польова']);
       expect(form(http.calls[0].init).get('formCity')).toBe('Заріччя');
+    });
+
+    it('filters by the district when the labels differ only by с. / с-ще', async () => {
+      // с. Луків (Луцький) and с-ще Луків (Ковельський): no « (… р-н)» in either label, one name at the operator.
+      const rows = [['Луцький', 'Луків', 'Шкільна', '1', '1.1'], ['Ковельський', 'Луків', 'Польова', '2', '2.1']];
+      const { p } = setup({ http: fakeHttp({ [CHERGA_URL]: () => queueTable(rows) }) });
+      await expect(p.listStreets('с. Луків')).resolves.toEqual(['Шкільна']);
+      await expect(p.listStreets('с-ще Луків')).resolves.toEqual(['Польова']);
     });
 
     it('falls back to the name alone when the operator has no row in that district', async () => {

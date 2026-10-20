@@ -1,3 +1,4 @@
+import { nameKey } from './names';
 import data from './settlements.json';
 
 type Kind = 'м' | 'с-ще' | 'с';
@@ -40,12 +41,24 @@ export function findSettlement(label: string): VoeSettlement | undefined {
   return voeSettlements().find((s) => s.label === label);
 }
 
-const RAION_SUFFIX = /\s*\([^()]*р-н\)\s*$/;
+let districtsByName: Map<string, Set<string>> | undefined;
 
-/** Whether the label ends in « (… р-н)», which only a name found in more than one district gets. */
-export function hasRaionSuffix(label: string): boolean {
-  return RAION_SUFFIX.test(label);
+/**
+ * Whether the operator knows this settlement's name in another district too. The forms take the name alone, so only
+ * the district tells such places apart — also when the labels differ by kind alone («с. Луків» and «с-ще Луків»).
+ */
+export function hasNamesake(s: VoeSettlement): boolean {
+  if (!districtsByName) {
+    districtsByName = new Map();
+    for (const o of voeSettlements()) {
+      const key = nameKey(operatorCity(o));
+      districtsByName.set(key, (districtsByName.get(key) ?? new Set()).add(nameKey(o.raion)));
+    }
+  }
+  return (districtsByName.get(nameKey(operatorCity(s)))?.size ?? 0) > 1;
 }
+
+const RAION_SUFFIX = /\s*\([^()]*р-н\)\s*$/;
 
 /** The settlement name without the «м.» / «с.» / «с-ще» prefix and the « (… р-н)» suffix. */
 export function bareName(label: string): string {
