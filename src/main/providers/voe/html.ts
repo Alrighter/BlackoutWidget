@@ -2,7 +2,9 @@ import type { CurrentOutage, HouseInfo, LineInfo } from '../../../shared/types';
 import { kyivDateKey, parseDtekDateTime } from '../../../shared/time';
 
 export interface QueueRow { raion: string; settlement: string; street: string; houses: string[]; gpv: string /* '6.1' or 'none' */ }
-export interface OutageRow { settlement: string; street: string; houses: string[]; type: string; reason: string; start: string; end: string }
+export interface OutageRow {
+  raion: string; settlement: string; street: string; houses: string[]; type: string; reason: string; start: string; end: string;
+}
 
 const HOUSE_RE = /^\d+(?:-?\p{L})?(?:\/\d+(?:-?\p{L})?)?$/u;
 
@@ -82,7 +84,7 @@ export function parseOutageTable(html: string): OutageRow[] {
   for (const c of tableRows(html).slice(1)) {
     if (c.length < 7) continue;
     const [start = '', end = ''] = c[6].split('\n').map(toDtekFormat);
-    out.push({ settlement: c[1], street: c[2], houses: splitHouses(c[3]), type: c[4], reason: c[5], start, end });
+    out.push({ raion: c[0], settlement: c[1], street: c[2], houses: splitHouses(c[3]), type: c[4], reason: c[5], start, end });
   }
   return out;
 }

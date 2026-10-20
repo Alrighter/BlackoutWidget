@@ -81,6 +81,11 @@ describe('parseOutageTable and matchOutage', () => {
     });
   });
 
+  it('reads the district from the first column', () => {
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.raion === 'Ковельський')).toBe(true);
+  });
+
   it('matches the emergency in Ковель', () => {
     expect(matchOutage(rows, { settlement: 'Ковель', street: 'Самійла Величка', house: '7А' }, now)).toEqual({
       kind: 'emergency', text: 'Аварійний випадок в мережах', start: '20.10.2026 09:50', end: '20.10.2026 11:51',
@@ -112,7 +117,7 @@ describe('parseOutageTable and matchOutage', () => {
 
   it('prefers emergency over planned when both are active', () => {
     const mk = (type: string, reason: string) => ({
-      settlement: 'А', street: 'Б', houses: ['1'], type, reason, start: '20.10.2026 09:00', end: '20.10.2026 12:00',
+      raion: 'Р', settlement: 'А', street: 'Б', houses: ['1'], type, reason, start: '20.10.2026 09:00', end: '20.10.2026 12:00',
     });
     const o = matchOutage([mk('Планове вимкнення', 'p'), mk('Аварійне вимкнення', 'e')], { settlement: 'А', street: 'Б', house: '1' }, now);
     expect(o?.text).toBe('e');
@@ -120,7 +125,7 @@ describe('parseOutageTable and matchOutage', () => {
 
   it('skips schedule-type rows and maps unknown types to other', () => {
     const mk = (type: string) => ({
-      settlement: 'А', street: 'Б', houses: ['1'], type, reason: 'r', start: '20.10.2026 09:00', end: '20.10.2026 12:00',
+      raion: 'Р', settlement: 'А', street: 'Б', houses: ['1'], type, reason: 'r', start: '20.10.2026 09:00', end: '20.10.2026 12:00',
     });
     const addr = { settlement: 'А', street: 'Б', house: '1' };
     expect(matchOutage([mk('Відключення за графіком')], addr, now)).toBeUndefined();

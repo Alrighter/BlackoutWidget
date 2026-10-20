@@ -47,6 +47,34 @@ const failStatus = (status: number): HttpResponse => ({
   ok: false, status, text: async () => '', arrayBuffer: async () => new ArrayBuffer(0),
 });
 const form = (init: Init) => new URLSearchParams(init.body ?? '');
+
+// Same-named villages: Заріччя is in three districts. The operator spells one district with a Latin «c» (U+0063).
+const VOLODYMYR_LATIN = 'Володимирcький';
+const queueTable = (rows: string[][]) => okText(
+  "<table class='table table-sm table-light'><tr class='fw-bold'><td>Район</td><td>Нас. пункт</td><td>Вулиця</td>"
+  + '<td>Будинок</td><td>Черга у ГПВ</td><td>Черга у ГАВ</td></tr>'
+  + rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}<td>Не залучено</td></tr>`).join('')
+  + '</table>',
+);
+const ZARICHCHIA = [
+  [VOLODYMYR_LATIN, 'Заріччя', 'Шкільна', '1', '3.1'],
+  ['Ковельський', 'Заріччя', 'Польова', '2, 7А', '4.1'],
+  ['Луцький', 'Заріччя', 'Лісова', '3', '5.1'],
+  ['Луцький', 'Заріччя-Нове', 'Садова', '4', '5.2'],
+];
+// The fixture's Самійла Величка emergency (09:50-11:51 on 20.10, houses incl. 7А), moved to Заріччя, Польова.
+const VELYCHKA_ROW = /<tr><td>Ковельський<\/td><td>Ковель<\/td><td>Самійла Величка<\/td>[\s\S]*?<\/tr>/.exec(CHOMU)![0];
+const zarichchiaOutages = (variants: { raion: string; planned?: boolean }[]) => okText(CHOMU.replace(
+  VELYCHKA_ROW,
+  variants.map((v) => {
+    const row = VELYCHKA_ROW.replace(
+      '<td>Ковельський</td><td>Ковель</td><td>Самійла Величка</td>', `<td>${v.raion}</td><td>Заріччя</td><td>Польова</td>`,
+    );
+    return v.planned
+      ? row.replace('Аварійне вимкнення', 'Планове вимкнення').replace('Аварійний випадок в мережах', 'Планові ремонтні роботи')
+      : row;
+  }).join(''),
+));
 const archiveWith = (patch: (members: any[]) => any[]) => {
   const copy = structuredClone(ARCHIVE);
   copy['hydra:member'] = patch(copy['hydra:member']);
@@ -292,6 +320,48 @@ describe('VoeProvider soft failures in fetchSnapshot', () => {
   });
 });
 
+describe('VoeProvider current outage in same-named villages', () => {
+  const zarichchia = (label: string): Address => ({
+    providerId: 'voe', city: label, street: 'Польова', house: '7А', lineIndex: 1, groupId: '4.1',
+  });
+  const KOVELSKYI = zarichchia('с. Заріччя (Ковельський р-н)');
+
+  it('takes only the saved district\'s row when two districts list the house', async () => {
+    // The queue lookup fails, so only the outage rows show which districts the operator uses.
+    const http = fakeHttp({
+      [CHERGA_URL]: () => new Error('ECONNRESET'),
+      [CHOMU_URL]: () => zarichchiaOutages([{ raion: VOLODYMYR_LATIN }, { raion: 'Ковельський', planned: true }]),
+    });
+    const { p } = setup({ http });
+    const kovel = await p.fetchSnapshot(KOVELSKYI);
+    expect(kovel.currentOutage).toMatchObject({ kind: 'planned', text: 'Планові ремонтні роботи' });
+    const volodymyr = await p.fetchSnapshot(zarichchia('с. Заріччя (Володимирський р-н)'));
+    expect(volodymyr.currentOutage).toMatchObject({ kind: 'emergency', text: 'Аварійний випадок в мережах' });
+  });
+
+  it('ignores a namesake\'s outage while the saved district has none', async () => {
+    // The queue table files Заріччя under Ковельський, so a Володимирський row never matches.
+    const http = fakeHttp({
+      [CHERGA_URL]: () => queueTable(ZARICHCHIA),
+      [CHOMU_URL]: () => zarichchiaOutages([{ raion: VOLODYMYR_LATIN }]),
+    });
+    const { p } = setup({ http });
+    const snap = await p.fetchSnapshot(KOVELSKYI);
+    expect(snap.lines).toEqual([{ index: 1, groupId: '4.1', label: 'Черга 4.1' }]);
+    expect('currentOutage' in snap).toBe(false);
+  });
+
+  it('matches by name when the operator has no row in the saved district', async () => {
+    const http = fakeHttp({
+      [CHERGA_URL]: () => queueTable(ZARICHCHIA.filter((r) => r[0] !== 'Ковельський')),
+      [CHOMU_URL]: () => zarichchiaOutages([{ raion: VOLODYMYR_LATIN }]),
+    });
+    const { p } = setup({ http });
+    const snap = await p.fetchSnapshot(KOVELSKYI);
+    expect(snap.currentOutage).toMatchObject({ kind: 'emergency', text: 'Аварійний випадок в мережах' });
+  });
+});
+
 describe('VoeProvider errors', () => {
   const rejecting = () => fakeHttp(Object.fromEntries(
     [ARCHIVE_URL, CHERGA_URL, CHOMU_URL, ...Object.values(IMG)].map((u) => [u, () => new TypeError('fetch failed')]),
@@ -373,23 +443,8 @@ describe('VoeProvider address lookup', () => {
   });
 
   describe('same-named villages', () => {
-    // The operator spells one district with a Latin «c» (U+0063).
-    const VOLODYMYR_LATIN = 'Володимирcький';
-    const table = (rows: string[][]) => okText(
-      "<table class='table table-sm table-light'><tr class='fw-bold'><td>Район</td><td>Нас. пункт</td><td>Вулиця</td>"
-      + '<td>Будинок</td><td>Черга у ГПВ</td><td>Черга у ГАВ</td></tr>'
-      + rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}<td>Не залучено</td></tr>`).join('')
-      + '</table>',
-    );
-    const ZARICHCHIA = [
-      [VOLODYMYR_LATIN, 'Заріччя', 'Шкільна', '1', '3.1'],
-      ['Ковельський', 'Заріччя', 'Польова', '2', '4.1'],
-      ['Луцький', 'Заріччя', 'Лісова', '3', '5.1'],
-      ['Луцький', 'Заріччя-Нове', 'Садова', '4', '5.2'],
-    ];
-
     it('filters by the district, matching Latin look-alike letters', async () => {
-      const { p, http } = setup({ http: fakeHttp({ [CHERGA_URL]: () => table(ZARICHCHIA) }) });
+      const { p, http } = setup({ http: fakeHttp({ [CHERGA_URL]: () => queueTable(ZARICHCHIA) }) });
       await expect(p.listStreets('с. Заріччя (Володимирський р-н)')).resolves.toEqual(['Шкільна']);
       await expect(p.listStreets('с. Заріччя (Ковельський р-н)')).resolves.toEqual(['Польова']);
       expect(form(http.calls[0].init).get('formCity')).toBe('Заріччя');
@@ -397,7 +452,7 @@ describe('VoeProvider address lookup', () => {
 
     it('falls back to the name alone when the operator has no row in that district', async () => {
       const rows = ZARICHCHIA.filter((r) => r[0] !== 'Ковельський');
-      const { p } = setup({ http: fakeHttp({ [CHERGA_URL]: () => table(rows) }) });
+      const { p } = setup({ http: fakeHttp({ [CHERGA_URL]: () => queueTable(rows) }) });
       await expect(p.listStreets('с. Заріччя (Ковельський р-н)')).resolves.toEqual(['Лісова', 'Шкільна']);
     });
   });

@@ -83,13 +83,23 @@ const LOOK_ALIKES: Record<string, string> = {
 };
 const normRaion = (s: string): string => s.trim().replace(/[aceiopxyABCEHIKMOPTXY]/g, (ch) => LOOK_ALIKES[ch]);
 
-/** Rows of exactly this settlement (the form matches by substring); by district too when the operator has that one. */
-function rowsOf(all: QueueRow[], place: OperatorPlace): QueueRow[] {
+/** Whether any of these rows is in the place's district. */
+function hasRaion(rows: ReadonlyArray<{ raion: string }>, place: OperatorPlace): boolean {
+  if (!place.raion) return false;
+  const want = normRaion(place.raion);
+  return rows.some((r) => normRaion(r.raion) === want);
+}
+
+/**
+ * Rows of exactly this settlement (the forms match by substring). By district too when these rows have that district,
+ * or when `raionKnown` (the operator files the name under it elsewhere): then rows of other districts never pass.
+ */
+function rowsOf<R extends { raion: string; settlement: string }>(all: R[], place: OperatorPlace, raionKnown = false): R[] {
   const same = all.filter((r) => r.settlement === place.city);
   if (!place.raion) return same;
   const want = normRaion(place.raion);
   const inRaion = same.filter((r) => normRaion(r.raion) === want);
-  return inRaion.length > 0 ? inRaion : same;
+  return inRaion.length > 0 || raionKnown ? inRaion : same;
 }
 
 export interface VoeDeps {
@@ -144,8 +154,14 @@ export class VoeProvider implements ScheduleProvider {
       const days: DaySchedule[] = [{ date: today, slots: todayEntry ? await this.slots(todayEntry, address.groupId) : allOn() }];
       if (tomorrowEntry) days.push({ date: tomorrowEntry.date, slots: await this.slots(tomorrowEntry, address.groupId) });
       const sourceUpdatedAt = kyivStamp(todayEntry?.uploadTimestamp);
-      const lines = await this.lines(address);
-      const currentOutage = await this.currentOutage(address, now);
+      let queue: QueueRow[] | undefined;
+      try {
+        queue = await this.queueRows(address.city);
+      } catch (e) {
+        this.log.warn('voe fetchSnapshot: queue lookup failed, keeping the saved line', e);
+      }
+      const lines = this.lines(address, queue);
+      const currentOutage = await this.currentOutage(address, now, queue ?? []);
       return {
         providerId: this.id,
         address,
@@ -210,17 +226,11 @@ export class VoeProvider implements ScheduleProvider {
     return grid;
   }
 
-  /** The house's queues from the operator; the saved line when the lookup fails or does not know the house. */
-  private async lines(address: Address): Promise<LineInfo[]> {
+  /** The house's queues from the operator; the saved line when the lookup failed (`queue` undefined) or lacks the house. */
+  private lines(address: Address, queue: QueueRow[] | undefined): LineInfo[] {
     const saved = [{ index: address.lineIndex, groupId: address.groupId, label: queueLabel(address.groupId) }];
-    let rows: QueueRow[];
-    try {
-      rows = await this.queueRows(address.city);
-    } catch (e) {
-      this.log.warn('voe fetchSnapshot: queue lookup failed, keeping the saved line', e);
-      return saved;
-    }
-    const house = housesOf(rows, address.street).find((h) => h.house === address.house);
+    if (!queue) return saved;
+    const house = housesOf(queue, address.street).find((h) => h.house === address.house);
     if (!house) {
       this.log.warn('voe fetchSnapshot: no queue row for the saved house, keeping the saved line', {
         city: address.city, street: address.street, house: address.house,
@@ -230,7 +240,12 @@ export class VoeProvider implements ScheduleProvider {
     return house.lines;
   }
 
-  private async currentOutage(address: Address, now: Date): Promise<CurrentOutage | undefined> {
+  /**
+   * The outage listed for the saved house. For same-named villages the district decides: when the operator files the
+   * name under the saved district (in its queue table, or in these outage rows), rows of other districts never match.
+   * The queue table counts too because a quiet district has no outage rows while its namesake may have one.
+   */
+  private async currentOutage(address: Address, now: Date, queue: QueueRow[]): Promise<CurrentOutage | undefined> {
     const place = this.place(address.city);
     if (!place.city) return undefined;
     try {
@@ -238,7 +253,8 @@ export class VoeProvider implements ScheduleProvider {
         method: 'POST', headers: FORM_HEADERS,
         body: new URLSearchParams({ formCity: place.city, formStreet: address.street, searchForm: 'searchFromForm' }).toString(),
       });
-      return matchOutage(parseOutageTable(html), { settlement: place.city, street: address.street, house: address.house }, now);
+      const rows = rowsOf(parseOutageTable(html), place, hasRaion(queue, place));
+      return matchOutage(rows, { settlement: place.city, street: address.street, house: address.house }, now);
     } catch (e) {
       this.log.warn('voe fetchSnapshot: current outage lookup failed', e);
       return undefined;
