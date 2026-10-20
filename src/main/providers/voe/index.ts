@@ -1,0 +1,295 @@
+import { providerDisplayName } from '../../../shared/providers';
+import { addDays, formatHM, kyivDateKey } from '../../../shared/time';
+import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot, Slot } from '../../../shared/types';
+import { silentLogger, type Logger } from '../../log';
+import type { HttpFetch, HttpResponse } from '../http';
+import { NetworkError, ProviderError, type ScheduleProvider } from '../types';
+import { readGpvGrid } from './gpv-image';
+import { housesOf, matchOutage, parseOutageTable, parseQueueTable, type QueueRow } from './html';
+import { decodePng } from './png';
+import { bareName, findSettlement, operatorCity, voeSettlements } from './settlements';
+
+export const VOE_QUIET_NOTE =
+  'Волиньобленерго не опублікувало графік на сьогодні — зазвичай це означає, що відключень за графіком немає';
+
+const OFFLINE = 'Немає з’єднання з сайтом Волиньобленерго';
+const NO_ANSWER = 'Сайт Волиньобленерго не відповідає';
+const HTTP_ERROR = 'Сайт Волиньобленерго повернув помилку';
+const UNREADABLE = 'Не вдалося прочитати графік Волиньобленерго';
+
+const API = 'https://api-voe-poweron.inneti.net';
+const ARCHIVE_URL = `${API}/api/archive_gpv_graphs?page=1`;
+const SITE = 'https://energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni';
+const QUEUE_URL = `${SITE}/cherga/`;
+const OUTAGE_URL = `${SITE}/chomu-nemaie-elektropostachannia/`;
+const FORM_HEADERS = { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' };
+const TIMEOUT_MS = 20_000;
+const IMAGE_CACHE_SIZE = 4;
+
+type Grid = Record<string, Slot[]>;
+
+/** One published picture: `date` is `dateGraph`'s day (Kyiv wall time, whatever the offset says). */
+interface ArchiveEntry { id: number; date: string; contentUrl?: string; uploadTimestamp?: string }
+
+/** Where a saved city label points at the operator: the name its forms take, and the district to tell villages apart. */
+interface OperatorPlace { city: string; raion?: string }
+
+const allOn = (): Slot[] => Array<Slot>(48).fill('on');
+
+const queueLabel = (groupId: string): string => (groupId === 'none' ? 'Не залучено до ГПВ' : `Черга ${groupId}`);
+
+function unreadable(cause?: unknown): ProviderError {
+  return new ProviderError(UNREADABLE, cause === undefined ? undefined : { cause });
+}
+
+function isDateKey(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
+}
+
+/** The archive page, newest first. Empty, or a newest entry without a sane date, means the source is dead or moved. */
+function parseArchive(text: string): ArchiveEntry[] {
+  const members = (JSON.parse(text) as { 'hydra:member'?: unknown })['hydra:member'];
+  if (!Array.isArray(members) || members.length === 0) throw unreadable({ archive: 'empty' });
+  const entries = members.map((m): ArchiveEntry => ({
+    id: Number(m?.id),
+    date: typeof m?.dateGraph === 'string' ? m.dateGraph.slice(0, 10) : '',
+    contentUrl: typeof m?.imageUrl?.contentUrl === 'string' ? m.imageUrl.contentUrl : undefined,
+    uploadTimestamp: typeof m?.imageUrl?.uploadTimestamp === 'string' ? m.imageUrl.uploadTimestamp : undefined,
+  }));
+  const newest = entries.reduce((a, b) => (b.id > a.id ? b : a));
+  if (!isDateKey(newest.date)) throw unreadable({ archive: 'newest dateGraph', value: newest.date });
+  return entries;
+}
+
+/** The latest revision for a day: the highest id with that `dateGraph`. */
+function pick(entries: ArchiveEntry[], date: string): ArchiveEntry | undefined {
+  let best: ArchiveEntry | undefined;
+  for (const e of entries) if (e.date === date && (!best || e.id > best.id)) best = e;
+  return best;
+}
+
+/** 'HH:MM DD.MM.YYYY' in Kyiv time, like DTEK's `fact.update`. */
+function kyivStamp(iso: string | undefined): string | undefined {
+  const d = iso ? new Date(iso) : undefined;
+  if (!d || Number.isNaN(d.getTime())) return undefined;
+  const [y, m, day] = kyivDateKey(d).split('-');
+  return `${formatHM(d)} ${day}.${m}.${y}`;
+}
+
+// The operator writes one district with Latin look-alikes («Володимирcький», Latin c): compare in Cyrillic.
+const LOOK_ALIKES: Record<string, string> = {
+  a: 'а', c: 'с', e: 'е', i: 'і', o: 'о', p: 'р', x: 'х', y: 'у',
+  A: 'А', B: 'В', C: 'С', E: 'Е', H: 'Н', I: 'І', K: 'К', M: 'М', O: 'О', P: 'Р', T: 'Т', X: 'Х', Y: 'У',
+};
+const normRaion = (s: string): string => s.trim().replace(/[aceiopxyABCEHIKMOPTXY]/g, (ch) => LOOK_ALIKES[ch]);
+
+/** Rows of exactly this settlement (the form matches by substring); by district too when the operator has that one. */
+function rowsOf(all: QueueRow[], place: OperatorPlace): QueueRow[] {
+  const same = all.filter((r) => r.settlement === place.city);
+  if (!place.raion) return same;
+  const want = normRaion(place.raion);
+  const inRaion = same.filter((r) => normRaion(r.raion) === want);
+  return inRaion.length > 0 ? inRaion : same;
+}
+
+export interface VoeDeps {
+  fetch: HttpFetch;
+  isOnline: () => boolean;
+  log?: Logger;
+  now?: () => Date;
+}
+
+/**
+ * Volynoblenergo over plain HTTPS: the day pictures from the inneti archive, the queue lookup and the current
+ * outages from energy.volyn.ua. No browser window, no captcha.
+ */
+export class VoeProvider implements ScheduleProvider {
+  readonly id = 'voe';
+  readonly displayName = providerDisplayName('voe');
+  private readonly log: Logger;
+  private readonly now: () => Date;
+  /** Parsed day pictures by `contentUrl`, least recently used first. */
+  private readonly grids = new Map<string, Grid>();
+  /** The settlement's queue rows by city label; queues are fixed for a year, so for the whole run. */
+  private readonly queues = new Map<string, QueueRow[]>();
+
+  constructor(private readonly deps: VoeDeps) {
+    this.log = deps.log ?? silentLogger;
+    this.now = deps.now ?? (() => new Date());
+  }
+
+  listCities(): Promise<string[]> {
+    return Promise.resolve(voeSettlements().map((s) => s.label));
+  }
+
+  listStreets(city: string): Promise<string[]> {
+    return this.serial('listStreets', async () => {
+      const rows = await this.queueRows(city);
+      return [...new Set(rows.map((r) => r.street))].sort((a, b) => a.localeCompare(b, 'uk'));
+    });
+  }
+
+  listHouses(city: string, street: string): Promise<HouseInfo[]> {
+    return this.serial('listHouses', async () => housesOf(await this.queueRows(city), street));
+  }
+
+  fetchSnapshot(address: Address): Promise<ScheduleSnapshot> {
+    return this.serial('fetchSnapshot', async () => {
+      const now = this.now();
+      const today = kyivDateKey(now);
+      const entries = parseArchive(await this.text(ARCHIVE_URL, { method: 'GET', headers: { Accept: 'application/ld+json' } }));
+      const todayEntry = pick(entries, today);
+      const tomorrowEntry = pick(entries, addDays(today, 1));
+      // Nothing published for today: power is on by schedule. Tomorrow without a picture is simply left out.
+      const days: DaySchedule[] = [{ date: today, slots: todayEntry ? await this.slots(todayEntry, address.groupId) : allOn() }];
+      if (tomorrowEntry) days.push({ date: tomorrowEntry.date, slots: await this.slots(tomorrowEntry, address.groupId) });
+      const sourceUpdatedAt = kyivStamp(todayEntry?.uploadTimestamp);
+      const lines = await this.lines(address);
+      const currentOutage = await this.currentOutage(address, now);
+      return {
+        providerId: this.id,
+        address,
+        groupId: address.groupId,
+        groupLabel: queueLabel(address.groupId),
+        days,
+        ...(sourceUpdatedAt ? { sourceUpdatedAt } : {}),
+        fetchedAt: now.toISOString(),
+        lines,
+        ...(currentOutage ? { currentOutage } : {}),
+        ...(todayEntry ? {} : { note: VOE_QUIET_NOTE }),
+      };
+    });
+  }
+
+  showVerification(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  dispose(): void {}
+
+  // One operation at a time: no parallel requests to the source; a failure doesn't break the chain.
+  private tail: Promise<unknown> = Promise.resolve();
+  private serial<T>(op: string, fn: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(() => this.guard(op, fn));
+    this.tail = run.catch(() => {});
+    return run;
+  }
+
+  // Callers only ever see ProviderError (incl. NetworkError); anything else is a response we could not read.
+  private async guard<T>(op: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (e) {
+      const err = e instanceof ProviderError ? e : unreadable(e);
+      this.log.error(`voe ${op} failed`, err);
+      throw err;
+    }
+  }
+
+  private async slots(entry: ArchiveEntry, groupId: string): Promise<Slot[]> {
+    if (groupId === 'none') return allOn(); // not in the hourly schedule: the picture says nothing about it
+    const row = (await this.grid(entry))[groupId];
+    if (!row) throw unreadable({ groupId, date: entry.date });
+    return row;
+  }
+
+  private async grid(entry: ArchiveEntry): Promise<Grid> {
+    const path = entry.contentUrl;
+    // A path on the API host only: never let the archive point the download elsewhere.
+    if (!path || !path.startsWith('/') || path.startsWith('//')) throw unreadable({ date: entry.date, contentUrl: path });
+    const hit = this.grids.get(path);
+    if (hit) {
+      this.grids.delete(path);
+      this.grids.set(path, hit);
+      return hit;
+    }
+    const bytes = await this.call(`${API}${path}`, { method: 'GET' }, (r) => r.arrayBuffer());
+    const grid = readGpvGrid(decodePng(new Uint8Array(bytes)));
+    this.grids.set(path, grid);
+    while (this.grids.size > IMAGE_CACHE_SIZE) this.grids.delete(this.grids.keys().next().value!);
+    return grid;
+  }
+
+  /** The house's queues from the operator; the saved line when the lookup fails or does not know the house. */
+  private async lines(address: Address): Promise<LineInfo[]> {
+    const saved = [{ index: address.lineIndex, groupId: address.groupId, label: queueLabel(address.groupId) }];
+    let rows: QueueRow[];
+    try {
+      rows = await this.queueRows(address.city);
+    } catch (e) {
+      this.log.warn('voe fetchSnapshot: queue lookup failed, keeping the saved line', e);
+      return saved;
+    }
+    const house = housesOf(rows, address.street).find((h) => h.house === address.house);
+    if (!house) {
+      this.log.warn('voe fetchSnapshot: no queue row for the saved house, keeping the saved line', {
+        city: address.city, street: address.street, house: address.house,
+      });
+      return saved;
+    }
+    return house.lines;
+  }
+
+  private async currentOutage(address: Address, now: Date): Promise<CurrentOutage | undefined> {
+    const place = this.place(address.city);
+    if (!place.city) return undefined;
+    try {
+      const html = await this.text(OUTAGE_URL, {
+        method: 'POST', headers: FORM_HEADERS,
+        body: new URLSearchParams({ formCity: place.city, formStreet: address.street, searchForm: 'searchFromForm' }).toString(),
+      });
+      return matchOutage(parseOutageTable(html), { settlement: place.city, street: address.street, house: address.house }, now);
+    } catch (e) {
+      this.log.warn('voe fetchSnapshot: current outage lookup failed', e);
+      return undefined;
+    }
+  }
+
+  private place(label: string): OperatorPlace {
+    const s = findSettlement(label);
+    // A label missing from the bundled list (the list was regenerated) still works by its bare name.
+    return s ? { city: operatorCity(s), raion: s.raion } : { city: bareName(label) };
+  }
+
+  private async queueRows(label: string): Promise<QueueRow[]> {
+    const cached = this.queues.get(label);
+    if (cached) return cached;
+    const place = this.place(label);
+    if (!place.city) return [];
+    const html = await this.text(QUEUE_URL, {
+      method: 'POST', headers: FORM_HEADERS,
+      body: new URLSearchParams({ formCity: place.city, formStreet: '%' }).toString(),
+    });
+    const rows = rowsOf(parseQueueTable(html), place);
+    // An empty answer may be a glitch or a changed page: ask again next time.
+    if (rows.length > 0) this.queues.set(label, rows);
+    return rows;
+  }
+
+  private text(url: string, init: Omit<Parameters<HttpFetch>[1], 'signal'>): Promise<string> {
+    return this.call(url, init, (r) => r.text());
+  }
+
+  /** One request with a timeout. No answer → NetworkError when offline, else «не відповідає»; a non-OK status → «повернув помилку». */
+  private async call<T>(
+    url: string, init: Omit<Parameters<HttpFetch>[1], 'signal'>, read: (r: HttpResponse) => Promise<T>,
+  ): Promise<T> {
+    let res: HttpResponse;
+    try {
+      res = await this.deps.fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch (e) {
+      throw this.noAnswer(url, e);
+    }
+    if (!res.ok) throw new ProviderError(HTTP_ERROR, { cause: { url, status: res.status } });
+    try {
+      return await read(res);
+    } catch (e) {
+      throw this.noAnswer(url, e);
+    }
+  }
+
+  private noAnswer(url: string, e: unknown): ProviderError {
+    if (!this.deps.isOnline()) return new NetworkError(OFFLINE, { cause: e });
+    return new ProviderError(NO_ANSWER, { cause: { url, error: e } });
+  }
+}

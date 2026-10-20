@@ -15,6 +15,7 @@ import { broadcastState, registerIpc, throttleLive } from './ipc';
 import { consoleLogger, type Logger } from './log';
 import { MainWindow } from './main-window';
 import { BrowserSession } from './providers/browser-session';
+import { electronHttp } from './providers/electron-http';
 import { providerSiteUrl } from '../shared/providers';
 import { createProviders, findProvider } from './providers/registry';
 import { RefreshService } from './refresh';
@@ -64,7 +65,7 @@ async function bootstrap(log: Logger): Promise<void> {
 
   const userData = app.getPath('userData');
   const store = new AppStore(userData);
-  const providers = createProviders(o => new BrowserSession(o, log), log);
+  const providers = createProviders(o => new BrowserSession(o, log), log, { fetch: electronHttp, isOnline: () => net.isOnline() });
   const service = new RefreshService({ store, getProvider: id => findProvider(providers, id) });
   const scheduler = new RefreshScheduler(() => service.refresh());
   const secrets = new SecretStore(join(userData, 'secrets.json'), electronEncryptor);

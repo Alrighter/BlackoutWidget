@@ -16,6 +16,7 @@ export default defineConfig({
           index: resolve(__dirname, 'src/main/index.ts'),
           'ble-host': resolve(__dirname, 'src/main/ble-host.ts'),
           'smoke-dtek': resolve(__dirname, 'src/main/smoke-dtek.ts'),
+          'smoke-voe': resolve(__dirname, 'src/main/smoke-voe.ts'),
           'smoke-ecoflow': resolve(__dirname, 'src/main/smoke-ecoflow.ts'),
           'smoke-ble': resolve(__dirname, 'src/main/smoke-ble.ts'),
         },

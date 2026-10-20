@@ -1,6 +1,7 @@
 import { createProviders } from '../../src/main/providers/registry';
 import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from '../../src/main/providers/dtek/page-scripts';
 import { providerSiteUrl } from '../../src/shared/providers';
+import { silentLogger } from '../../src/main/log';
 import type { SessionOptions } from '../../src/main/providers/browser-session';
 
 const HOSTS: Record<string, string> = {
@@ -9,23 +10,27 @@ const HOSTS: Record<string, string> = {
 function setup() {
   const made: SessionOptions[] = [];
   const session = { ensureReady: vi.fn(), evaluate: vi.fn(), showForUser: vi.fn(), dispose: vi.fn(), reload: vi.fn(), isOnline: vi.fn() };
-  const providers = createProviders(o => { made.push(o); return session as any; });
-  return { made, session, providers };
+  const http = { fetch: vi.fn(), isOnline: vi.fn(() => true) };
+  const providers = createProviders(o => { made.push(o); return session as any; }, silentLogger, http);
+  return { made, session, http, providers };
 }
 test('providers come out in a fixed order', () => {
-  expect(setup().providers.map(p => p.id)).toEqual(['dtek-kem', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
+  expect(setup().providers.map(p => p.id)).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'dtek-oem']);
 });
 test('each DTEK site gets its own url, partition and host', () => {
   const { made, providers } = setup();
+  const dtek = providers.filter(p => p.id.startsWith('dtek-'));
   expect(made).toHaveLength(4);
-  providers.forEach((p, i) => {
+  dtek.forEach((p, i) => {
     expect(made[i]).toEqual({
       url: providerSiteUrl(p.id), partition: `persist:${p.id}`, readyCheck: READY_CHECK,
       allowedHosts: [HOSTS[p.id]], afterReady: NEUTRALIZE_TIMERS, blockRequest: isPagePollRequest,
     });
   });
 });
-test('creating providers touches no session', () => {
-  const { session } = setup();
+test('creating providers touches no session and makes no request', () => {
+  const { session, http } = setup();
   for (const fn of Object.values(session)) expect(fn).not.toHaveBeenCalled();
+  expect(http.fetch).not.toHaveBeenCalled();
+  expect(http.isOnline).not.toHaveBeenCalled();
 });

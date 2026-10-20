@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { app, session } from 'electron';
+import { app, net, session } from 'electron';
 import { BrowserSession } from './providers/browser-session';
+import { electronHttp } from './providers/electron-http';
 import { createProviders, findProvider } from './providers/registry';
 import { consoleLogger } from './log';
 import type { HouseInfo } from '../shared/types';
@@ -22,7 +23,9 @@ const offline = process.argv.includes('--offline');
 async function main(): Promise<number> {
   const started = Date.now();
   if (offline) await session.fromPartition(PARTITION).enableNetworkEmulation({ offline: true });
-  const providers = createProviders(o => new BrowserSession(o, consoleLogger), consoleLogger);
+  const providers = createProviders(
+    o => new BrowserSession(o, consoleLogger), consoleLogger, { fetch: electronHttp, isOnline: () => net.isOnline() },
+  );
   try {
     const provider = findProvider(providers, providerId);
     const cities = await provider.listCities();
