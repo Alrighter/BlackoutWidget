@@ -48,6 +48,18 @@ One-off, no change to `package.json`. A throwaway Node script (not committed):
 
 District note: the operator uses the post-2020 districts (Луцький, Ковельський, Володимирський, Камінь-Каширський), but writes Володимирський with a Latin `c` in the middle (`Володимир` + `c` U+0063 + `ький`). Compare «Район» normalized (map Latin look-alikes to Cyrillic) or fall back to the name alone. No `operatorName` was needed, because every checked name returned rows. Other names were not checked (no crawling).
 
+## Namesakes that differ by kind alone (live check 2026-10-20)
+
+Four names repeat in another district with a different kind, so their labels carry no ` (<район> р-н)`. The provider filters them by district too: the filter keys on the name the operator sees, not on the label. The same `cherga` form, `formStreet=%`:
+
+| `formCity` sent | Rows per «Район» and exact «Нас. пункт» | In the list |
+| --- | --- | --- |
+| `Луків` | Ковельський 143, Луцький 14 (plus Луківка 7) | с-ще Луків (Ковельський), с. Луків (Луцький) |
+| `Заболоття` | Ковельський 184, `Володимирcький` 3 | с. Заболоття (Ковельський р-н), с. Заболоття (Володимирський р-н), с-ще Заболоття (Ковельський) |
+| `Мар’янівка` | Луцький 101, Ковельський 3 (plus Богушівська Мар’янівка 2) | с. Мар’янівка (Луцький р-н), с. Мар’янівка (Ковельський р-н), с-ще Мар’янівка (Луцький) |
+
+Before the fix, «с. Луків» showed the 143 Ковельський rows of «с-ще Луків» as well. The с. and с-ще of one name in one district (Заболоття in Ковельський, Мар’янівка in Луцький, Дубище in Луцький) stay merged, because the operator cannot tell them apart either.
+
 ## Apostrophes (live check 2026-10-20)
 
 All 25 bundled names with an apostrophe use U+2019 (`’`), as КАТОТТГ does. One village was sent to the same `cherga` form twice, `formStreet=%`:
