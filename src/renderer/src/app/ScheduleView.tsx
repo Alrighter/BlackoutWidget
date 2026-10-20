@@ -3,6 +3,7 @@ import type { RendererApi } from '../../../shared/ipc';
 import { outageParts, recentOutages } from '../../../shared/actual-view';
 import { dayCells, type DayCell } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
+import { providerShortName } from '../../../shared/providers';
 import { addDays, formatDM, formatHM, parseDtekDateTime } from '../../../shared/time';
 import type { AppState, DaySchedule } from '../../../shared/types';
 import { computeWidgetView, countdownText } from '../../../shared/widget-state';
@@ -95,7 +96,7 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
   return (
     <div className="sv">
       {view?.outageBadge && snapshot?.currentOutage && (
-        <Banner tone="danger" title={`${view.outageBadge} відключення`} text={`ДТЕК: «${snapshot.currentOutage.text}»`} />
+        <Banner tone="danger" title={`${view.outageBadge} відключення`} text={`${providerShortName(snapshot.providerId)}: «${snapshot.currentOutage.text}»`} />
       )}
       {state.lineChanged && (
         <Banner tone="warn" title="Схема підключення змінилась — перевірте лінію" text="Графік для вашої адреси тепер може бути іншим."
@@ -103,7 +104,7 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
       )}
       {state.phase === 'captcha' && (
         <Banner tone="warn" title="Сайт ДТЕК просить пройти перевірку" text="Поки її не пройдено, графік не оновлюється."
-          action={{ label: 'Пройти перевірку', run: () => void api.solveCaptcha() }} />
+          action={{ label: 'Пройти перевірку', run: () => void api.solveCaptcha(snapshot?.providerId ?? state.settings.address?.providerId) }} />
       )}
       {state.phase === 'error' && <Banner tone="warn" title={`Не вдалося оновити: ${state.lastError ?? 'невідома помилка'}`} />}
 
@@ -156,7 +157,7 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
               {day ? outageLine(day, emergencyStart && formatHM(emergencyStart)) : ''}
             </span>
             <span className="sv-updated" data-capture="updated">
-              {`Оновлено о ${formatHM(new Date(snapshot.fetchedAt))}${snapshot.sourceUpdatedAt ? ` · графік ДТЕК від ${snapshot.sourceUpdatedAt}` : ''}`}
+              {`Оновлено о ${formatHM(new Date(snapshot.fetchedAt))}${snapshot.sourceUpdatedAt ? ` · графік ${providerShortName(snapshot.providerId)} від ${snapshot.sourceUpdatedAt}` : ''}`}
               {view.stale && <span className="sv-stale">дані застаріли</span>}
             </span>
           </div>

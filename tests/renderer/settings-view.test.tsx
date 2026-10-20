@@ -79,7 +79,7 @@ test('the autostart switch is named by its label, shows the setting and flips it
 test('the schedule row: «Оновлено о HH:MM» of the last fetch; «Оновити зараз» refreshes', async () => {
   const api = mockApi();
   render(<SettingsView state={stateOf({}, fixtureSnapshot({ fetchedAt: '2026-10-17T11:50:00.000Z' }))} api={api} onChangeAddress={() => {}} />);
-  expect(screen.getByText('Графік ДТЕК')).toBeInTheDocument();
+  expect(screen.getByText('Графік відключень')).toBeInTheDocument();
   expect(screen.getByText('Оновлено о 14:50')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Оновити зараз' }));
   expect(api.refreshNow).toHaveBeenCalledTimes(1);

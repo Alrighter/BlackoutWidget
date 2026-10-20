@@ -13,7 +13,7 @@ function mockApi(houses: HouseInfo[]) {
     listHouses: vi.fn(async () => houses),
     previewLines: vi.fn(async () => houses[0].lines.map(line => ({ line, today: fixtureSnapshot().days[0] }))),
     solveCaptcha: vi.fn(async () => {}), saveAddress: vi.fn(async () => {}), setWidgetStyle: vi.fn(async () => {}),
-    setAutostart: vi.fn(async () => {}), openDtekSite: vi.fn() } as unknown as RendererApi;
+    setAutostart: vi.fn(async () => {}), openProviderSite: vi.fn() } as unknown as RendererApi;
 }
 const two = [{ house: '40', outageActive: false, lines: [{ index: 1, groupId: 'GPV1.2', label: 'Черга 1.2' }, { index: 2, groupId: 'GPV4.2', label: 'Черга 4.2' }] }];
 const OUTAGE_NOTE = 'Зараз для цього будинку діє відключення — список ліній може бути неповним. Якщо вашої лінії немає, спробуйте пізніше.';
@@ -174,8 +174,14 @@ test('the line step opens the schedule on the DTEK site (D11)', async () => {
   render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   await user.click(await screen.findByRole('button', { name: 'Відкрити графік на сайті ДТЕК' }));
-  expect(api.openDtekSite).toHaveBeenCalledTimes(1);
-  expect(api.openDtekSite).toHaveBeenCalledWith();
+  expect(api.openProviderSite).toHaveBeenCalledTimes(1);
+  expect(api.openProviderSite).toHaveBeenCalledWith('dtek-krem');
+});
+test('the line step subline names the provider', async () => {
+  const api = mockApi(two); const user = userEvent.setup();
+  render(<SetupWizard api={api} autostart widgetStyle="compact" onDone={() => {}} />); await pickAddress(user);
+  await user.click(screen.getByRole('button', { name: 'Далі' }));
+  expect(await screen.findByText(/з сайтом ДТЕК і оберіть свою\.$/)).toBeInTheDocument();
 });
 test('«Готово» sums up the choice and switches autostart; nothing is saved before «Завершити»', async () => {
   const api = mockApi([{ house: '40', outageActive: false, lines: [two[0].lines[0]] }]); const onDone = vi.fn(); const user = userEvent.setup();
@@ -214,7 +220,7 @@ test('captcha: shows prompt, solves, then retries the load', async () => {
   await user.click(await screen.findByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Сайт ДТЕК просить пройти перевірку')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Пройти перевірку' }));
-  expect(api.solveCaptcha).toHaveBeenCalled();
+  expect(api.solveCaptcha).toHaveBeenCalledWith('dtek-krem');
   expect(await screen.findByText('м. Біла Церква')).toBeInTheDocument();
   expect(api.listCities).toHaveBeenCalledTimes(2);
 });

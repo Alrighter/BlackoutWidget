@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { THEMES, themeTokens, type ThemeTokens } from '../../src/shared/design-tokens';
-import { PROVIDER_NAMES, providerDisplayName, providerRegion } from '../../src/shared/providers';
+import { PROVIDERS, providerDisplayName, providerRegion } from '../../src/shared/providers';
 
 const css = readFileSync(join(__dirname, '../../src/renderer/src/ui/tokens.css'), 'utf8');
 const appCss = readFileSync(join(__dirname, '../../src/renderer/src/app/app.css'), 'utf8');
@@ -93,7 +93,7 @@ describe('design tokens', () => {
 describe('provider names', () => {
   it('names a known provider', () => {
     expect(providerDisplayName('dtek-krem')).toBe('ДТЕК Київські регіональні електромережі');
-    expect(PROVIDER_NAMES['dtek-krem']).toBe('ДТЕК Київські регіональні електромережі');
+    expect(PROVIDERS['dtek-krem'].name).toBe('ДТЕК Київські регіональні електромережі');
   });
 
   it('names the region a provider serves (D4), none for an unknown one', () => {

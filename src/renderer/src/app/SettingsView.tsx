@@ -92,7 +92,7 @@ export function SettingsView({ state, api, ecoflowFormOpen = false, onChangeAddr
           <div className="st-hair" />
           <div className="st-row">
             <div className="st-row-text">
-              <span className="st-row-title">Графік ДТЕК</span>
+              <span className="st-row-title">Графік відключень</span>
               <span className="st-row-sub" data-capture="updated">{updatedText(state.snapshot)}</span>
             </div>
             <button className="sv-btn st-refresh" onClick={() => void api.refreshNow()}>

@@ -28,7 +28,14 @@ test('captcha banner calls solveCaptcha', async () => {
   render(<ScheduleView state={{ settings: DEFAULT_SETTINGS, snapshot: fixtureSnapshot(), phase: 'captcha', lineChanged: false }} now={new Date('2026-10-17T08:50:00Z')} api={api} onConnectEcoflow={noop} />);
   expect(screen.getByText('Сайт ДТЕК просить пройти перевірку')).toBeInTheDocument();
   expect(screen.getByText('Поки її не пройдено, графік не оновлюється.')).toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Пройти перевірку' })); expect(api.solveCaptcha).toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Пройти перевірку' })); expect(api.solveCaptcha).toHaveBeenCalledWith('dtek-krem');
+});
+test('a Volyn snapshot names its provider in the banner and the foot', () => {
+  const base = fixtureSnapshot({ fetchedAt: '2026-10-17T11:15:00.000Z', sourceUpdatedAt: '22:26 19.10.2026', currentOutage: { kind: 'emergency', text: 'Аварійний випадок в мережах', start: '13:30 17.10.2026', end: '17:00 17.10.2026' } });
+  const snapshot = { ...base, providerId: 'voe', address: { ...base.address, providerId: 'voe' } };
+  render(<ScheduleView state={{ settings: DEFAULT_SETTINGS, snapshot, phase: 'ok', lineChanged: false }} now={new Date('2026-10-17T11:20:00Z')} api={{} as RendererApi} onConnectEcoflow={noop} />);
+  expect(screen.getByText('Волиньобленерго: «Аварійний випадок в мережах»')).toBeInTheDocument();
+  expect(screen.getByText(/· графік Волиньобленерго від 22:26 19\.10\.2026$/)).toBeInTheDocument();
 });
 test('line-changed banner opens the wizard', async () => {
   const api = { openMainWindow: vi.fn() } as unknown as RendererApi;
