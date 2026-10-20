@@ -195,6 +195,8 @@ describe('parseOutageTable and matchOutage', () => {
     expect(kind('Аварійне відключення')).toBe('emergency');
     expect(kind('аварійне вимкнення')).toBe('emergency');
     expect(kind('Екстрене відключення')).toBe('emergency');
+    // Unscheduled is not planned, though the word holds «планов»: no «Планове» badge for it.
+    expect(kind('Позапланове вимкнення')).toBe('emergency');
     expect(kind('планове вимкнення (ремонт)')).toBe('planned');
     expect(kind('Планове відключення')).toBe('planned');
     expect(kind('Застосування графіків обмеження')).toBeUndefined();

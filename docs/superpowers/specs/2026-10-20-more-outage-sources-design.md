@@ -86,9 +86,9 @@ Id `voe`, display name «Волиньобленерго», region card «Вол�
 - **Fail closed.** If the image size differs, or more than a few cells match neither colour, the fetch fails with a clear error and the previous snapshot rules apply, as for any failed refresh. The 2026-10-17 image (`volyn-gpv-2026-10-17.png`) is the test fixture. Its per-queue off-hours must equal the image's own «Загальна тривалість» header: 4, 3.5, 3.5, 3.5, 3, 3, 3.5, 3.5, 1, 1.5, 4, 1.
 - **A day with no image** follows the quiet-day rule below. Today without an image is all `on` with the note; tomorrow without one is left out.
 - **Current outage.**
-  - `POST https://energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni/chomu-nemaie-elektropostachannia/` with the city and street lists live planned and emergency outages per street and house, with start and estimated end.
+  - `POST https://energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni/chomu-nemaie-elektropostachannia/` with the city and a blank street lists the settlement's live planned and emergency outages per street and house, with start and estimated end. The street is matched in the app, so the operator's other apostrophe or a look-alike letter cannot hide a row.
   - The house cell is a comma list, the same as in `cherga` (checked on the saved Kovel response: «1, 2, 3, 4, 5, 6, 9, 9А, 10, 12»). Match the saved house in that list, and keep only rows whose settlement equals the saved city exactly (the match is by substring).
-  - «Аварійне вимкнення» → `kind: 'emergency'`.
+  - «Аварійне вимкнення» and «Позапланове вимкнення» → `kind: 'emergency'`.
   - «Планове вимкнення» for the saved house → a new `kind: 'planned'`. It overrides the schedule exactly like an emergency, with the badge «Планове». My call: the operator names the house and the hours, so showing «світло є» through it would be wrong. `activeEmergency` in `src/shared/widget-state.ts` and its badge are extended for it. DTEK never fills this kind.
   - Rows about applying the hourly schedule («застосування графіків обмеження», if they appear) are ignored. The image already covers them.
   - The text is the «Причина» column.
@@ -107,6 +107,7 @@ Id `voe`, display name «Волиньобленерго», region card «Вол�
 **Settlements (`listCities`).**
 - **A bundled list.** The operator has no settlement list, so the app bundles the list of Volyn oblast settlements from the state codifier КАТОТТГ (open government data).
 - **Duplicates.** Names that occur more than once get their district so they can be told apart. The operator's table has a «Район» column to filter on.
+  - The filter applies to every name the operator knows in more than one district, also when the labels differ by kind alone and carry no district («с. Луків» in Луцький, «с-ще Луків» in Ковельський). A name found in one district only is matched by name alone.
   - Whether that column uses the four districts made in 2020 or the old sixteen is checked live. The filter follows whatever the operator uses.
   - Two villages with the same name in the same district cannot be told apart by the operator either. They appear once, with the streets of both. A person on a street that exists in both gets two lines, and the line step's previews let them choose. My call.
 - **Spelling check.** The bundled spelling must match what the `cherga` form accepts. A spot check against the live form for Луцьк, Ковель, Володимир (renamed in 2021) and Нововолинськ is part of the work. Where the operator still uses an old name, the bundled entry follows the operator.
