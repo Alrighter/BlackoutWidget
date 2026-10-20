@@ -40,6 +40,8 @@ export type EcoflowPreviewResult =
 export interface ActualLive {
   link: 'searching' | 'connecting' | 'connected' | 'refused' | 'stalled' | 'unsupported' | Exclude<BleProblem, 'scan-failed'>;
   acInVolts?: number; acInHz?: number; inputWatts?: number; acOut?: boolean; soc?: number; invSilent?: boolean;
+  /** The station's total input and output, from the PD heartbeat. */
+  wattsIn?: number; wattsOut?: number;
 }
 export type ActionResult = { ok: true } | { ok: false; error: string };
 

@@ -105,6 +105,14 @@ No change in layout. The «Фактично» state comes from the readings belo
   - Report its verdict with `observedAt` = receipt time.
   - Throttle: report when the verdict's power changes, otherwise at most every `READING_MS = 10_000`.
 - **No inverter heartbeat** while connected for `INV_SILENT_MS = 20_000`: report unknown, «станція не повідомляє про вхід». When MPPT `cfgAcEnabled` says the AC output is off, append « (вимкнено вихід AC?)».
+- **On battery** (added 2026-10-19 after the user saw «невідомо» during an outage with the AC output off: the inverter sleeps then, so it sends nothing): with the inverter silent, a fresh PD heartbeat (`PD_FRESH_MS = 15_000`) with `wattsInSum` 0 and `wattsOutSum` above 0, held for `DRAIN_HOLD_MS = 30_000`, reports **off**, detail «станція працює від батареї, вхід 0 Вт».
+  - It holds while the input stays 0 W, even when the output drops to 0. Any input, a stale PD heartbeat, a link drop or a sleep ends it. The inverter's own verdict always wins.
+  - While the hold runs, no «unknown» is reported, so the history gets no unknown blip before the off.
+  - Silence alone is still never «off». This rule rests on positive data: the battery feeding the outputs with nothing coming in.
+  - It never infers «on». The RIVER 2 Pro takes USB-C input, and solar comes in on XT60, so input watts do not prove a grid. When the grid comes back, it wakes the inverter, which is the AC charger, and the inverter reports «on».
+  - With nothing plugged in (0 W out), the station looks the same as grid on and idle, so it stays unknown.
+  - Unverified: grid on, battery full, AC output off, a DC load, and an inverter that sleeps anyway. If the station feeds that load from the battery, the rule reads a false «off».
+  - The live line shows the PD totals instead of the bare «Станція не повідомляє про вхід»: «Від батареї · споживання N Вт», or «Вхід N Вт · споживання M Вт».
 - **Link not connected** (searching, connecting, lost) for longer than `LINK_GRACE_MS = 30_000`: report unknown, «станція поза зв’язком Bluetooth». Reconnects that finish within the grace period show nothing.
 - **Bluetooth problems**: report unknown with the setup texts, lower-cased as reasons:
   - «Bluetooth на цьому комп’ютері вимкнено»;

@@ -33,13 +33,20 @@ function previewView(r: EcoflowPreviewResult): { text: string; tone: Tone } {
   return { text: cap(r.reason), tone: 'neutral' };
 }
 
+/** With the inverter silent, the station's own totals say what is left to say about the input. */
+function silentText(l: ActualLive): string {
+  if (l.wattsIn === undefined) return 'Станція не повідомляє про вхід';
+  if (l.wattsIn === 0 && l.wattsOut) return `Від батареї · споживання ${l.wattsOut} Вт`;
+  return `Вхід ${l.wattsIn} Вт${l.wattsOut === undefined ? '' : ` · споживання ${l.wattsOut} Вт`}`;
+}
+
 /** The live line of the Bluetooth source; a value the station has not sent yet is left out, never shown as 0. */
 function liveText(l: ActualLive | null): string | null {
   if (!l) return null;
   if (l.link === 'connected') {
     const out = l.acOut === undefined ? null : `вихід AC ${l.acOut ? 'увімк' : 'вимк'}`;
     const soc = l.soc === undefined ? null : `заряд ${l.soc}%`;
-    const input = l.invSilent ? ['Станція не повідомляє про вхід'] : [
+    const input = l.invSilent ? [silentText(l)] : [
       l.acInVolts === undefined ? null : `${l.acInVolts} В`,
       l.acInHz === undefined ? null : `${l.acInHz} Гц`,
       l.inputWatts === undefined ? null : `${l.inputWatts} Вт`,

@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeHeartbeat } from '../../../src/main/actual/ecoflow/ble/heartbeats';
 import { ADAPTER_UNREADY_MS, INV_SILENT_MS, type BleLinkLike, type LinkEvent } from '../../../src/main/actual/ecoflow/ble/link';
 import { decodePacket } from '../../../src/main/actual/ecoflow/ble/protocol';
-import { EcoflowBleSource, LINK_GRACE_MS, READING_MS, REASON_REPEAT_MS } from '../../../src/main/actual/ecoflow/ble/source';
+import {
+  DRAIN_HOLD_MS, EcoflowBleSource, LINK_GRACE_MS, ON_BATTERY_DETAIL, PD_FRESH_MS, READING_MS, REASON_REPEAT_MS,
+} from '../../../src/main/actual/ecoflow/ble/source';
 import type { AdapterState } from '../../../src/main/actual/ecoflow/ble/messages';
 import type { ActualReading } from '../../../src/main/actual/types';
 import { BLE_REASON } from '../../../src/shared/ecoflow-ble';
@@ -38,9 +40,19 @@ function setup() {
     link.emit({ ev: 'link', sn, state });
   const inv = (fields: Record<string, number | string>, sn = SN) => link.emit({ ev: 'heartbeat', sn, module: 'inv', fields });
   const mppt = (fields: Record<string, number>) => link.emit({ ev: 'heartbeat', sn: SN, module: 'mppt', fields });
+  const pd = (fields: Record<string, number>) => link.emit({ ev: 'heartbeat', sn: SN, module: 'pd', fields });
+  /** PD heartbeats every 2 s for `ms`. */
+  const pdFor = (ms: number, fields: Record<string, number>) => {
+    for (let t = 0; t < ms; t += 2_000) {
+      pd(fields);
+      vi.advanceTimersByTime(2_000);
+    }
+  };
   const GRID = { acInVol: 119_189, acInFreq: 60, inputWatts: 100 };
-  return { link, log, source, readings, start, state, inv, mppt, GRID };
+  return { link, log, source, readings, start, state, inv, mppt, pd, pdFor, GRID };
 }
+
+const DRAIN = { wattsInSum: 0, wattsOutSum: 12 };
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(T0); });
 afterEach(() => { vi.useRealTimers(); });
@@ -341,6 +353,100 @@ describe('EcoflowBleSource', () => {
     state('lost');
     inv(GRID);
     expect(readings).toEqual([]);
+  });
+
+  describe('on battery: the inverter silent, PD 0 W in and some W out', () => {
+    it('reports off once it has held 30 s, with no unknown before it', () => {
+      const { start, state, mppt, pdFor, readings } = setup();
+      start();
+      state('connected');
+      mppt({ cfgAcEnabled: 0 });
+      pdFor(DRAIN_HOLD_MS - 2_000, DRAIN);
+      expect(readings).toEqual([]);
+      pdFor(4_000, DRAIN);
+      expect(readings).toEqual([{ power: 'off', observedAt: new Date(T0 + DRAIN_HOLD_MS).toISOString(), detail: ON_BATTERY_DETAIL }]);
+      pdFor(60_000, DRAIN);
+      expect(readings.every(r => r.power === 'off')).toBe(true);
+      expect(readings.length).toBeGreaterThanOrEqual(6);
+    });
+
+    it('holds while the input stays 0, even when the output falls to 0', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      pdFor(2 * REASON_REPEAT_MS, { wattsInSum: 0, wattsOutSum: 0 });
+      expect(readings.length).toBeGreaterThan(1);
+      expect(readings.every(r => r.power === 'off')).toBe(true);
+    });
+
+    it('nothing plugged in (0 W out) stays unknown: it looks the same as the grid on and idle', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(2 * DRAIN_HOLD_MS, { wattsInSum: 0, wattsOutSum: 0 });
+      expect(readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.invSilent })]);
+    });
+
+    it('input above 0 ends it: back to unknown, never on', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      expect(readings.at(-1)?.power).toBe('off');
+      pdFor(4_000, { wattsInSum: 50, wattsOutSum: 12 });
+      expect(readings.at(-1)).toMatchObject({ power: 'unknown', reason: BLE_REASON.invSilent });
+      expect(readings.some(r => r.power === 'on')).toBe(false);
+    });
+
+    it('the inverter wins: its heartbeat gives the verdict and keeps it', () => {
+      const { start, state, inv, pd, pdFor, readings, GRID } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      expect(readings.at(-1)?.power).toBe('off');
+      const n = readings.length;
+      for (let i = 0; i < 15; i++) {
+        inv(GRID);
+        pd(DRAIN);
+        vi.advanceTimersByTime(2_000);
+      }
+      expect(readings.slice(n).map(r => r.power)).toEqual(['on', 'on', 'on']);
+    });
+
+    it('a stale PD heartbeat gives unknown', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      expect(readings.at(-1)?.power).toBe('off');
+      vi.advanceTimersByTime(PD_FRESH_MS + 1_000);
+      expect(readings.at(-1)).toMatchObject({ power: 'unknown', reason: BLE_REASON.invSilent });
+    });
+
+    it('a link drop starts the hold over', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      state('lost');
+      state('connected');
+      const n = readings.length;
+      pdFor(DRAIN_HOLD_MS - 2_000, DRAIN);
+      expect(readings.slice(n)).toEqual([]);
+      pdFor(4_000, DRAIN);
+      expect(readings.slice(n).map(r => r.power)).toEqual(['off']);
+    });
+
+    it('a PD heartbeat before the link is up does not count', () => {
+      const { start, state, pd, pdFor, readings } = setup();
+      start();
+      pd(DRAIN);
+      vi.advanceTimersByTime(10_000);
+      state('connected');
+      pdFor(DRAIN_HOLD_MS - 2_000, DRAIN);
+      expect(readings).toEqual([]);
+    });
   });
 
   it('stop unwatches and stays silent', () => {
