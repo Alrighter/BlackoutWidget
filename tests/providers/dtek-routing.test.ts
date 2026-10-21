@@ -27,15 +27,15 @@ const nowIso = () => new Date().toISOString();
 
 /** dtek-provider.test.ts's fake plus a window: open after ensureReady, closed after release. `opens` counts the builds. */
 function fakeSession(body: unknown = stale) {
-  let open = false;
   const s = {
+    open: false,
     opens: 0,
-    ensureReady: vi.fn(async () => { if (!open) s.opens++; open = true; }),
-    showForUser: vi.fn(async () => { if (!open) s.opens++; open = true; }),
+    ensureReady: vi.fn(async () => { if (!s.open) s.opens++; s.open = true; }),
+    showForUser: vi.fn(async () => { if (!s.open) s.opens++; s.open = true; }),
     reload: vi.fn(async () => {}),
     isOnline: vi.fn(() => true),
-    isOpen: vi.fn(() => open),
-    release: vi.fn(() => { open = false; }),
+    isOpen: vi.fn(() => s.open),
+    release: vi.fn(() => { s.open = false; }),
     dispose: vi.fn(),
     evaluate: vi.fn(async (js: string): Promise<unknown> => {
       if (js === READ_FACT) return { fact: stale.fact, schNames: stale.preset.sch_names };
@@ -45,6 +45,10 @@ function fakeSession(body: unknown = stale) {
     }),
   };
   return s;
+}
+/** The next ensureReady builds the window and then fails its load: as in BrowserSession, the window stays open. */
+function failedLoad(s: ReturnType<typeof fakeSession>, err: Error) {
+  s.ensureReady.mockImplementationOnce(async () => { if (!s.open) s.opens++; s.open = true; throw err; });
 }
 const readFacts = (s: ReturnType<typeof fakeSession>) => s.evaluate.mock.calls.filter(c => c[0] === READ_FACT).length;
 const homeNums = (s: ReturnType<typeof fakeSession>) => s.evaluate.mock.calls.filter(c => c[0] === HOME_NUM).length;
@@ -361,5 +365,76 @@ test('showVerification arms the linger', async () => {
   await vi.advanceTimersByTimeAsync(PAGE_LINGER_MS - 1);
   expect(s.release).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
+  expect(s.release).toHaveBeenCalledTimes(1);
+});
+
+test('no feeds: the page stays and every refresh uses it', async () => {
+  const { p, s } = provider(fakeSession(), []);
+  await p.fetchSnapshot(addr, null);
+  await vi.advanceTimersByTimeAsync(15 * MIN);
+  expect(s.release).not.toHaveBeenCalled();
+  const again = await p.fetchSnapshot(addr, fresh());
+  expect(homeNums(s)).toBe(2);
+  expect(again.houseCheckedAt).toBe(nowIso());
+  // A failed load neither releases the page nor holds the next refresh to a budget.
+  failedLoad(s, new CaptchaRequiredError('x'));
+  await expect(p.fetchSnapshot(addr, fresh())).rejects.toBeInstanceOf(CaptchaRequiredError);
+  await vi.advanceTimersByTimeAsync(MIN);
+  expect((await p.fetchSnapshot(addr, fresh())).houseCheckedAt).toBe(nowIso());
+  await vi.advanceTimersByTimeAsync(PAGE_LINGER_MS);
+  expect(s.release).not.toHaveBeenCalled();
+});
+test('no feeds: a first load that fails is retried on the next refresh, not refused by the budget', async () => {
+  const s = fakeSession();
+  failedLoad(s, new ProviderError('Сайт ДТЕК не відповідає'));
+  const { p } = provider(s, []);
+  await expect(p.fetchSnapshot(addr, null)).rejects.toThrow('Сайт ДТЕК не відповідає');
+  s.open = false; // the window is gone (closed by DTEK or the OS), and the last open was 1 min ago
+  await vi.advanceTimersByTimeAsync(MIN);
+  expect((await p.fetchSnapshot(addr, null)).houseCheckedAt).toBe(nowIso());
+  expect(s.ensureReady).toHaveBeenCalledTimes(2);
+});
+
+test('a failed page use releases at once, so the next open goes through the budget', async () => {
+  const { p, s, feeds } = provider();
+  failedLoad(s, new CaptchaRequiredError('x'));
+  // Location A: its house check hits a verification, and the feed answers.
+  const a = await p.fetchSnapshot(addr, snap({ houseCheckedAt: ago(25 * HOUR) }));
+  expect(a.days).toEqual(FEED_DAYS);
+  expect(s.release).toHaveBeenCalledTimes(1);
+  expect(s.open).toBe(false);
+  // Location B, 1 min later and with no previous: the budget refuses the page, the feed answers.
+  await vi.advanceTimersByTimeAsync(MIN);
+  const b = await p.fetchSnapshot({ ...addr, house: '13' }, null);
+  expect(s.ensureReady).toHaveBeenCalledTimes(1);
+  expect(feeds[0].read).toHaveBeenCalledTimes(2);
+  expect(b.lines).toEqual([{ index: 1, groupId: 'GPV1.2', label: 'Черга 1.2' }]);
+  expect('houseCheckedAt' in b).toBe(false);
+  // No linger follows a failure.
+  await vi.advanceTimersByTimeAsync(PAGE_LINGER_MS);
+  expect(s.release).toHaveBeenCalledTimes(1);
+});
+test('a failed page use forgets the cached fact, as the linger does', async () => {
+  const { p, s } = provider();
+  await p.listStreets(C);
+  expect(readFacts(s)).toBe(1);
+  s.evaluate.mockRejectedValueOnce(new TypeError('boom')); // the house check's getHomeNum
+  await vi.advanceTimersByTimeAsync(MIN);
+  expect((await p.fetchSnapshot(addr, null)).days).toEqual(FEED_DAYS);
+  expect(s.release).toHaveBeenCalledTimes(1);
+  await p.listStreets(C);
+  expect(readFacts(s)).toBe(2);
+});
+test('a failed page use while the verification shows releases nothing', async () => {
+  const { p, s } = provider();
+  let shown!: () => void;
+  s.showForUser.mockImplementation(() => new Promise<void>(r => { shown = r; }));
+  const verification = p.showVerification();
+  failedLoad(s, new CaptchaRequiredError('x'));
+  await expect(p.listStreets(C)).rejects.toBeInstanceOf(CaptchaRequiredError);
+  expect(s.release).not.toHaveBeenCalled();
+  shown();
+  await verification;
+  await vi.advanceTimersByTimeAsync(PAGE_LINGER_MS);
   expect(s.release).toHaveBeenCalledTimes(1);
 });

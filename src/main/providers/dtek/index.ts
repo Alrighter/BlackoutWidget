@@ -154,9 +154,9 @@ export class DtekProvider implements ScheduleProvider {
     throw offline ? new NetworkError(FEEDS_FAILED_TEXT) : new ProviderError(FEEDS_FAILED_TEXT);
   }
 
-  /** Evaluated at the moment the page would be used. */
+  /** Evaluated at the moment the page would be used. With no feeds the page is the only source: no budget. */
   private pageAllowed(): boolean {
-    return pageAllowed(this.session.isOpen(), this.lastPageOpenAt, this.pageGapMs);
+    return this.feeds.length === 0 || pageAllowed(this.session.isOpen(), this.lastPageOpenAt, this.pageGapMs);
   }
 
   private pageFor(address: Address, reason: PageReason): Promise<ScheduleSnapshot> {
@@ -198,28 +198,38 @@ export class DtekProvider implements ScheduleProvider {
 
   /**
    * Every page operation goes through here. It stops the linger while it runs. Finding the window closed means this use
-   * opens it, which counts toward the budget whether or not the open succeeds. The last use to end arms the linger.
+   * opens it, which counts toward the budget whether or not the open succeeds. When the last running use ends, a success
+   * arms the linger and a failure releases at once: a window whose load failed still counts as open, and a use inside
+   * the linger would load DTEK again past the budget. With no feeds the page stays, as before them.
    */
   private async usePage<T>(fn: () => Promise<T>): Promise<T> {
     clearTimeout(this.linger);
     this.linger = undefined;
     if (!this.session.isOpen()) this.lastPageOpenAt = Date.now();
     this.pageUses++;
+    let ok = false;
     try {
-      return await fn();
+      const value = await fn();
+      ok = true;
+      return value;
     } finally {
-      if (--this.pageUses === 0) this.armLinger();
+      if (--this.pageUses === 0 && this.feeds.length > 0) {
+        if (ok) this.armLinger();
+        else this.releasePage();
+      }
     }
   }
 
   private armLinger(): void {
-    const timer = setTimeout(() => {
-      this.linger = undefined;
-      this.session.release();
-      this.state = null; // the next open reads the fact afresh
-    }, this.lingerMs);
+    const timer = setTimeout(() => this.releasePage(), this.lingerMs);
     timer.unref?.();
     this.linger = timer;
+  }
+
+  private releasePage(): void {
+    this.linger = undefined;
+    this.session.release();
+    this.state = null; // the next open reads the fact afresh
   }
 
   // One operation at a time: no parallel requests to the source; a failure doesn't break the chain.
