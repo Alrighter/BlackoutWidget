@@ -9,16 +9,14 @@ export class MainWindow {
   private win: BrowserWindow | null = null;
   private ready = false;
   private pendingNav: MainNav | null = null;
-  private quitting = false;
 
-  constructor(private readonly preload: string) {
-    app.on('before-quit', () => { this.quitting = true; });
-  }
+  constructor(private readonly preload: string) {}
 
   /**
-   * The window is loaded once and never reloaded. The initial view and location go in the query string; later
-   * ones are pushed to the renderer as a MainNav (after did-finish-load if it is still loading). No view: only
-   * show/focus. No location: the window keeps (or starts on) its own selection.
+   * A window is loaded once and never reloaded; closing it frees it, and the next open builds a fresh one. The
+   * initial view and location go in the query string; later ones are pushed to the renderer as a MainNav (after
+   * did-finish-load if it is still loading). No view: only show/focus. No location: the window keeps (or starts
+   * on) its own selection.
    */
   open(view?: MainView, locationId?: string): void {
     if (!this.win || this.win.isDestroyed()) {
@@ -56,11 +54,13 @@ export class MainWindow {
     }
     win.setMenuBarVisibility(false);
     win.on('page-title-updated', e => e.preventDefault()); // keep the fixed window title
-    // Closing hides the window; the app lives in the tray.
-    win.on('close', e => {
-      if (this.quitting || win.isDestroyed()) return;
-      e.preventDefault();
-      win.hide();
+    // Closing really closes: a hidden window would keep its renderer (and its GPU surfaces) for the app's whole life.
+    // The app lives in the tray; the next open builds the window again.
+    win.on('closed', () => {
+      if (this.win !== win) return;
+      this.win = null;
+      this.ready = false;
+      this.pendingNav = null;
     });
     win.webContents.on('did-finish-load', () => {
       this.ready = true;

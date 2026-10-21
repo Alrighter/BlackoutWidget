@@ -206,6 +206,9 @@ export class BrowserSession implements PageSession {
     }
     const win = new BrowserWindow({
       show: false, width: 1280, height: 900, title: 'ДТЕК — перевірка',
+      // A never-shown window otherwise renders the whole site as if on screen: about 100 MB of GPU memory and some
+      // renderer memory for a page nobody sees (smoke-memory). Shown for a verification, it paints as usual.
+      paintWhenInitiallyHidden: false,
       webPreferences: { partition: this.opts.partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
