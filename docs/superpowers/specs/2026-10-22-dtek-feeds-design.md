@@ -87,7 +87,7 @@ Calls that were mine, not the user's, are marked *(my call)*.
 - Carried unchanged from `previous`, when there is one: `lines`, `outageActive`, `currentOutage`, `houseCheckedAt`.
   - This keeps `lineChanged` true when the last house check found the saved queue gone.
   - It never invents a line change: with no `previous`, `lines` is `[{ index: address.lineIndex, groupId: address.groupId, label: groupLabel }]`.
-  - The emergency banner already ends by its own `end` time and staleness (`activeEmergency`), so a carried `currentOutage` cannot outlive its window.
+  - A carried `currentOutage` must not outlive the house data behind it. The emergency banner ends at the outage's own `end` time. An outage without a readable `end` counts only while it is fresh, and `activeEmergency` measures that from `houseCheckedAt` when the snapshot has one, else from `fetchedAt`. A feed snapshot renews `fetchedAt` but not `houseCheckedAt`, so a house check that keeps failing cannot hold the widget at «Світла немає · час відновлення невідомий». Only the emergency uses `houseCheckedAt`; the widget's «stale» display stays keyed on `fetchedAt`.
 - `fetchedAt` is now.
 - `groupLabel` is the feed's own name for the queue (the mirror's `sch_names`), else `previous.groupLabel`, else `queueLabelFromId(groupId)`.
 
