@@ -9,6 +9,8 @@ export interface ProviderInfo {
   siteUrl: string;
   /** Set when the source serves one city only, so the wizard can skip the city step. */
   singleCity?: string;
+  /** Added to the wizard's note for a house with no lines (a pointer to the source that may serve it). */
+  noLinesHint?: string;
 }
 
 /** Metadata of the schedule sources, shared by the main-process providers and the UI texts. */
@@ -24,6 +26,15 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
   'dtek-dnem': {
     name: 'ДТЕК Дніпровські електромережі', shortName: 'ДТЕК', region: 'Дніпропетровська область',
     siteUrl: 'https://www.dtek-dnem.com.ua/ua/shutdowns',
+    noLinesHint: 'Якщо ваш будинок обслуговує ЦЕК, оберіть «ПЕЕМ «ЦЕК»»',
+  },
+  'cek': {
+    name: 'ПЕЕМ «ЦЕК»', shortName: 'ЦЕК', region: 'Дніпропетровська область',
+    siteUrl: 'https://cek.dp.ua/index.php/cpojivaham/vidkliuchennia/2-uncategorised/921-grafik-pogodinikh-vidklyuchen.html',
+  },
+  'ztoe': {
+    name: 'Житомиробленерго', shortName: 'Житомиробленерго', region: 'Житомирська область',
+    siteUrl: 'https://www.ztoe.com.ua/unhooking-search.php',
   },
   'dtek-krem': {
     name: 'ДТЕК Київські регіональні електромережі', shortName: 'ДТЕК', region: 'Київська область',
@@ -44,6 +55,10 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
   'toe': {
     name: 'Тернопільобленерго', shortName: 'Тернопільобленерго', region: 'Тернопільська область',
     siteUrl: 'https://poweron.toe.com.ua/',
+  },
+  'cvoe': {
+    name: 'Чернівціобленерго', shortName: 'Чернівціобленерго', region: 'Чернівецька область',
+    siteUrl: 'https://oblenergo.cv.ua/shutdowns/',
   },
 };
 
@@ -72,4 +87,9 @@ export function providerSiteUrl(id: string): string | undefined {
 /** The only city the provider serves, if it serves just one. */
 export function providerSingleCity(id: string): string | undefined {
   return info(id)?.singleCity;
+}
+
+/** A pointer for a house the provider has no lines for, if the provider has one. */
+export function providerNoLinesHint(id: string): string | undefined {
+  return info(id)?.noLinesHint;
 }

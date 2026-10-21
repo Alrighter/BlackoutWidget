@@ -2,10 +2,11 @@ import { providerDisplayName } from '../../../shared/providers';
 import { addDays, kyivDateKey } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
-import type { HttpFetch } from '../http';
-import { HttpSource, loggable, quietNote, sourceTexts, type SourceInit } from '../http-source';
+import { HttpSource, quietNote, sourceTexts, type PlainHttpDeps, type SourceInit } from '../http-source';
 import { NONE_GROUP, daySlots, linesOf, queueLabel } from '../lines';
-import { AddressNotFoundError, resolveByLabel, uniqueLabels } from '../resolve';
+import { labeled, noGroup, resolveByLabel, sortedLabels, type Labeled } from '../resolve';
+import { isInt, isObj } from '../shape';
+import { addressSide, daysForLine, snapshotOf, type ScheduleDays } from '../snapshot';
 import type { ScheduleProvider } from '../types';
 import { MkoeShapeError, mkoeDay } from './schedule';
 import { mkoeSettlements, type MkoeSettlement } from './settlements';
@@ -17,10 +18,6 @@ export const MKOE_ODD_QUEUES_NOTE = `${NAME} повідомило черги б�
 
 const API = 'https://off.energy.mk.ua/api';
 const GET: SourceInit = { method: 'GET', headers: { Accept: 'application/json' } };
-
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 
 function fail(reason: string): never {
   throw new MkoeShapeError(reason);
@@ -92,26 +89,10 @@ function currentOutageOf(queues: HouseQueue[]): CurrentOutage | undefined {
 
 // --- The provider ----------------------------------------------------------------------------------------------
 
-/**
- * A list with its labels, index-aligned as `resolveByLabel` needs, in id order: the « (2)» of a repeated label then
- * follows the record, so a saved label never moves to a namesake when the API lists them in another order.
- */
-interface Labeled<T> { items: T[]; labels: string[] }
-
-const sorted = (labels: string[]): string[] => [...labels].sort((a, b) => a.localeCompare(b, 'uk'));
-const byId = <T extends { id: number }>(items: T[]): T[] => [...items].sort((a, b) => a.id - b.id);
 const houseOrder = new Intl.Collator('uk', { numeric: true });
 const recName = (r: Rec): string => r.name;
-const noGroup = (): undefined => undefined;
 
-export interface MkoeDeps {
-  fetch: HttpFetch;
-  isOnline: () => boolean;
-  log?: Logger;
-  now?: () => Date;
-  sleep?: (ms: number) => Promise<void>;
-  clock?: () => number;
-}
+export type MkoeDeps = PlainHttpDeps;
 
 /**
  * Миколаївобленерго over plain HTTPS (off.energy.mk.ua): the bundled settlements, then streets and houses, each house's
@@ -144,7 +125,7 @@ export class MkoeProvider implements ScheduleProvider {
   }
 
   listStreets(city: string): Promise<string[]> {
-    return this.http.serial('listStreets', async () => sorted((await this.streetList(this.settlement(city).id)).labels));
+    return this.http.serial('listStreets', async () => sortedLabels((await this.streetList(this.settlement(city).id)).labels));
   }
 
   /** Each house once, in number order. Its queues come only per house, through `houseLines`. */
@@ -176,34 +157,15 @@ export class MkoeProvider implements ScheduleProvider {
         ? read.lines
         : [{ index: address.lineIndex, groupId: address.groupId, label: queueLabel(address.groupId) }];
       const currentOutage = queues ? currentOutageOf(queues) : undefined;
-      let days: DaySchedule[];
-      let sourceUpdatedAt: string | undefined;
-      let note: string | undefined;
+      let schedule: ScheduleDays;
       if (read?.unknown !== undefined) {
         // The house's queues came in a shape we do not know: neither its line nor the always-on line is proven.
         this.log.warn('mkoe fetchSnapshot: house queues of an unknown shape', { what: 'outage-queue', reason: read.unknown });
-        days = [{ date: today, slots: daySlots('unknown') }];
-        note = MKOE_ODD_QUEUES_NOTE;
-      } else if (!lines.some((l) => l.groupId === address.groupId)) {
-        // The operator moved the house to another queue (or in or out of the schedule): the app asks to pick again.
-        days = [{ date: today, slots: daySlots('unknown') }];
-      } else if (address.groupId === NONE_GROUP) {
-        days = [{ date: today, slots: daySlots('on') }];
+        schedule = { days: [{ date: today, slots: daySlots('unknown') }], note: MKOE_ODD_QUEUES_NOTE };
       } else {
-        ({ days, sourceUpdatedAt, note } = await this.schedule(address.groupId, today));
+        schedule = await daysForLine(lines, address.groupId, today, () => this.schedule(address.groupId, today));
       }
-      return {
-        providerId: this.id,
-        address,
-        groupId: address.groupId,
-        groupLabel: queueLabel(address.groupId),
-        days,
-        ...(sourceUpdatedAt ? { sourceUpdatedAt } : {}),
-        fetchedAt: now.toISOString(),
-        lines,
-        ...(currentOutage ? { currentOutage } : {}),
-        ...(note ? { note } : {}),
-      };
+      return snapshotOf({ providerId: this.id, address, now, groupLabel: queueLabel(address.groupId), lines, currentOutage, ...schedule });
     });
   }
 
@@ -218,15 +180,11 @@ export class MkoeProvider implements ScheduleProvider {
    * For a queue line any other failure only costs the check (undefined: the saved line stays, no current outage): the
    * oblast-wide schedule still holds. The 'none' line has no schedule behind it, so there the failure fails the snapshot.
    */
-  private async houseCheck(address: Address): Promise<number | undefined> {
-    try {
+  private houseCheck(address: Address): Promise<number | undefined> {
+    return addressSide(address.groupId, this.log, 'mkoe fetchSnapshot: address check', async () => {
       const list = await this.houseList(await this.streetId(address.city, address.street), true);
       return this.house(list, address.house).id;
-    } catch (e) {
-      if (e instanceof AddressNotFoundError || address.groupId === NONE_GROUP) throw e;
-      this.log.warn('mkoe fetchSnapshot: address check failed, keeping the saved line', loggable(e));
-      return undefined;
-    }
+    });
   }
 
   /**
@@ -234,26 +192,20 @@ export class MkoeProvider implements ScheduleProvider {
    * the outage. For the 'none' line this answer is the only proof that the house is still outside the schedule (the
    * house list proves only that it exists), so there the failure fails the snapshot.
    */
-  private async checkedHouseQueues(address: Address, iddom: number): Promise<HouseQueue[] | undefined> {
-    try {
-      return await this.houseQueues(iddom);
-    } catch (e) {
-      if (address.groupId === NONE_GROUP) throw e;
-      this.log.warn('mkoe fetchSnapshot: house queues failed, keeping the saved line', loggable(e));
-      return undefined;
-    }
+  private checkedHouseQueues(address: Address, iddom: number): Promise<HouseQueue[] | undefined> {
+    return addressSide(address.groupId, this.log, 'mkoe fetchSnapshot: house queues', () => this.houseQueues(iddom));
   }
 
   /**
    * Today (all on with the quiet note when it has no row) and tomorrow when it has one, for the saved queue name. The
    * three answers are read one after another, every refresh: the dictionaries are the guard a quiet `[]` cannot give.
    */
-  private async schedule(groupId: string, today: string): Promise<{ days: DaySchedule[]; sourceUpdatedAt?: string; note?: string }> {
+  private async schedule(groupId: string, today: string): Promise<ScheduleDays> {
     const tomorrow = addDays(today, 1);
     const active = await this.http.json(`${API}/v2/schedule/active`, GET);
     const timeSeries = await this.http.json(`${API}/schedule/time-series`, GET);
     const queues = await this.http.json(`${API}/outage-queue/by-type/3`, GET);
-    const day = (date: string) => this.read('schedule', () => mkoeDay(active, timeSeries, queues, date, groupId));
+    const day = (date: string) => this.http.read('schedule', () => mkoeDay(active, timeSeries, queues, date, groupId));
     const todayDay = day(today);
     const tomorrowDay = day(tomorrow);
     const days: DaySchedule[] = [{ date: today, slots: todayDay ? todayDay.slots : daySlots('on') }];
@@ -280,8 +232,7 @@ export class MkoeProvider implements ScheduleProvider {
     const cached = this.streets.get(nsId);
     if (cached) return cached;
     const body = await this.http.json(`${API}/addr/ns/${nsId}/street`, GET);
-    const items = byId(this.read('addr/street', () => records(body, 'idstreet', 'nazstreet', 'street')));
-    const list = { items, labels: uniqueLabels(items, recName, noGroup) };
+    const list = labeled(this.http.read('addr/street', () => records(body, 'idstreet', 'nazstreet', 'street')), recName);
     this.streets.set(nsId, list);
     return list;
   }
@@ -291,24 +242,13 @@ export class MkoeProvider implements ScheduleProvider {
     const cached = this.houses.get(streetId);
     if (cached && !fresh) return cached;
     const body = await this.http.json(`${API}/addr/street/${streetId}/dom`, GET);
-    const items = byId(this.read('addr/dom', () => records(body, 'iddom', 'nazdom', 'dom')));
-    const list = { items, labels: uniqueLabels(items, recName, noGroup) };
+    const list = labeled(this.http.read('addr/dom', () => records(body, 'iddom', 'nazdom', 'dom')), recName);
     this.houses.set(streetId, list);
     return list;
   }
 
   private async houseQueues(iddom: number): Promise<HouseQueue[]> {
     const body = await this.http.json(`${API}/addr/dom/${iddom}/outage-queue`, GET);
-    return this.read('outage-queue', () => parseHouseQueues(body));
-  }
-
-  /** A shape error as «could not read»; its reason is ours, never response text. */
-  private read<T>(what: string, parse: () => T): T {
-    try {
-      return parse();
-    } catch (e) {
-      if (e instanceof MkoeShapeError) throw this.http.unreadable({ what, reason: e.message });
-      throw e;
-    }
+    return this.http.read('outage-queue', () => parseHouseQueues(body));
   }
 }

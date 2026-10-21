@@ -165,7 +165,7 @@ Per settlement: one POST for streets (~250 KB response; the page includes the fu
 | endpoint | purpose |
 |---|---|
 | `pw_otgs?pagination=false` | 19+ REMs: `{id:1..., name:"Андрушівський РЕМ"}` (ids differ from `rem_id`: here 5 = Хорошівський, 6 = Житомирський, 7 = Коростенський, 11 = Звягельський) |
-| `pw_cities?pagination=false&otg.id=5` (also `&name=Березівка`, works as exact filter; without `otg.id` 22,694 rows) | cities: `{id, name:"Березівка", otg:{id,name}}`. Names carry no "с."/"місто" prefix; duplicates exist (3 Березівка in otg 5: ids 1636 (0 streets), 2622 (5 streets), 17707) |
+| `pw_cities?pagination=false&otg.id=5` (also `&name=Березівка`, which matches part of a name, not the exact name: on 2026-10-21 `name=Березів` returned the same three records, so a client keeps only equal names; without `otg.id` 22,694 rows) | cities: `{id, name:"Березівка", otg:{id,name}}`. Names carry no "с."/"місто" prefix; duplicates exist (3 Березівка in otg 5: ids 1636 (0 streets), 2622 (5 streets), 17707) |
 | `pw_streets?pagination=false&city.id=2622` | streets `{id, name:"вул. Вишнева"}` (city 214 Хорошів: 111) |
 | `pw_accidents?page=1&otg.id=&city.id=&street.id=&typeOff=1&switchSubReason=0` | current outages (emergency etc.), paged by 30 |
 | `pw_accident_planeds?page=1&otg.id=&city.id=&street.id=` plus `datePlanIn[after]` / `datePlanIn[before]` (as used by the site; filter semantics not tested) | planned works |

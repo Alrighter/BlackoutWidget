@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HttpFetch, HttpResponse } from '../../src/main/providers/http';
 import { HttpSource, loggable, quietNote, sourceTexts } from '../../src/main/providers/http-source';
+import { QueueValueError } from '../../src/main/providers/lines';
+import { ShapeError } from '../../src/main/providers/shape';
 import { NetworkError, ProviderError } from '../../src/main/providers/types';
 import { VOE_QUIET_NOTE } from '../../src/main/providers/voe';
 import type { Logger } from '../../src/main/log';
@@ -157,5 +159,30 @@ describe('HttpSource', () => {
     expect(seen[0].signal).toBeInstanceOf(AbortSignal);
     expect(seen[1].method).toBe('POST');
     expect(seen[1].signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe('read', () => {
+  const { src } = setup(async () => ok(''));
+
+  it('a ShapeError from the parser is unreadable, with its reason and what was read', () => {
+    let caught: unknown;
+    try { src.read('x', () => { throw new ShapeError('bad'); }); } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(ProviderError);
+    expect((caught as ProviderError).message).toBe(texts.unreadable);
+    expect((caught as ProviderError).cause).toEqual({ what: 'x', reason: 'bad' });
+  });
+
+  it('a QueueValueError is unreadable too', () => {
+    expect(() => src.read('q', () => { throw new QueueValueError(); })).toThrow(texts.unreadable);
+  });
+
+  it('any other error is rethrown as it is', () => {
+    const e = new Error('plain');
+    expect(() => src.read('x', () => { throw e; })).toThrow(e);
+  });
+
+  it('the parser\'s value passes through', () => {
+    expect(src.read('x', () => 5)).toBe(5);
   });
 });

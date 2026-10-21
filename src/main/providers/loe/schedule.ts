@@ -1,18 +1,16 @@
 import type { Slot } from '../../../shared/types';
+import { isObj, ShapeError, type Obj } from '../shape';
 
 // Pure readers of Львівобленерго's schedule text (api.loe.lviv.ua, the CMS behind poweron.loe.lviv.ua). Anything of an
 // unknown shape throws LoeShapeError, whose message is a fixed reason of ours: never a value from the response.
 
-export class LoeShapeError extends Error {
+export class LoeShapeError extends ShapeError {
   override name = 'LoeShapeError';
 }
 
 function fail(reason: string): never {
   throw new LoeShapeError(reason);
 }
-
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** One published revision: the day it is for (the heading), its «станом на» stamp, and every group's 48 slots. */
 export interface LoeRevision { date: string /* YYYY-MM-DD */; updatedAt: string /* 'HH:MM DD.MM.YYYY' */; groups: Record<string, Slot[]> }

@@ -3,14 +3,15 @@ import { providerDisplayName } from '../../../shared/providers';
 import { addDays, kyivDateKey } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
-import type { HttpFetch } from '../http';
-import { HttpSource, loggable, quietNote, sourceTexts, type SourceInit } from '../http-source';
-import { NONE_GROUP, QueueValueError, classifyQueue, daySlots, linesOf, queueLabel } from '../lines';
-import { addressNotFound, resolveByLabel, uniqueLabels } from '../resolve';
+import { HttpSource, quietNote, sourceTexts, type PlainHttpDeps, type SourceInit } from '../http-source';
+import { accidentRows, currentOutageOf, plannedRows, wallStamp, type Place, type SubReason } from '../inneti';
+import { NONE_GROUP, classifyQueue, daySlots, linesOf, queueLabel } from '../lines';
+import { addressNotFound, labeled, noGroup, resolveByLabel, sortedLabels, type Labeled } from '../resolve';
+import { bestEffort, daysForLine, snapshotOf, type ScheduleDays } from '../snapshot';
 import type { ScheduleProvider } from '../types';
 import {
-  currentOutageOf, parseBuildingGroups, parseBuildingNames, parseCities, parseGpvCollection, parseOutageRows, parseStreets,
-  queueSlots, wallStamp, ToeShapeError, type ToeCity, type ToeHouseRow, type ToeStreet,
+  parseBuildingGroups, parseBuildingNames, parseCities, parseGpvCollection, parseStreets, queueSlots,
+  type ToeCity, type ToeHouseRow, type ToeStreet,
 } from './parse';
 
 const NAME = 'Тернопільобленерго';
@@ -20,15 +21,9 @@ const API = 'https://api-poweron.toe.com.ua/api';
 // Never an Origin: a wrong, `null` or `file://` Origin gets a 403 from the operator's Cloudflare rule.
 const GET: SourceInit = { method: 'GET', headers: { Accept: 'application/ld+json' } };
 
-/**
- * A list with its labels, index-aligned as `resolveByLabel` needs, in id order: the « (2)» of a repeated label then
- * follows the record, so a saved label never moves to a namesake when the API lists them in another order.
- */
-interface Labeled<T> { items: T[]; labels: string[] }
-interface Place { cityId: number; streetId: number }
+/** `switchSubReason` 2 is the hourly schedule itself (the widget already shows it); every other value is an emergency. */
+export const TOE_SUB_REASON: SubReason = (v) => (v === 2 ? undefined : { kind: 'emergency', text: 'Аварійне відключення' });
 
-const sorted = (labels: string[]): string[] => [...labels].sort((a, b) => a.localeCompare(b, 'uk'));
-const byId = <T extends { id: number }>(items: T[]): T[] => [...items].sort((a, b) => a.id - b.id);
 /** Ternopil's `chergGpv` values for a house outside the hourly schedule. */
 const NOT_IN_SCHEDULE_VALUES = ['Не входить', '', null] as const;
 /** A `chergGpv` as a classified id: «N.M» or the 'none' line; anything else throws (read as «could not read»). */
@@ -36,18 +31,10 @@ const queueId = (value: unknown): string => classifyQueue(value, NOT_IN_SCHEDULE
 /** Whether any of these classified ids is an hourly-schedule queue («1.2»). */
 const hasQueue = (ids: string[]): boolean => ids.some((id) => id !== NONE_GROUP);
 const cityGroup = (c: ToeCity): string | undefined => (c.otg ? `${c.otg} громада` : undefined);
-const noGroup = (): undefined => undefined;
 /** Rows whose house text is blank cannot be asked about: the API matches the text exactly. */
 const usable = (rows: ToeHouseRow[]): ToeHouseRow[] => rows.filter((r) => r.house.trim() !== '');
 
-export interface ToeDeps {
-  fetch: HttpFetch;
-  isOnline: () => boolean;
-  log?: Logger;
-  now?: () => Date;
-  sleep?: (ms: number) => Promise<void>;
-  clock?: () => number;
-}
+export type ToeDeps = PlainHttpDeps;
 
 /**
  * Тернопільобленерго over plain HTTPS (api-poweron.toe.com.ua): the address directory, each house's queues, the
@@ -76,11 +63,11 @@ export class ToeProvider implements ScheduleProvider {
   }
 
   listCities(): Promise<string[]> {
-    return this.http.serial('listCities', async () => sorted((await this.cityList()).labels));
+    return this.http.serial('listCities', async () => sortedLabels((await this.cityList()).labels));
   }
 
   listStreets(city: string): Promise<string[]> {
-    return this.http.serial('listStreets', async () => sorted((await this.streetList((await this.city(city)).id)).labels));
+    return this.http.serial('listStreets', async () => sortedLabels((await this.streetList((await this.city(city)).id)).labels));
   }
 
   /** Each house once, its text byte for byte. One queue per house here; `houseLines` gives them all once it is picked. */
@@ -88,7 +75,7 @@ export class ToeProvider implements ScheduleProvider {
     return this.http.serial('listHouses', async () => {
       const queues = new Map<string, string[]>();
       for (const r of usable(await this.houseRows(await this.place(city, street)))) {
-        queues.set(r.house, [...(queues.get(r.house) ?? []), this.read('building-names', () => queueId(r.queue))]);
+        queues.set(r.house, [...(queues.get(r.house) ?? []), this.http.read('building-names', () => queueId(r.queue))]);
       }
       return [...queues].map(([house, q]): HouseInfo => ({ house, lines: linesOf(q), outageActive: false, linesPending: true }));
     });
@@ -106,30 +93,9 @@ export class ToeProvider implements ScheduleProvider {
       // The fail-closed guard: the house and its queues, before the schedule (whose empty answer proves nothing).
       const lines = await this.houseQueues(place, address.house);
       if (lines.length === 0) throw addressNotFound(NAME);
-      let days: DaySchedule[];
-      let sourceUpdatedAt: string | undefined;
-      let note: string | undefined;
-      if (!lines.some((l) => l.groupId === address.groupId)) {
-        // The saved queue is gone: the schedule call answers only for the house's queues now. The app asks to re-pick.
-        days = [{ date: today, slots: daySlots('unknown') }];
-      } else if (address.groupId === NONE_GROUP) {
-        days = [{ date: today, slots: daySlots('on') }];
-      } else {
-        ({ days, sourceUpdatedAt, note } = await this.schedule(place, address, today));
-      }
-      const currentOutage = await this.currentOutage(place, address.house, now);
-      return {
-        providerId: this.id,
-        address,
-        groupId: address.groupId,
-        groupLabel: queueLabel(address.groupId),
-        days,
-        ...(sourceUpdatedAt ? { sourceUpdatedAt } : {}),
-        fetchedAt: now.toISOString(),
-        lines,
-        ...(currentOutage ? { currentOutage } : {}),
-        ...(note ? { note } : {}),
-      };
+      const schedule = await daysForLine(lines, address.groupId, today, () => this.schedule(place, address, today));
+      const currentOutage = await bestEffort(this.log, 'toe fetchSnapshot: current outage lookup', () => this.currentOutage(place, address.house, now));
+      return snapshotOf({ providerId: this.id, address, now, groupLabel: queueLabel(address.groupId), lines, currentOutage, ...schedule });
     });
   }
 
@@ -140,20 +106,20 @@ export class ToeProvider implements ScheduleProvider {
   dispose(): void {}
 
   /** Today (all on with the quiet note when nothing is published) and tomorrow when its member is there. */
-  private async schedule(place: Place, address: Address, today: string): Promise<{ days: DaySchedule[]; sourceUpdatedAt?: string; note?: string }> {
+  private async schedule(place: Place, address: Address, today: string): Promise<ScheduleDays> {
     const tomorrow = addDays(today, 1);
     // The site's window. `time` must differ on every call: the edge cache keys on the URL only, not on X-debug-key.
     const url = `${API}/a_gpv_g?before=${tomorrow}T00:00:00%2B00:00&after=${addDays(today, -1)}T12:00:00%2B00:00`
       + `&time=${this.uniqueTime()}`;
     const key = Buffer.from(`${place.cityId}/${place.streetId}/${address.house}`, 'utf8').toString('base64');
     const body = await this.http.json(url, { ...GET, headers: { ...GET.headers, 'X-debug-key': key } });
-    const byDate = this.read('a_gpv_g', () => parseGpvCollection(body));
+    const byDate = this.http.read('a_gpv_g', () => parseGpvCollection(body));
     const todayDay = byDate.get(today);
     const tomorrowDay = byDate.get(tomorrow);
     const days: DaySchedule[] = [{
-      date: today, slots: todayDay ? this.read('a_gpv_g', () => queueSlots(todayDay, address.groupId)) : daySlots('on'),
+      date: today, slots: todayDay ? this.http.read('a_gpv_g', () => queueSlots(todayDay, address.groupId)) : daySlots('on'),
     }];
-    if (tomorrowDay) days.push({ date: tomorrow, slots: this.read('a_gpv_g', () => queueSlots(tomorrowDay, address.groupId)) });
+    if (tomorrowDay) days.push({ date: tomorrow, slots: this.http.read('a_gpv_g', () => queueSlots(tomorrowDay, address.groupId)) });
     if (!todayDay) return { days, note: TOE_QUIET_NOTE };
     return { days, sourceUpdatedAt: wallStamp(todayDay.dateCreate) };
   }
@@ -168,29 +134,24 @@ export class ToeProvider implements ScheduleProvider {
     const url = `${API}/pw-accounts/building-groups?cityId=${place.cityId}&streetId=${place.streetId}`
       + `&buildingNames=${encodeURIComponent(house)}`;
     const body = await this.http.json(url, GET);
-    const groups = this.read('building-groups', () => parseBuildingGroups(body).map(queueId));
+    const groups = this.http.read('building-groups', () => parseBuildingGroups(body).map(queueId));
     if (hasQueue(groups)) return linesOf(groups);
     const rows = usable(await this.houseRows(place)).filter((r) => r.house === house);
     if (rows.length === 0) return [];
-    if (hasQueue(this.read('building-names', () => rows.map((r) => queueId(r.queue))))) {
+    if (hasQueue(this.http.read('building-names', () => rows.map((r) => queueId(r.queue))))) {
       throw this.http.unreadable({ what: 'building-groups', reason: 'no queue while building-names has one' });
     }
     return linesOf([]);
   }
 
-  /** Emergency, then planned works, running now for this house. A failure here never fails the snapshot. */
+  /** Emergency, then planned works, running now for this house. */
   private async currentOutage(place: Place, house: string, now: Date): Promise<CurrentOutage | undefined> {
-    try {
-      const query = `page=1&city.id=${place.cityId}&street.id=${place.streetId}`;
-      const emergencyBody = await this.http.json(`${API}/pw_accidents?${query}`, GET);
-      const emergency = this.read('pw_accidents', () => parseOutageRows(emergencyBody, 'emergency', place));
-      const plannedBody = await this.http.json(`${API}/pw_accident_planeds?${query}`, GET);
-      const planned = this.read('pw_accident_planeds', () => parseOutageRows(plannedBody, 'planned', place));
-      return currentOutageOf(emergency, planned, house, now);
-    } catch (e) {
-      this.log.warn('toe fetchSnapshot: current outage lookup failed', loggable(e));
-      return undefined;
-    }
+    const query = `page=1&city.id=${place.cityId}&street.id=${place.streetId}`;
+    const emergencyBody = await this.http.json(`${API}/pw_accidents?${query}`, GET);
+    const emergency = this.http.read('pw_accidents', () => accidentRows(emergencyBody, place, TOE_SUB_REASON));
+    const plannedBody = await this.http.json(`${API}/pw_accident_planeds?${query}`, GET);
+    const planned = this.http.read('pw_accident_planeds', () => plannedRows(plannedBody, place));
+    return currentOutageOf([...emergency, ...planned], house, now);
   }
 
   private async place(city: string, street: string): Promise<Place> {
@@ -208,8 +169,7 @@ export class ToeProvider implements ScheduleProvider {
   private async cityList(): Promise<Labeled<ToeCity>> {
     if (this.cities) return this.cities;
     const body = await this.http.json(`${API}/pw_cities?pagination=false&otg.id=`, GET);
-    const items = byId(this.read('pw_cities', () => parseCities(body)));
-    this.cities = { items, labels: uniqueLabels(items, (c) => c.name, cityGroup) };
+    this.cities = labeled(this.http.read('pw_cities', () => parseCities(body)), (c) => c.name, cityGroup);
     return this.cities;
   }
 
@@ -217,25 +177,14 @@ export class ToeProvider implements ScheduleProvider {
     const cached = this.streets.get(cityId);
     if (cached) return cached;
     const body = await this.http.json(`${API}/pw_streets?pagination=false&city.id=${cityId}`, GET);
-    const items = byId(this.read('pw_streets', () => parseStreets(body)));
-    const list = { items, labels: uniqueLabels(items, (s) => s.name, noGroup) };
+    const list = labeled(this.http.read('pw_streets', () => parseStreets(body)), (s) => s.name);
     this.streets.set(cityId, list);
     return list;
   }
 
   private async houseRows(place: Place): Promise<ToeHouseRow[]> {
     const body = await this.http.json(`${API}/pw-accounts/building-names?cityId=${place.cityId}&streetId=${place.streetId}`, GET);
-    return this.read('building-names', () => parseBuildingNames(body));
-  }
-
-  /** A parser's shape error as «could not read»; its reason is ours, never response text. */
-  private read<T>(what: string, parse: () => T): T {
-    try {
-      return parse();
-    } catch (e) {
-      if (e instanceof ToeShapeError || e instanceof QueueValueError) throw this.http.unreadable({ what, reason: e.message });
-      throw e;
-    }
+    return this.http.read('building-names', () => parseBuildingNames(body));
   }
 
   /** Lower-case letters and digits, different on every call of this run and, by the random part, across installs. */

@@ -1,5 +1,7 @@
 import type { Logger } from '../log';
 import type { HttpFetch, HttpResponse } from './http';
+import { QueueValueError } from './lines';
+import { ShapeError } from './shape';
 import { NetworkError, ProviderError } from './types';
 
 export interface SourceTexts { offline: string; noAnswer: string; httpError: string; unreadable: string }
@@ -15,8 +17,18 @@ export function sourceTexts(name: string): SourceTexts {
 }
 
 /** The note for a day the operator published nothing for; `verb` agrees with the operator's gender. */
-export function quietNote(name: string, verb: 'опублікувало' | 'опублікував'): string {
+export function quietNote(name: string, verb: 'опублікувало' | 'опублікував' | 'опублікувала'): string {
   return `${name} не ${verb} графік на сьогодні — зазвичай це означає, що відключень за графіком немає`;
+}
+
+/** What a plain-HTTPS provider is built from. */
+export interface PlainHttpDeps {
+  fetch: HttpFetch;
+  isOnline: () => boolean;
+  log?: Logger;
+  now?: () => Date;
+  sleep?: (ms: number) => Promise<void>;
+  clock?: () => number;
 }
 
 export type SourceInit = Omit<Parameters<HttpFetch>[1], 'signal'>;
@@ -84,6 +96,16 @@ export class HttpSource {
   /** The «could not read» error. The cause may carry a url, status, field name or short reason, never body text. */
   unreadable(cause?: Record<string, unknown>): ProviderError {
     return new ProviderError(this.o.texts.unreadable, cause === undefined ? undefined : { cause });
+  }
+
+  /** A ShapeError or QueueValueError from `parse` as unreadable({ what, reason: e.message }); anything else rethrown. */
+  read<T>(what: string, parse: () => T): T {
+    try {
+      return parse();
+    } catch (e) {
+      if (e instanceof ShapeError || e instanceof QueueValueError) throw this.unreadable({ what, reason: e.message });
+      throw e;
+    }
   }
 
   // Callers only ever see ProviderError (incl. NetworkError); anything else is a response we could not read.

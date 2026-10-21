@@ -1,20 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  currentOutageOf, parseBuildingGroups, parseBuildingNames, parseCities, parseGpvCollection, parseOutageRows, parseStreets,
-  queueSlots, wallStamp, ToeShapeError,
+  parseBuildingGroups, parseBuildingNames, parseCities, parseGpvCollection, parseStreets, queueSlots, ToeShapeError,
 } from '../../src/main/providers/toe/parse';
+import { wallStamp } from '../../src/main/providers/inneti';
 import type { Slot } from '../../src/shared/types';
-import { kyivWallTimeToInstant } from '../../src/shared/time';
 
 const fx = (n: string): unknown => JSON.parse(readFileSync(join(__dirname, '..', 'fixtures', 'toe', n), 'utf8'));
 const GPV_1_2 = fx('a_gpv_g_2026-10-17_house-1032-47931-1_group1.2.json') as any;
 const GPV_TWO = fx('a_gpv_g_2026-10-17_house-1032-31848-29_groups2.2+4.1.json') as any;
 const GPV_QUIET = fx('a_gpv_g_quiet-2026-10-20_valid-key.json');
-const ACC_383 = fx('pw_accidents_city383_street3752_2026-10-20.json');
-const PLANNED_22085 = fx('pw_accident_planeds_city22085_street41475_2026-10-20.json');
-
-const at = (date: string, h: number, m = 0) => kyivWallTimeToInstant(date, h * 60 + m);
 
 /** The 17.10 shape of a 3-hour outage: maybe from `from`, off for six slots, maybe again, the rest on. */
 const outage = (from: number): Slot[] => Array.from({ length: 48 }, (_, i): Slot => {
@@ -132,15 +127,6 @@ describe('parseGpvCollection / queueSlots', () => {
   });
 });
 
-describe('wallStamp', () => {
-  it('takes the digits as Kyiv wall clock', () => {
-    expect(wallStamp('2026-10-17T18:52:36Z')).toBe('18:52 17.10.2026');
-    expect(wallStamp('2026-10-20T03:31:35+00:00')).toBe('03:31 20.10.2026');
-    expect(wallStamp('вчора')).toBeUndefined();
-    expect(wallStamp(undefined)).toBeUndefined();
-  });
-});
-
 describe('address lists', () => {
   it('parseCities keeps id, name and громада, and drops empty names', () => {
     const cities = parseCities(fx('pw_cities_all.json'));
@@ -176,81 +162,5 @@ describe('address lists', () => {
     expect(() => parseBuildingGroups({})).toThrow(ToeShapeError);
     expect(() => parseBuildingGroups({ buildingGroups: [{ chergGpv: 12 }] })).toThrow(ToeShapeError);
     expect(() => parseBuildingGroups({ buildingGroups: [null] })).toThrow(ToeShapeError);
-  });
-});
-
-describe('current outage', () => {
-  const ZBARAZH = { cityId: 383, streetId: 3752 };
-  const NAHIRIANKA = { cityId: 22085, streetId: 41475 };
-
-  it('the Збараж emergency counts between 03:31 and 13:00 for house 10 only', () => {
-    const rows = parseOutageRows(ACC_383, 'emergency', ZBARAZH);
-    expect(currentOutageOf(rows, [], '10', at('2026-10-20', 10))).toEqual({
-      kind: 'emergency', text: 'Аварійне відключення', start: '03:31 20.10.2026', end: '13:00 20.10.2026',
-    });
-    expect(currentOutageOf(rows, [], '10', at('2026-10-20', 14))).toBeUndefined();
-    expect(currentOutageOf(rows, [], '10', at('2026-10-20', 3, 30))).toBeUndefined();
-    expect(currentOutageOf(rows, [], '1', at('2026-10-20', 10))).toBeUndefined();
-  });
-
-  it('never keeps koment', () => {
-    const rows = parseOutageRows(ACC_383, 'emergency', ZBARAZH);
-    expect(JSON.stringify(rows)).not.toContain('Пошкодження');
-  });
-
-  it('a planned row counts only while it runs', () => {
-    const planned = parseOutageRows(PLANNED_22085, 'planned', NAHIRIANKA);
-    expect(currentOutageOf([], planned, '1', at('2026-10-21', 9))).toEqual({
-      kind: 'planned', text: 'Планові роботи', start: '08:00 21.10.2026', end: '17:00 21.10.2026',
-    });
-    expect(currentOutageOf([], planned, '1', at('2026-10-20', 17, 30))).toBeUndefined();
-  });
-
-  it('emergency wins over planned', () => {
-    const emergency = parseOutageRows(ACC_383, 'emergency', ZBARAZH);
-    const planned = parseOutageRows(PLANNED_22085, 'planned', NAHIRIANKA).map((r) => ({ ...r, houses: ['10'] }));
-    expect(currentOutageOf(emergency, planned, '10', at('2026-10-20', 10))?.kind).toBe('emergency');
-    expect(currentOutageOf([], planned, '10', at('2026-10-20', 10))?.kind).toBe('planned');
-  });
-
-  it('matches the house exactly in a comma list', () => {
-    const body = structuredClone(ACC_383) as any;
-    body['hydra:member'][0].buildingNames = ', 1, 1-Б, 10 , 12';
-    const rows = parseOutageRows(body, 'emergency', ZBARAZH);
-    expect(currentOutageOf(rows, [], '10', at('2026-10-20', 10))?.kind).toBe('emergency');
-    expect(currentOutageOf(rows, [], '1-б', at('2026-10-20', 10))).toBeUndefined();
-    expect(currentOutageOf(rows, [], '', at('2026-10-20', 10))).toBeUndefined();
-  });
-
-  it('an emergency without an end counts once it has started; a planned one without an end does not', () => {
-    const body = structuredClone(ACC_383) as any;
-    body['hydra:member'][0].datePlanIn = null;
-    const rows = parseOutageRows(body, 'emergency', ZBARAZH);
-    expect(currentOutageOf(rows, [], '10', at('2026-10-20', 23))).toEqual({
-      kind: 'emergency', text: 'Аварійне відключення', start: '03:31 20.10.2026',
-    });
-    const planned = parseOutageRows(body, 'planned', ZBARAZH);
-    expect(currentOutageOf([], planned, '10', at('2026-10-20', 10))).toBeUndefined();
-  });
-
-  it('switchSubReason 2 repeats the hourly schedule and is skipped; 1 and 3 are emergencies', () => {
-    const withReason = (v: number) => {
-      const body = structuredClone(ACC_383) as any;
-      body['hydra:member'][0].switchSubReason = v;
-      return currentOutageOf(parseOutageRows(body, 'emergency', ZBARAZH), [], '10', at('2026-10-20', 10));
-    };
-    expect(withReason(2)).toBeUndefined();
-    expect(withReason(1)?.kind).toBe('emergency');
-    expect(withReason(3)?.kind).toBe('emergency');
-  });
-
-  it('a row of another city or street never counts', () => {
-    expect(parseOutageRows(ACC_383, 'emergency', { cityId: 383, streetId: 1 })).toEqual([]);
-    expect(parseOutageRows(ACC_383, 'emergency', { cityId: 1, streetId: 3752 })).toEqual([]);
-  });
-
-  it('an outage answer of another shape throws', () => {
-    expect(() => parseOutageRows({ 'hydra:member': null }, 'emergency', ZBARAZH)).toThrow(ToeShapeError);
-    expect(() => parseOutageRows('<html>', 'planned', ZBARAZH)).toThrow(ToeShapeError);
   });
 });

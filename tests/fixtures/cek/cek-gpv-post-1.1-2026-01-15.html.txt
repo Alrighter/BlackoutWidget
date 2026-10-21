@@ -1,0 +1,296 @@
+<h2>Графіки відключення</h2> 
+<form method="post"> 
+<label for="queue">Черга:</label> 
+<select id="queue" name="queue" required> 
+<option value="">Виберіть чергу</option> 
+<option value="all" >Усі черги</option> 
+ 
+<option value="1.1" selected> 
+1.1 черга 
+</option> 
+ 
+<option value="1.2" > 
+1.2 черга 
+</option> 
+ 
+<option value="2.1" > 
+2.1 черга 
+</option> 
+ 
+<option value="2.2" > 
+2.2 черга 
+</option> 
+ 
+<option value="3.1" > 
+3.1 черга 
+</option> 
+ 
+<option value="3.2" > 
+3.2 черга 
+</option> 
+ 
+<option value="4.1" > 
+4.1 черга 
+</option> 
+ 
+<option value="4.2" > 
+4.2 черга 
+</option> 
+ 
+<option value="5.1" > 
+5.1 черга 
+</option> 
+ 
+<option value="5.2" > 
+5.2 черга 
+</option> 
+ 
+<option value="6.1" > 
+6.1 черга 
+</option> 
+ 
+<option value="6.2" > 
+6.2 черга 
+</option> 
+ 
+</select> 
+
+ 
+<label for="date">Дата:</label> 
+<input type="date" id="date" name="date" value="2026-01-15" required> 
+<input type="submit" value="Показати"> 
+</form> 
+</div> 
+ 
+ 
+<h2 class="queue-heading" id="heading">Усі відключення</h2> 
+ 
+ 
+<div class="form-container tableView" id="tableView_1.1" style="display: block;"> 
+<h2 class="queue-heading">Черга 1.1</h2> 
+<table> 
+<thead> 
+<tr> 
+<th>Номер</th> 
+<th>Час початку</th> 
+<th>Час закінчення</th> 
+<th>Тривалість (год.)</th> 
+<!--<<th>Дата</th>--> 
+</tr> 
+</thead> 
+<!--<tbody>--> 
+ 
+ 
+<tr> 
+<td><div style="text-align: center;">1</td> 
+<td>02:00:00</td> 
+<td>05:30:00</td> 
+<td>3.5</div></td> 
+<!--<td>2026-01-15</td>--> 
+</div></tr> 
+ 
+<tr> 
+<td><div style="text-align: center;">2</td> 
+<td>09:00:00</td> 
+<td>16:00:00</td> 
+<td>7</div></td> 
+<!--<td>2026-01-15</td>--> 
+</div></tr> 
+ 
+<tr> 
+<td><div style="text-align: center;">3</td> 
+<td>19:30:00</td> 
+<td>23:59:00</td> 
+<td>4.5</div></td> 
+<!--<td>2026-01-15</td>--> 
+</div></tr> 
+ 
+<!--</tbody>--> 
+</table> 
+
+ 
+</div> 
+
+ 
+ 
+ 
+<h1> </h1> 
+<div class="form-container" id="graphicView" style="display: none;"> 
+<h1> </h1> 
+<h1> </h1> 
+<h1> </h1> 
+<h1> </h1> 
+<div class="circle-row"> 
+<div class="circle-container"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>1.1</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+
+ 
+<div class="circle-container-2"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>1.2</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+</div> 
+
+ 
+<div class="circle-row"> 
+<div class="circle-container-3"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>2.1</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+
+ 
+<div class="circle-container-4"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>2.2</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+</div> 
+
+ 
+<div class="circle-row"> 
+<div class="circle-container-5"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>3.1</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+
+ 
+<div class="circle-container-6"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>3.2</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+</div> 
+
+ 
+<div class="circle-row"> 
+<div class="circle-container-7"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>4.1</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+
+ 
+<div class="circle-container-8"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>4.2</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+</div> 
+
+ 
+<div class="circle-row"> 
+<div class="circle-container-9"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>5.1</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+
+ 
+<div class="circle-container-10"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>5.2</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+</div> 
+
+ 
+<div class="circle-row"> 
+<div class="circle-container-11"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>6.1</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+
+ 
+<div class="circle-container-12"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>6.2</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+</div> 
+
+ 
+ 
+</div> 
+
+ 
+<div style="display: flex; justify-content: center; align-items: center; height: 400px; padding-top: 50px;"> 
+ 
+ 
+<div class="circle-container"> 
+<div class="circle-center"> 
+<p>ГПВ</p> 
+<h1>ЧЕРГА</h1> 
+<h1>1.1</h1> 
+<p>ПРАТ "ЦЕК"</p> 
+</div> 
+<div class="circle-ticks"></div> 
+</div> 
+ 
+ 
+
+ 
+ 
+ 
+</div> 
+
+ 
+ 
+ 
+
+ 
+ 

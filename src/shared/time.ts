@@ -84,3 +84,9 @@ export function parseDtekDateTime(s: string): Date | undefined {
   const date = kyivWallTimeToInstant(key, h * 60 + mi);
   return kyivDateKey(date) === key ? date : undefined;
 }
+
+/** 'HH:MM DD.MM.YYYY' of an instant, in Kyiv time. */
+export function kyivStamp(d: Date): string {
+  const [y, m, day] = kyivDateKey(d).split('-');
+  return `${formatHM(d)} ${day}.${m}.${y}`;
+}

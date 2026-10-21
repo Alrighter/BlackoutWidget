@@ -1,16 +1,13 @@
 import { formatHM, kyivDateKey } from '../../../shared/time';
 import type { Slot } from '../../../shared/types';
 import { daySlots } from '../lines';
+import { instant, isInt, isObj, ShapeError } from '../shape';
 
 /**
  * A Миколаївобленерго answer of a shape we do not know. The message is a fixed reason of ours, never response text.
  * No day with outages has been seen live yet (mykolaiv.md §1.6), so only the documented shape is taken.
  */
-export class MkoeShapeError extends Error {}
-
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
-const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
+export class MkoeShapeError extends ShapeError {}
 
 function fail(reason: string): never {
   throw new MkoeShapeError(reason);
@@ -25,15 +22,6 @@ const TYPES: Record<string, { rank: number; slot: Slot }> = {
   OFF: { rank: 2, slot: 'off' },
   PROBABLY_OFF: { rank: 1, slot: 'maybe-off' },
 };
-
-/** An instant with its zone (`Z` or an offset): a bare wall time would be read in the machine's zone. */
-const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
-
-function instant(v: unknown): Date | undefined {
-  if (typeof v !== 'string' || !INSTANT.test(v)) return undefined;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
 
 interface Entry { slot: number; queueId: number; type: string; updatedAt?: Date }
 interface Row { date: string; entries: Entry[] }

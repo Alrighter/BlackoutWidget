@@ -20,9 +20,9 @@ const OUTAGE_NOTE = 'Зараз для цього будинку діє відк
 /** A street of houses 1..n, each on one line. */
 const street = (n: number): HouseInfo[] => Array.from({ length: n }, (_, i) => ({ house: String(i + 1), outageActive: false, lines: [two[0].lines[0]] }));
 const tabbable = () => screen.getAllByRole('radio').filter(r => r.tabIndex === 0).map(r => r.textContent);
-async function toHouseStep(user: UserEvent) {
+async function toHouseStep(user: UserEvent, region = /Київська область/) {
   // D4: the only supported source, as a region card, picked already.
-  expect(await screen.findByRole('radio', { name: /Київська область/, checked: true })).toBeInTheDocument();
+  expect(await screen.findByRole('radio', { name: region, checked: true })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   await user.type(await screen.findByRole('combobox', { name: 'Місто або село' }), 'Біла');
   expect(screen.queryByText('с-ще Козин')).toBeNull();
@@ -393,4 +393,39 @@ test('a house without linesPending never calls houseLines', async () => {
   await user.click(screen.getByRole('button', { name: 'Далі' }));
   expect(await screen.findByText('Лінія 1 · черга 1.2')).toBeInTheDocument();
   expect(houseLines).not.toHaveBeenCalled();
+});
+
+describe('a house with no lines: its own note, or the provider hint', () => {
+  const DNEM = [{ id: 'dtek-dnem', displayName: 'ДТЕК Дніпровські електромережі' }];
+  async function openNoLines(houses: HouseInfo[], providerList: { id: string; displayName: string }[], region: RegExp) {
+    const api = mockApi(houses) as unknown as { listProviders: ReturnType<typeof vi.fn> };
+    api.listProviders = vi.fn(async () => providerList);
+    const user = userEvent.setup();
+    render(<SetupWizard api={api as unknown as RendererApi} autostart widgetStyle="compact" onDone={() => {}} />);
+    await toHouseStep(user, region);
+    await user.click(await screen.findByText('40'));
+  }
+  test('a house note replaces the generic one, still blocked', async () => {
+    const note = 'Цей будинок відключає ДТЕК — оберіть «ДТЕК Дніпровські електромережі»';
+    await openNoLines([{ house: '40', outageActive: false, lines: [], note }], DNEM, /Дніпропетровська область/);
+    expect(screen.getByText(note)).toBeInTheDocument();
+    expect(screen.queryByText(/не публікує/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Далі' })).toBeDisabled();
+  });
+  test('DTEK Dnipro adds the pointer to ЦЕК', async () => {
+    await openNoLines([{ house: '40', outageActive: false, lines: [] }], DNEM, /Дніпропетровська область/);
+    expect(screen.getByText('Для цього будинку ДТЕК не публікує графік відключень. Якщо ваш будинок обслуговує ЦЕК, оберіть «ПЕЕМ «ЦЕК»»')).toBeInTheDocument();
+  });
+  test('another DTEK site keeps today\'s text', async () => {
+    await openNoLines([{ house: '40', outageActive: false, lines: [] }], [{ id: 'dtek-krem', displayName: 'ДТЕК Київські регіональні електромережі' }], /Київська область/);
+    expect(screen.getByText(NO_SCHEDULE)).toBeInTheDocument();
+  });
+  test('a note of one house is gone after picking another', async () => {
+    const note = 'Цей будинок відключає ДТЕК — оберіть «ДТЕК Дніпровські електромережі»';
+    const houses: HouseInfo[] = [{ house: '40', outageActive: false, lines: [], note }, { house: '41', outageActive: false, lines: [] }];
+    await openNoLines(houses, [{ id: 'dtek-krem', displayName: 'ДТЕК Київські регіональні електромережі' }], /Київська область/);
+    await userEvent.setup().click(screen.getByText('41'));
+    expect(screen.queryByText(note)).toBeNull();
+    expect(screen.getByText(NO_SCHEDULE)).toBeInTheDocument();
+  });
 });
