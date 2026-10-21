@@ -20,9 +20,14 @@ const providerId = arg('--provider') ?? 'dtek-krem';
 const settleMs = Number(arg('--settle') ?? '20') * 1000;
 if (process.argv.includes('--no-gpu')) app.disableHardwareAcceleration();
 
-// An uncaught error must end the run with a console line, never with Electron's error dialog on the desktop.
+// An uncaught error or rejection must end the run with a console line, never with Electron's error dialog on the desktop.
 process.on('uncaughtException', err => {
   console.log(`FAILED uncaught: ${err.message}`);
+  removeSmokeProfile(profile, PROFILE_PREFIX);
+  app.exit(1);
+});
+process.on('unhandledRejection', reason => {
+  console.log(`FAILED unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
   removeSmokeProfile(profile, PROFILE_PREFIX);
   app.exit(1);
 });
