@@ -22,7 +22,7 @@ const CHOICES = {
 };
 const DEFAULTS = {
   target: 'widget', style: 'compact', scenario: 'on', theme: 'dark', view: 'schedule',
-  out: '.superpowers/design-refresh/captures', wallpaper: 'auto', delay: '300', scale: '1',
+  out: '.superpowers/design-refresh/captures', wallpaper: 'auto', delay: '300', scale: '1', locations: '1',
 };
 const WALLPAPERS = ['auto', 'light', 'dark', 'busy', 'none'];
 const FLAGS = new Set(['move-mode']);
@@ -37,7 +37,7 @@ function parseArgs(argv) {
     if (!m) throw new Error(`unexpected argument "${args[i]}"`);
     const [, key, inline] = m;
     if (FLAGS.has(key)) { opts[key] = true; continue; }
-    if (!Object.hasOwn(DEFAULTS, key) && !['now', 'patch', 'stubs', 'exec', 'tag'].includes(key)) throw new Error(`unknown option --${key}`);
+    if (!Object.hasOwn(DEFAULTS, key) && !['now', 'patch', 'stubs', 'exec', 'tag', 'widget-location'].includes(key)) throw new Error(`unknown option --${key}`);
     const value = inline ?? args[++i];
     if (value === undefined) throw new Error(`--${key} needs a value`);
     opts[key] = value;
@@ -47,6 +47,8 @@ function parseArgs(argv) {
     for (const v of opts[key]) if (!CHOICES[key].includes(v)) throw new Error(`--${key} ${v}: one of ${CHOICES[key].join(', ')}, all`);
   }
   if (!WALLPAPERS.includes(opts.wallpaper)) throw new Error(`--wallpaper: one of ${WALLPAPERS.join(', ')}`);
+  if (!['1', '2'].includes(opts.locations)) throw new Error('--locations: 1 or 2');
+  opts.locations = Number(opts.locations);
   for (const key of ['delay', 'scale']) {
     opts[key] = Number(opts[key]);
     if (!(opts[key] >= 0)) throw new Error(`--${key} needs a number`);
@@ -111,12 +113,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function capture(job, opts) {
   nativeTheme.themeSource = job.theme;
-  const { nowMs, state, stubs } = buildScenario(job.scenario, { style: job.style, now: opts.now });
+  const { nowMs, state, stubs } = buildScenario(job.scenario, { style: job.style, now: opts.now, locations: opts.locations });
   if (opts.patch) {
-    const { settings, ...rest } = opts.patch;
+    // `location`: merged into the first LocationState (e.g. {"phase":"captcha"}); the rest into the AppState.
+    const { settings, location, ...rest } = opts.patch;
     Object.assign(state, rest);
     if (settings) Object.assign(state.settings, settings);
+    if (location) Object.assign(state.locations[0], location);
   }
+  // As widgetStateOf in src/main/compose-state.ts: the widget gets its own location only (null for an id that is gone).
+  const own = state.locations.find(l => l.location.id === (opts['widget-location'] ?? state.locations[0]?.location.id));
+  const widgetState = own ? { location: own, showName: state.locations.length > 1 } : null;
   if (opts.stubs) Object.assign(stubs, opts.stubs);
   const widget = job.target === 'widget';
   const [width, height] = widget ? WIDGET_SIZES[job.style] : APP_SIZE;
@@ -135,7 +142,7 @@ async function capture(job, opts) {
   let timer;
   try {
     configs.set(wc.id, {
-      nowMs, state, stubs, moveMode: opts['move-mode'] === true,
+      nowMs, state, widget: widgetState, stubs, moveMode: opts['move-mode'] === true,
       wallpaper: { kind: opts.wallpaper === 'auto' ? job.theme : opts.wallpaper, width, height },
     });
     wc.on('console-message', e => { if (e.level === 'error') errors.push(e.message); });
