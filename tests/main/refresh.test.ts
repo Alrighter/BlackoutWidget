@@ -16,20 +16,27 @@ const place = (store: AppStore, name: string, address: Address | null = addr) =>
 function setup(fetch: () => Promise<ScheduleSnapshot>, opts: { cached?: ScheduleSnapshot } = {}) {
   const store = newStore();
   const loc = place(store, 'Дім');
+  const second = place(store, 'Дача'); // same address, never refreshed: must stay untouched
   if (opts.cached) store.setSnapshot(loc.id, opts.cached);
   const provider = { fetchSnapshot: vi.fn(fetch) } as unknown as ScheduleProvider;
   const svc = new RefreshService({ store, getProvider: () => provider });
-  return { store, provider, svc, id: loc.id, state: () => svc.getStates()[0] };
+  return { store, provider, svc, id: loc.id, otherId: second.id, state: () => svc.getStates()[0], other: () => svc.getStates()[1] };
 }
 test('starts with cached snapshot before any refresh (offline start)', () => {
   const { state } = setup(async () => { throw new Error('offline'); }, { cached: fixtureSnapshot() });
   expect(state().snapshot?.sourceUpdatedAt).toBe('17.10.2026 11:55');
 });
+test('a snapshot cached for A is not shown for B, even with the same address', () => {
+  const { other, state } = setup(async () => fixtureSnapshot(), { cached: fixtureSnapshot() });
+  expect(state().snapshot).not.toBeNull();
+  expect(other().snapshot).toBeNull();
+});
 test('successful refresh saves snapshot, phase ok, emits', async () => {
-  const { svc, store, id, state } = setup(async () => fixtureSnapshot());
+  const { svc, store, id, otherId, state, other } = setup(async () => fixtureSnapshot());
   const seen: string[] = []; svc.onState(() => seen.push(state().phase));
   expect(await svc.refresh(id)).toBe('ok');
   expect(seen).toEqual(['refreshing', 'ok']); expect(store.getSnapshot(id)).not.toBeNull();
+  expect(store.getSnapshot(otherId)).toBeNull(); expect(other()).toMatchObject({ phase: 'idle', snapshot: null });
 });
 test('new sourceUpdatedAt replaces snapshot and emits', async () => {
   let n = 0; const { svc, id, state } = setup(async () => fixtureSnapshot({ sourceUpdatedAt: n++ ? '17.10.2026 14:00' : '17.10.2026 11:55' }));
@@ -37,14 +44,15 @@ test('new sourceUpdatedAt replaces snapshot and emits', async () => {
   expect(state().snapshot?.sourceUpdatedAt).toBe('17.10.2026 14:00');
 });
 test('provider error keeps previous snapshot', async () => {
-  const { svc, id, state } = setup(async () => { throw new ProviderError('Сайт ДТЕК повернув помилку'); }, { cached: fixtureSnapshot() });
+  const { svc, id, state, other } = setup(async () => { throw new ProviderError('Сайт ДТЕК повернув помилку'); }, { cached: fixtureSnapshot() });
   expect(await svc.refresh(id)).toBe('failed');
+  expect(other()).toMatchObject({ phase: 'idle', snapshot: null }); expect(other().lastError).toBeUndefined();
   expect(state()).toMatchObject({ phase: 'error', lastError: 'Сайт ДТЕК повернув помилку' });
   expect(state().snapshot).not.toBeNull();
 });
 test('captcha → phase captcha, outcome failed (it reached the site)', async () => {
-  const { svc, id, state } = setup(async () => { throw new CaptchaRequiredError('x'); });
-  expect(await svc.refresh(id)).toBe('failed'); expect(state().phase).toBe('captcha');
+  const { svc, id, state, other } = setup(async () => { throw new CaptchaRequiredError('x'); });
+  expect(await svc.refresh(id)).toBe('failed'); expect(state().phase).toBe('captcha'); expect(other().phase).toBe('idle');
 });
 test('NetworkError → outcome offline, phase error with the offline message', async () => {
   const { svc, id, state } = setup(async () => { throw new NetworkError('Немає з’єднання з сайтом ДТЕК'); }, { cached: fixtureSnapshot() });
