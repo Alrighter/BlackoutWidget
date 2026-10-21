@@ -118,7 +118,10 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
           )}
         </div>
         {tab === 'schedule' && (
-          <button className="app-refresh" aria-label="Оновити зараз" title="Оновити зараз" onClick={() => void api.refreshNow(id)}>
+          <button className="app-refresh" aria-label="Оновити зараз" title="Оновити зараз" onClick={() => {
+            // A location deleted meanwhile is refused by main; the next state drops it, so there is nothing to show.
+            api.refreshNow(id).catch(() => {});
+          }}>
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></svg>
           </button>
         )}

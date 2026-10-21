@@ -253,6 +253,24 @@ test('the schedule row: «Оновлено о HH:MM» of the selected location\'
   expect(api.refreshNow).toHaveBeenCalledWith('b');
 });
 
+test('«Оновити зараз» for a location main no longer has leaves no unhandled rejection', async () => {
+  const gone = new Error("Error invoking remote method 'refresh:now': Error: Цієї адреси вже немає");
+  // A plain function, not vi.fn: a mock's own bookkeeping handles the promise it returns.
+  const asked: (string | undefined)[] = [];
+  const api = mockApi({ refreshNow: (id?: string) => { asked.push(id); return Promise.reject(gone); } });
+  const unhandled = vi.fn();
+  process.on('unhandledRejection', unhandled);
+  try {
+    view(stateOf(), { api });
+    await userEvent.click(screen.getByRole('button', { name: 'Оновити зараз' }));
+    expect(asked).toEqual(['home']);
+    await new Promise(r => setTimeout(r, 0));
+    expect(unhandled).not.toHaveBeenCalled();
+  } finally {
+    process.off('unhandledRejection', unhandled);
+  }
+});
+
 test('no schedule yet: the row says so', () => {
   view(stateOf([locOf(HOME, null)]));
   expect(screen.getByText('Дані ще не отримано')).toBeInTheDocument();

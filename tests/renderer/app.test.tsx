@@ -107,6 +107,25 @@ test('the tab row: «Графік» selected first, ⟳ beside the tabs refreshe
   expect(f.api.refreshNow).toHaveBeenCalledWith('home');
 });
 
+test('⟳ for a location main no longer has leaves no unhandled rejection', async () => {
+  pinDate();
+  const gone = new Error("Error invoking remote method 'refresh:now': Error: Цієї адреси вже немає");
+  // A plain function, not vi.fn: a mock's own bookkeeping handles the promise it returns.
+  const asked: (string | undefined)[] = [];
+  const f = fake(appState(), { refreshNow: (id?: string) => { asked.push(id); return Promise.reject(gone); } });
+  const unhandled = vi.fn();
+  process.on('unhandledRejection', unhandled);
+  try {
+    render(<App api={f.api} view="schedule" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Оновити зараз' }));
+    expect(asked).toEqual(['home']);
+    await new Promise(r => setTimeout(r, 0));
+    expect(unhandled).not.toHaveBeenCalled();
+  } finally {
+    process.off('unhandledRejection', unhandled);
+  }
+});
+
 test('one location: no switcher', async () => {
   pinDate();
   render(<App api={fake().api} view="schedule" />);

@@ -189,7 +189,10 @@ export function SettingsView({ state, loc, api, ecoflowFormOpen = false, onChang
               <span className="st-row-title">Графік відключень</span>
               <span className="st-row-sub" data-capture="updated">{updatedText(loc.snapshot)}</span>
             </div>
-            <button className="sv-btn st-refresh" onClick={() => void api.refreshNow(id)}>
+            <button className="sv-btn st-refresh" onClick={() => {
+              // A location deleted meanwhile is refused by main; the next state drops it, so there is nothing to show.
+              api.refreshNow(id).catch(() => {});
+            }}>
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></svg>
               Оновити зараз
             </button>
