@@ -4,7 +4,7 @@ import type { LocationActions } from '../../src/main/location-actions';
 import { LocationError } from '../../src/main/store';
 import { IPC } from '../../src/shared/ipc';
 import { NAME_TAKEN, type LocationInput } from '../../src/shared/locations';
-import type { WidgetState } from '../../src/shared/types';
+import type { AppState, WidgetState } from '../../src/shared/types';
 
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), on: vi.fn() } }));
 
@@ -26,8 +26,10 @@ function setup() {
     rename: vi.fn(), remove: vi.fn(), setStyle: vi.fn(), setActualLocation: vi.fn(),
   } satisfies LocationActions;
   const widgetState = { showName: true } as unknown as WidgetState;
+  const appState = { locations: [], settingsLoaded: true } as unknown as AppState;
   const deps = {
     providers: [],
+    getState: vi.fn(() => appState),
     locations,
     refresh: vi.fn(),
     openMainWindow: vi.fn(),
@@ -44,7 +46,7 @@ function setup() {
     if (!found) throw new Error(`no handler for ${channel}`);
     return (found[1] as (e: unknown, ...a: unknown[]) => unknown)({ sender }, ...args);
   };
-  return { deps, widgetA, locations, widgetState, call };
+  return { deps, widgetA, locations, widgetState, appState, call };
 }
 
 test('the location channels', () => {
@@ -64,6 +66,15 @@ describe('widget calls are routed by the sender', () => {
     deps.getWidgetState.mockClear();
     expect(call(IPC.widgetGetState, SENDER_MAIN)).toBeNull();
     expect(deps.getWidgetState).not.toHaveBeenCalled();
+  });
+
+  test('state:get answers the main window with every location, and a widget with null', () => {
+    const { deps, appState, call } = setup();
+    expect(call(IPC.getState, SENDER_MAIN)).toBe(appState);
+    deps.getState.mockClear();
+    // A widget never receives another location's data, so not the whole AppState either.
+    expect(call(IPC.getState, SENDER_A)).toBeNull();
+    expect(deps.getState).not.toHaveBeenCalled();
   });
 
   test('widget:drag reaches the sending widget only, and bad input is ignored', () => {

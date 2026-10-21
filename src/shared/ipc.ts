@@ -52,7 +52,7 @@ export interface ActualLive {
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export interface RendererApi {
-  /** The main window's state: every location. */
+  /** The main window's state: every location. Main answers a widget with null; widgets use getWidgetState. */
   getState(): Promise<AppState>;
   onState(cb: (s: AppState) => void): () => void;
   /** A widget's own state. Main knows the widget by its window, so no id is sent. Null for a widget that is gone. */

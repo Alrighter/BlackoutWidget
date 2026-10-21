@@ -18,7 +18,7 @@ export interface WidgetCalls {
 
 export interface IpcDeps {
   providers: ScheduleProvider[];
-  /** The main window's state: every location, plus the actual-power status. */
+  /** The main window's state: every location, plus the actual-power status. A widget asking gets null. */
   getState(): AppState;
   /** One widget's state, or null for a location that is gone. */
   getWidgetState(locationId: string): WidgetState | null;
@@ -87,7 +87,8 @@ export function registerIpc(deps: IpcDeps): void {
   // A widget's calls keep the event: the widget is the one that owns the sender.
   const widgetOf = (e: { sender: WebContents }) => deps.widgets.find(e.sender);
 
-  handle(IPC.getState, () => deps.getState());
+  // Every location's data, so the main window's only: a widget never receives another location's snapshot.
+  ipcMain.handle(IPC.getState, e => (widgetOf(e) ? null : deps.getState()));
   ipcMain.handle(IPC.widgetGetState, e => {
     const widget = widgetOf(e);
     return widget ? deps.getWidgetState(widget.locationId) : null;
