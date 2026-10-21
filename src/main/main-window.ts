@@ -1,6 +1,6 @@
 import { app, BrowserWindow, nativeTheme } from 'electron';
 import { join } from 'node:path';
-import { IPC, type MainView } from '../shared/ipc';
+import { IPC, type MainNav, type MainView } from '../shared/ipc';
 
 // The page is transparent so Mica shows through on Windows; elsewhere the window paints the mockup's window colour.
 const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#1e2028' : '#eef0f5');
@@ -8,7 +8,7 @@ const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#1e2028' : '#
 export class MainWindow {
   private win: BrowserWindow | null = null;
   private ready = false;
-  private pendingView: MainView | null = null;
+  private pendingNav: MainNav | null = null;
   private quitting = false;
 
   constructor(private readonly preload: string) {
@@ -16,18 +16,20 @@ export class MainWindow {
   }
 
   /**
-   * The window is loaded once and never reloaded. The initial view goes in the query string; later views are
-   * pushed to the renderer (after did-finish-load if it is still loading). No view: only show/focus.
+   * The window is loaded once and never reloaded. The initial view and location go in the query string; later
+   * ones are pushed to the renderer as a MainNav (after did-finish-load if it is still loading). No view: only
+   * show/focus. No location: the window keeps (or starts on) its own selection.
    */
-  open(view?: MainView): void {
+  open(view?: MainView, locationId?: string): void {
     if (!this.win || this.win.isDestroyed()) {
       this.win = this.create();
       this.ready = false;
-      this.pendingView = null;
-      this.load(this.win, view ?? 'schedule');
+      this.pendingNav = null;
+      this.load(this.win, view ?? 'schedule', locationId);
     } else if (view) {
-      if (this.ready) this.win.webContents.send(IPC.navigate, view);
-      else this.pendingView = view;
+      const nav: MainNav = locationId === undefined ? { view } : { view, locationId };
+      if (this.ready) this.win.webContents.send(IPC.navigate, nav);
+      else this.pendingNav = nav;
     }
     const w = this.win;
     if (w.isMinimized()) w.restore();
@@ -62,17 +64,18 @@ export class MainWindow {
     });
     win.webContents.on('did-finish-load', () => {
       this.ready = true;
-      if (this.pendingView) win.webContents.send(IPC.navigate, this.pendingView);
-      this.pendingView = null;
+      if (this.pendingNav) win.webContents.send(IPC.navigate, this.pendingNav);
+      this.pendingNav = null;
     });
     return win;
   }
 
-  private load(win: BrowserWindow, view: MainView): void {
+  private load(win: BrowserWindow, view: MainView, locationId: string | undefined): void {
+    const query: Record<string, string> = locationId === undefined ? { view } : { view, location: locationId };
     const url = process.env.ELECTRON_RENDERER_URL;
     const loading = url
-      ? win.loadURL(`${url}/app.html?view=${view}`)
-      : win.loadFile(join(__dirname, '../renderer/app.html'), { query: { view } });
+      ? win.loadURL(`${url}/app.html?${new URLSearchParams(query)}`)
+      : win.loadFile(join(__dirname, '../renderer/app.html'), { query });
     loading.catch(err => console.error('main window load failed', err));
   }
 }
