@@ -1,8 +1,11 @@
 // Regenerates src/main/providers/ztoe/settlements.data.json from the operator's address form (windows-1251 HTML).
 // Read-only: GET the page for the rem_id list, then POST rem_id=N for each REM, one second apart.
-// Falls back to the saved 2026-10-20 research capture when the site cannot be reached (and says so on stdout).
+// Falls back to the saved 2026-10-20 research capture only when the site cannot be reached, by a network error or an
+// HTTP error status (and says so on stdout). An answer of another shape or count stops the run with its own reason.
 // Usage: node scripts/gen-ztoe-settlements.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PAGE = 'https://www.ztoe.com.ua/unhooking-search.php';
 const OUT = new URL('../src/main/providers/ztoe/settlements.data.json', import.meta.url);
@@ -31,21 +34,30 @@ function options(html, name) {
   return out;
 }
 
-async function request(body) {
-  const res = await fetch(PAGE, body === undefined ? {} : {
-    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body,
-  });
-  if (!res.ok) throw new Error(`${body === undefined ? 'GET' : 'POST'} -> ${res.status}`);
+/** The site could not be reached: a network error or an HTTP error status. Only this falls back to the saved capture. */
+class Unreachable extends Error {}
+
+async function request(fetchFn, body) {
+  const method = body === undefined ? 'GET' : 'POST';
+  let res;
+  try {
+    res = await fetchFn(PAGE, body === undefined ? {} : {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body,
+    });
+  } catch (e) {
+    throw new Unreachable(`${method}: ${e.message}`);
+  }
+  if (!res.ok) throw new Unreachable(`${method} -> ${res.status}`);
   return cp1251.decode(await res.arrayBuffer());
 }
 
-async function live() {
-  const rems = options(await request(), 'rem_id');
+async function live(fetchFn, pause) {
+  const rems = options(await request(fetchFn), 'rem_id');
   if (rems.length !== 19) throw new Error(`expected 19 REMs, got ${rems.length}`);
   const rows = [];
   for (const rem of rems) {
-    await sleep(1000);
-    const list = options(await request(new URLSearchParams({ rem_id: String(rem.id) }).toString()), 'naspunkt_id');
+    await pause(1000);
+    const list = options(await request(fetchFn, new URLSearchParams({ rem_id: String(rem.id) }).toString()), 'naspunkt_id');
     for (const n of list) rows.push({ id: n.id, name: n.name, remId: rem.id, rem: rem.name });
   }
   return rows;
@@ -63,23 +75,34 @@ function fallback() {
   return { rows, remCount: rems.length };
 }
 
-let rows;
-let source = 'live';
-try {
-  rows = await live();
-} catch (e) {
-  source = `fallback (site unreachable: ${e.message})`;
-  rows = fallback().rows;
+/**
+ * The settlements live, or from the saved capture when the site cannot be reached. Any other failure of the live run (an
+ * answer of another shape or count) is thrown with its own reason. `fetch`, `sleep` and `fallback` are for the tests.
+ */
+export async function settlementRows({ fetch: fetchFn = fetch, sleep: pause = sleep, fallback: saved = fallback } = {}) {
+  try {
+    return { rows: await live(fetchFn, pause), source: 'live' };
+  } catch (e) {
+    if (!(e instanceof Unreachable)) throw e;
+    return { rows: saved().rows, source: `fallback (site unreachable: ${e.message})` };
+  }
 }
 
-// Check what we write.
-const perRem = new Map();
-for (const r of rows) perRem.set(r.remId, (perRem.get(r.remId) ?? 0) + 1);
-if (perRem.size !== 19) throw new Error(`expected settlements in 19 REMs, got ${perRem.size}`);
-if (new Set(rows.map((r) => r.id)).size !== rows.length) throw new Error('repeated settlement ids');
-if (rows.some((r) => !r.name || !r.rem)) throw new Error('empty name');
-if (rows.length < 1700 || rows.length > 1800) throw new Error(`unexpected total ${rows.length}`);
+async function main() {
+  const { rows, source } = await settlementRows();
 
-rows.sort((a, b) => a.id - b.id);
-writeFileSync(OUT, JSON.stringify(rows, null, 1) + '\n');
-console.log(`${source}: ${perRem.size} REM, ${rows.length} settlements`);
+  // Check what we write.
+  const perRem = new Map();
+  for (const r of rows) perRem.set(r.remId, (perRem.get(r.remId) ?? 0) + 1);
+  if (perRem.size !== 19) throw new Error(`expected settlements in 19 REMs, got ${perRem.size}`);
+  if (new Set(rows.map((r) => r.id)).size !== rows.length) throw new Error('repeated settlement ids');
+  if (rows.some((r) => !r.name || !r.rem)) throw new Error('empty name');
+  if (rows.length < 1700 || rows.length > 1800) throw new Error(`unexpected total ${rows.length}`);
+
+  rows.sort((a, b) => a.id - b.id);
+  writeFileSync(OUT, JSON.stringify(rows, null, 1) + '\n');
+  console.log(`${source}: ${perRem.size} REM, ${rows.length} settlements`);
+}
+
+// Only when run as a script: importing it (the tests do) neither fetches nor writes.
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
