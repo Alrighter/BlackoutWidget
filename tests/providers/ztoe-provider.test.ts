@@ -491,12 +491,22 @@ describe('ZtoeProvider current outage', () => {
     expect(http.to('pw_accidents')).toHaveLength(0);
 
     // Every kind word the bundle writes, in either case. (Their street lists are not routed: the check fails softly.)
-    for (const kind of ['с. ', 'Село ', 'селище ', 'Селище ', 'місто ', 'Місто ', 'м. ']) {
-      const s = ztoeSettlements().find((x) => x.name.startsWith(kind))!;
+    // Each is a settlement no other of its РЕМ ends in the same name, so it has no namesake there (R10).
+    const list = ztoeSettlements();
+    const unique = (s: (typeof list)[number], bare: string) =>
+      !list.some((o) => o.id !== s.id && o.remId === s.remId && o.name.toLowerCase().endsWith(bare.toLowerCase()));
+    for (const kind of ['с. ', 'Село ', 'селище ', 'місто ', 'Місто ', 'м. ']) {
+      const s = list.find((x) => x.name.startsWith(kind) && unique(x, x.name.slice(kind.length)))!;
       const other = setup();
       await other.p.fetchSnapshot({ ...VYSHNEVA_1, city: s.label });
       expect(other.http.to('pw_cities').map((c) => new URL(c.url).searchParams.get('name'))).toEqual([s.name.slice(kind.length)]);
     }
+    // «Селище » starts one name only, «Селище Бондарі», which «Село Бондарі» and «с. Бондарі» of its РЕМ share: no lookup.
+    const bondari = list.filter((x) => x.name.startsWith('Селище '));
+    expect(bondari.map((x) => x.name)).toEqual(['Селище Бондарі']);
+    const shared = setup();
+    await shared.p.fetchSnapshot({ ...VYSHNEVA_1, city: bondari[0].label });
+    expect(shared.http.calls.filter((c) => c.url.startsWith(API))).toHaveLength(0);
 
     const area = ztoeSettlements().find((s) => s.id === 16671)!;
     expect(area.name).toBe('с/рада Березівська');
@@ -504,6 +514,34 @@ describe('ZtoeProvider current outage', () => {
     const snap = await council.p.fetchSnapshot({ ...VYSHNEVA_1, city: area.label });
     expect(snap.days).toEqual([{ date: '2026-10-20', slots: OCT20_5_1 }]);
     expect(council.http.calls.filter((c) => c.url.startsWith(API))).toHaveLength(0);
+  });
+
+  it('two settlements of one РЕМ with one bare name are never looked up: no namesake\'s banner (R10)', async () => {
+    // «с. Червоногранітне» (16273) and «селище Червоногранітне» (16282), both of the Хорошівський РЕМ: inneti would be
+    // asked the same name for both. Its city here has the street, with an emergency running.
+    const http = fakeHttp({
+      'GET /api/pw_cities': (q) => ok(q.get('otg.id') === '5' && q.get('name') === 'Червоногранітне'
+        ? hydra([{ id: 2622, name: 'Червоногранітне' }]) : EMPTY),
+    });
+    for (const id of [16273, 16282]) {
+      const s = ztoeSettlements().find((x) => x.id === id)!;
+      expect(s.remId).toBe(5);
+      const { p, http: h } = setup({ http, now: at('2026-10-20', 14) });
+      const snap = await p.fetchSnapshot({ ...VYSHNEVA_1, city: s.label });
+      expect(snap.days).toEqual([{ date: '2026-10-20', slots: OCT20_5_1 }]);
+      expect('currentOutage' in snap).toBe(false);
+      expect(h.calls.filter((c) => c.url.startsWith(API))).toHaveLength(0);
+      h.calls.length = 0;
+    }
+  });
+
+  it('a bare name unique in its РЕМ still joins, though other РЕМ have it (R10)', async () => {
+    const berezivka = ztoeSettlements().filter((s) => s.name === 'с. Березівка');
+    expect(berezivka.length).toBeGreaterThan(1);
+    expect(berezivka.filter((s) => s.remId === 5).map((s) => s.id)).toEqual([16205]);
+    const { p, http } = setup({ now: at('2026-10-20', 14) });
+    expect((await p.fetchSnapshot(VYSHNEVA_1)).currentOutage).toEqual(EMERGENCY_11_17);
+    expect(http.to('pw_cities')).toHaveLength(1);
   });
 
   it('keeps the place for the run, a miss too, but not a failed lookup', async () => {
@@ -523,6 +561,21 @@ describe('ZtoeProvider current outage', () => {
     expect('currentOutage' in await again.p.fetchSnapshot(VYSHNEVA_1)).toBe(false);
     fail = false;
     expect((await again.p.fetchSnapshot(VYSHNEVA_1)).currentOutage).toEqual(EMERGENCY_11_17);
+  });
+
+  it('an empty РЕМ list is never kept: logged, and the next refresh asks again (T3)', async () => {
+    let empty = true;
+    const http = fakeHttp({ 'GET /api/pw_otgs': () => ok(empty ? EMPTY : OTGS) });
+    const { p, log } = setup({ http, now: at('2026-10-20', 14) });
+    const first = await p.fetchSnapshot(VYSHNEVA_1);
+    expect(first.days).toEqual([{ date: '2026-10-20', slots: OCT20_5_1 }]);
+    expect('currentOutage' in first).toBe(false);
+    expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalledWith('ztoe fetchSnapshot: current outage lookup failed', expect.any(ProviderError));
+    expect(http.to('pw_cities')).toHaveLength(0);
+    empty = false;
+    expect((await p.fetchSnapshot(VYSHNEVA_1)).currentOutage).toEqual(EMERGENCY_11_17);
+    expect(http.to('pw_otgs')).toHaveLength(2);
   });
 
   it('a rejected pw_accidents still delivers the schedule', async () => {

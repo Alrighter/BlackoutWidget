@@ -56,6 +56,19 @@ function bareName(name: string): string | undefined {
   return n.replace(KIND, '').trim() || undefined;
 }
 
+/**
+ * Another bundled settlement of the same РЕМ has this bare name («с. Червоногранітне» and «селище Червоногранітне»):
+ * inneti is asked by РЕМ and name only, so it could answer with the other one's record.
+ */
+function namesakeInRem(settlement: ZtoeSettlement, bare: string): boolean {
+  const key = nameKey(bare);
+  return ztoeSettlements().some((s) => {
+    if (s.id === settlement.id || s.remId !== settlement.remId) return false;
+    const other = bareName(s.name);
+    return other !== undefined && nameKey(other) === key;
+  });
+}
+
 /** An inneti РЕМ («Хорошівський РЕМ») is the bundle's РЕМ («Хорошівський») by name. */
 const sameRem = (otg: string, rem: string): boolean => nameKey(otg).replace(/\s*рем$/u, '') === nameKey(rem);
 
@@ -214,10 +227,11 @@ export class ZtoeProvider implements ScheduleProvider {
    * The join by name: the РЕМ's otg; its cities of the settlement's bare name (the API's `name` filter also matches a
    * part of a name, so only an equal name counts); their streets with the street's words. Every such street of one
    * city counts (inneti holds some streets in two spellings); streets in two or more cities, or none, are no place.
+   * A bare name another settlement of the РЕМ shares is no place, without a request: never a namesake's record.
    */
   private async findPlaces(settlement: ZtoeSettlement, words: string): Promise<Place[] | undefined> {
     const bare = bareName(settlement.name);
-    if (!bare) return undefined;
+    if (!bare || namesakeInRem(settlement, bare)) return undefined;
     const otg = (await this.otgList()).find((o) => sameRem(o.name, settlement.rem));
     if (!otg) return undefined;
     const citiesBody = await this.http.json(
@@ -234,10 +248,15 @@ export class ZtoeProvider implements ScheduleProvider {
     return places.length > 0 && places.every((p) => p.cityId === places[0].cityId) ? places : undefined;
   }
 
+  /** inneti's РЕМ list, kept for the run once read. An empty list is unreadable (logged), so it is asked again. */
   private async otgList(): Promise<Rec[]> {
     if (this.otgs) return this.otgs;
     const body = await this.http.json(`${INNETI}/pw_otgs?pagination=false`, INNETI_GET);
-    this.otgs = this.http.read('pw_otgs', () => records(body, 'pw_otgs'));
+    this.otgs = this.http.read('pw_otgs', () => {
+      const otgs = records(body, 'pw_otgs');
+      if (otgs.length === 0) throw new ZtoeShapeError('pw_otgs: none');
+      return otgs;
+    });
     return this.otgs;
   }
 
