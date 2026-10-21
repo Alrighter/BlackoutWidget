@@ -50,3 +50,22 @@ export function resolveByLabel<T>(
   if (accepted.length === 1) return accepted[0];
   throw addressNotFound(company);
 }
+
+export const noGroup = (): undefined => undefined;
+
+/** Labels in localeCompare 'uk' order, for a picker. */
+export const sortedLabels = (labels: readonly string[]): string[] => [...labels].sort((a, b) => a.localeCompare(b, 'uk'));
+
+/**
+ * A list with its labels, index-aligned as `resolveByLabel` needs, in id order: the « (2)» of a repeated label then
+ * follows the record, so a saved label never moves to a namesake when the API lists them in another order.
+ */
+export interface Labeled<T> { items: T[]; labels: string[] }
+
+/** Items in id order (a « (2)» follows its record) with their uniqueLabels; `group` defaults to noGroup. */
+export function labeled<T extends { id: number }>(
+  items: readonly T[], name: (t: T) => string, group: (t: T) => string | undefined = noGroup,
+): Labeled<T> {
+  const byId = [...items].sort((a, b) => a.id - b.id);
+  return { items: byId, labels: uniqueLabels(byId, name, group) };
+}

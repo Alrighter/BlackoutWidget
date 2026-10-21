@@ -639,6 +639,12 @@ describe('LoeProvider current outage', () => {
     expect((await p.fetchSnapshot(VAKHULY)).currentOutage).toEqual({ kind: 'emergency', text: 'Аварійне вимкнення', start: '13:09 20.10.2026' });
   });
 
+  it('a datePlanIn that is present but not an instant skips the row, never an open-ended outage', async () => {
+    const http = fakeHttp({ [`${API}/pw_accidents`]: accidentsOf([{ ...VAKHULY_ROW, datePlanIn: 'скоро' }]) });
+    const { p } = setup({ http, now: () => at('2026-10-21', 9) });
+    expect('currentOutage' in await p.fetchSnapshot(VAKHULY)).toBe(false);
+  });
+
   it('converts the instants to Kyiv time, whatever their offset', async () => {
     const http = fakeHttp({
       [`${API}/pw_accidents`]: accidentsOf([{ ...VAKHULY_ROW, dateEvent: '2026-10-20T10:09:00Z', datePlanIn: '2026-10-20T17:00:00+00:00' }]),

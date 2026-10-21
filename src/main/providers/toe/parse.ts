@@ -1,19 +1,16 @@
-import { kyivWallTimeToInstant } from '../../../shared/time';
-import type { CurrentOutage, Slot } from '../../../shared/types';
+import type { Slot } from '../../../shared/types';
+import { isInt, isObj, ShapeError, type Obj } from '../shape';
 
 // Pure readers of the Тернопільобленерго API (api-poweron.toe.com.ua, API Platform / Hydra). Anything of an unknown
 // shape throws ToeShapeError, whose message is a fixed reason of ours: never a value from the response.
 
-export class ToeShapeError extends Error {
+export class ToeShapeError extends ShapeError {
   override name = 'ToeShapeError';
 }
 
 function fail(reason: string): never {
   throw new ToeShapeError(reason);
 }
-
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** `hydra:member` of a Hydra collection; `null` only where the API uses it for «nothing». */
 function members(body: unknown, what: string, allowNull = false): unknown[] {
@@ -29,13 +26,11 @@ export interface ToeStreet { id: number; name: string }
 /** `queue` is `chergGpv` as written (missing → undefined): the provider classifies it, so a missing one is never «empty». */
 export interface ToeHouseRow { house: string; queue: string | null | undefined }
 
-const isId = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
-
 /** `pw_cities`: id, name and громада. Rows with an empty name are unusable and dropped; no city at all is unreadable. */
 export function parseCities(body: unknown): ToeCity[] {
   const cities: ToeCity[] = [];
   for (const m of members(body, 'pw_cities')) {
-    if (!isObj(m) || !isId(m.id)) fail('pw_cities: row');
+    if (!isObj(m) || !isInt(m.id)) fail('pw_cities: row');
     if (typeof m.name !== 'string' || m.name.trim() === '') continue;
     const otg = isObj(m.otg) && typeof m.otg.name === 'string' && m.otg.name.trim() !== '' ? m.otg.name : undefined;
     cities.push({ id: m.id, name: m.name, ...(otg ? { otg } : {}) });
@@ -46,7 +41,7 @@ export function parseCities(body: unknown): ToeCity[] {
 /** `pw_streets` of one city: id and name. */
 export function parseStreets(body: unknown): ToeStreet[] {
   return members(body, 'pw_streets').map((m) => {
-    if (!isObj(m) || !isId(m.id) || typeof m.name !== 'string') return fail('pw_streets: row');
+    if (!isObj(m) || !isInt(m.id) || typeof m.name !== 'string') return fail('pw_streets: row');
     return { id: m.id, name: m.name };
   });
 }
@@ -130,78 +125,4 @@ export function queueSlots(day: GpvDay, groupId: string): Slot[] {
     const v = t[k];
     return typeof v === 'string' && Object.hasOwn(STATES, v) ? STATES[v] : fail('a_gpv_g: slot value');
   });
-}
-
-// --- Wall-clock stamps -----------------------------------------------------------------------------------------
-
-const WALL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/;
-
-/**
- * 'HH:MM DD.MM.YYYY' from a stamp's digits. TOE writes Kyiv wall clock and labels it «Z» or «+00:00», as its own site
- * shows it: the digits are taken as written, never converted.
- */
-export function wallStamp(iso: string | null | undefined): string | undefined {
-  const m = typeof iso === 'string' ? WALL.exec(iso) : null;
-  return m ? `${m[4]}:${m[5]} ${m[3]}.${m[2]}.${m[1]}` : undefined;
-}
-
-/** The instant of a stamp's digits read as Kyiv wall clock. */
-function wallInstant(iso: string | null | undefined): Date | undefined {
-  const m = typeof iso === 'string' ? WALL.exec(iso) : null;
-  if (!m) return undefined;
-  const [h, mi, s] = [Number(m[4]), Number(m[5]), Number(m[6] ?? 0)];
-  if (h > 23 || mi > 59 || s > 59) return undefined;
-  const d = kyivWallTimeToInstant(`${m[1]}-${m[2]}-${m[3]}`, h * 60 + mi);
-  return Number.isNaN(d.getTime()) ? undefined : new Date(d.getTime() + s * 1000);
-}
-
-// --- Current outage (pw_accidents, pw_accident_planeds) -----------------------------------------------------------
-
-export type OutageKind = 'emergency' | 'planned';
-/** One outage row, reduced to what is needed. `koment` is never read. */
-export interface OutageRow { kind: OutageKind; houses: string[]; start: string; end?: string }
-
-const TEXT: Record<OutageKind, string> = { emergency: 'Аварійне відключення', planned: 'Планові роботи' };
-/** `switchSubReason` 2 is the hourly schedule itself (the widget already shows it). */
-const SCHEDULE_REASON = 2;
-
-const idOf = (v: unknown): unknown => (isObj(v) ? v.id : undefined);
-
-/**
- * The rows of one outage list that belong to this city and street (the query filters by them; a row of another place
- * never counts even if the filter were ignored). Only `city.id`, `street.id`, `buildingNames`, `dateEvent`,
- * `datePlanIn` and `switchSubReason` are read.
- */
-export function parseOutageRows(body: unknown, kind: OutageKind, place: { cityId: number; streetId: number }): OutageRow[] {
-  const rows: OutageRow[] = [];
-  for (const m of members(body, kind)) {
-    if (!isObj(m)) continue;
-    if (idOf(m.city) !== place.cityId || idOf(m.street) !== place.streetId) continue;
-    if (kind === 'emergency' && m.switchSubReason === SCHEDULE_REASON) continue;
-    if (typeof m.buildingNames !== 'string' || typeof m.dateEvent !== 'string') continue;
-    const end = typeof m.datePlanIn === 'string' ? m.datePlanIn : undefined;
-    rows.push({
-      kind, houses: m.buildingNames.split(',').map((h) => h.trim()).filter((h) => h !== ''),
-      start: m.dateEvent, ...(end ? { end } : {}),
-    });
-  }
-  return rows;
-}
-
-/** Running now: started, and not yet past its planned end. Only an emergency may have no end (it counts once started). */
-function running(row: OutageRow, now: Date): boolean {
-  const start = wallInstant(row.start);
-  if (!start || start.getTime() > now.getTime()) return false;
-  if (row.end === undefined) return row.kind === 'emergency';
-  const end = wallInstant(row.end);
-  return !!end && now.getTime() <= end.getTime();
-}
-
-/** The outage for this house now: an emergency wins over planned works. */
-export function currentOutageOf(emergency: OutageRow[], planned: OutageRow[], house: string, now: Date): CurrentOutage | undefined {
-  const row = [...emergency, ...planned].find((r) => house !== '' && r.houses.includes(house) && running(r, now));
-  if (!row) return undefined;
-  const start = wallStamp(row.start);
-  const end = wallStamp(row.end);
-  return { kind: row.kind, text: TEXT[row.kind], ...(start ? { start } : {}), ...(end ? { end } : {}) };
 }

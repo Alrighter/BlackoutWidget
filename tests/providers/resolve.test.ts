@@ -1,4 +1,4 @@
-import { AddressNotFoundError, addressNotFound, resolveByLabel, uniqueLabels } from '../../src/main/providers/resolve';
+import { AddressNotFoundError, addressNotFound, labeled, noGroup, resolveByLabel, sortedLabels, uniqueLabels } from '../../src/main/providers/resolve';
 import { ProviderError } from '../../src/main/providers/types';
 
 interface It { id: number; name: string; g: string }
@@ -71,4 +71,27 @@ test('a saved group that matches the only item resolves', () => {
 test('a numeric suffix never matches in rule 2', () => {
   const items = [{ n: 'вул. Шевченка' }];
   expect(() => resolveByLabel(items, ['вул. Шевченка'], 'вул. Шевченка (2)', t => t.n, () => undefined, 'Х')).toThrow(AddressNotFoundError);
+});
+
+test('labeled lists the items in id order, a « (2)» following its record', () => {
+  const r = labeled([{ id: 5, name: 'A' }, { id: 2, name: 'A' }], (x) => x.name);
+  expect(r.items.map((x) => x.id)).toEqual([2, 5]);
+  expect(r.labels).toEqual(['A', 'A (2)']);
+});
+test('labeled uses the group to tell namesakes apart', () => {
+  const r = labeled([{ id: 1, name: 'A', g: 'X' }, { id: 2, name: 'A', g: 'Y' }], (x) => x.name, (x) => x.g);
+  expect(r.labels).toEqual(['A (X)', 'A (Y)']);
+});
+test('rule 2(b) with two items sharing name and group, with a saved «A (G)», is not found', () => {
+  // The saved label is not an exact one (the list was labelled without groups), so only rule 2(b) can match it: both items do.
+  const r = labeled([{ id: 1, name: 'A', g: 'G' }, { id: 2, name: 'A', g: 'G' }], (x) => x.name);
+  expect(() => resolveByLabel(r.items, r.labels, 'A (G)', (x) => x.name, (x) => x.g, 'Х')).toThrow(AddressNotFoundError);
+});
+test('a group suffix differing only by U+2019 vs U+0027 resolves', () => {
+  const r = labeled([{ id: 1, name: 'A', g: 'Мар’янівська' }, { id: 2, name: 'B', g: 'Інша' }], (x) => x.name, (x) => x.g);
+  expect(resolveByLabel(r.items, r.labels, "A (Мар'янівська)", (x) => x.name, (x) => x.g, 'Х').id).toBe(1);
+});
+test('noGroup is undefined and sortedLabels sorts for uk', () => {
+  expect(noGroup()).toBeUndefined();
+  expect(sortedLabels(['Яр', 'Аб', 'Ґ', 'Бо'])).toEqual(['Аб', 'Бо', 'Ґ', 'Яр']);
 });
