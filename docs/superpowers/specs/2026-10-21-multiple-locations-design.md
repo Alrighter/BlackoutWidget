@@ -75,7 +75,7 @@ interface Location {
 interface Settings {
   /** 0–5, in the order created. `locations[0]` is the tray's location. */
   locations: Location[];
-  /** The location EcoFlow belongs to; null while there are no locations. */
+  /** The location EcoFlow belongs to; null with no locations, or after that location was deleted. */
   actualLocationId: string | null;
   autostart: boolean;
   actualSource: ActualSourceConfig | null;
@@ -118,6 +118,17 @@ The cache is one file, `snapshots.json`, of the form `{ [locationId]: ScheduleSn
 - `addLocation` and `removeLocation`, built the same way.
 
 The widget's position save (`WidgetWindow.commit`) and its style change write through `updateLocation`, not through top-level keys. Adding a location is one call that carries the name, address and style together. The wizard no longer saves the address and the style in two calls, so a failure can never leave a half-made location with a live widget.
+
+### Settings that cannot be read at start *(my call)*
+
+At login a settings file is sometimes locked for a moment, by OneDrive or an antivirus. While no read has succeeded, `getSettings()` returns the display fallback, which has `locations: []`. That must not look like a new install.
+
+- **The store reports it.** The store tells the caller whether the last read succeeded. The first-setup wizard opens only after a successful read with no locations. While the file is unreadable, the main window shows its normal error state instead.
+- **Main follows the settings.** Main keeps its widgets and schedulers in step with `settings.locations` after every successful read, not only at start, add and delete:
+  - A location id in settings with no widget gets one.
+  - A widget whose id is no longer in settings is disposed.
+
+  So «Дім» comes back by itself once a locked file reads. A deleted location never comes back, because its id is gone from the file.
 
 ## State that windows get
 
@@ -191,13 +202,18 @@ There is one `WidgetWindow` per location:
 - **The glass updater.** `startGlassUpdater` takes one widget, so each widget gets its own updater, stopped with that widget.
 - **The desktop pinner.** `Win32DesktopPinner` holds one `win`, `progman` and `rect`, plus a watch timer. A second `pin()` takes over the first widget's slot, and the first widget would no longer be re-attached after an explorer restart. So each widget gets its own pinner, disposed with it *(my call)*.
 
-### Placement of a new widget
+### Placement *(my call)*
 
-- **First free spot.** The new widget goes on the display of `locations[0]`'s widget, else the primary display. It takes the first spot in that display's work area that overlaps no existing widget:
-  1. directly below the previous widget, 16 DIP apart, right edges aligned;
-  2. otherwise, directly to the left of it, top edges aligned.
-- **No room.** If neither fits, the widget goes to the default corner, moved 24 DIP down and left once for each widget already there.
-- **Saved at once.** The spot is saved to the location immediately *(my call)*.
+One helper finds a free spot. It is given a display's work area, the widget's size and the rectangles of the other widgets.
+
+- **The search.** It starts at today's default corner (top-right, 24 DIP margin) and scans in 16-DIP steps, down first, then one column to the left. It returns the first spot with no overlap and at least 16 DIP between this widget and every other.
+- **When the area is full.** It falls back to the default corner. Overlap is accepted only then.
+
+When it runs:
+
+- **Adding a location.** It runs on the display of `locations[0]`'s widget, else on the primary display. The spot is saved to the new location at once.
+- **A widget whose display is gone** today goes to the primary display's corner, and that position is not saved. With several widgets, each one goes to its own free spot, found in location order. The position is still not saved, so the widget returns when the display comes back.
+- **A style change** keeps the widget's top-left corner, as today, even if the bigger size now overlaps a neighbour. Moving the widget is up to the user.
 
 ### Name on the widget
 
@@ -227,6 +243,7 @@ There is one `WidgetWindow` per location:
   - The location name, with «Перейменувати» for an inline edit using the name rules above.
   - The address line and «Змінити адресу». This runs today's wizard and keeps the name, style and position.
   - «Видалити», hidden while only one location exists. It asks first: «Видалити локацію «Батьки»? Її віджет зникне з робочого столу.»
+  - Deleting `locations[0]` makes the next location the first one, and the tray follows it *(my call)*.
   - Below the card, «Додати адресу» starts the wizard for a new location. At 5 locations the button is disabled with «Можна додати до 5 адрес».
 - **Wizard.**
   - The steps are the same as today.
@@ -256,7 +273,11 @@ There is one `WidgetWindow` per location:
 ## EcoFlow
 
 - `actualLocationId` is set by the migration, and by the very first location when one is created from scratch.
-- Deleting that location moves it to the first remaining location *(my call)*.
+- **Deleting that location** leaves `actualLocationId` null *(my call)*. The station is then shown on no location, so nothing guesses where it stands.
+  - The EcoFlow card says «Оберіть, де стоїть станція».
+  - The card shows the picker even when only one location is left.
+  - Picking a location sets `actualLocationId` again.
+- **The history stays the station's own** when the picker moves it to another location *(my call)*. It is carried over: not cut and not tagged. The user is saying «the station stands here», so the new location shows the station's past week, and its mismatch text compares the readings with this location's schedule. `HistoryStore` and `ActualStateService` stay unchanged.
 - The actual-power status reaches only that location's view everywhere: the widget, the schedule tab and the tray. That includes the status itself, `actualStrip`, the mismatch text and «з HH:MM».
 - The actual source, its secrets, history and Bluetooth link are unchanged, one for the app.
 
@@ -273,14 +294,15 @@ There is one `WidgetWindow` per location:
 - **Name rules and the 5-location limit.**
 - **`updateLocation`** keeps a concurrent change: a position save landing between a read and a rename.
 - **Placement:**
-  - below the previous widget;
-  - to its left;
-  - the cascade;
-  - no overlap.
+  - the first free spot, with the 16-DIP gap;
+  - a full work area falls back to the corner;
+  - when a display is lost, each widget gets its own spot, and nothing is saved;
+  - a style change keeps the top-left corner.
+- **Unreadable settings at start:** no first-setup wizard opens. Widgets and schedulers appear once the file reads, and a deleted location never comes back.
 - **Tray tooltip and menu** with 1 and with 2+ locations, including the 127-character cut.
 - **Per-location schedulers:** a failing location does not change a healthy one's next run. Starts on the same provider are staggered.
 - **Late results** are dropped after a delete or an address change.
-- **EcoFlow** appears only on its location, and moves when that location is deleted.
+- **EcoFlow** appears only on its location. Deleting that location leaves it unassigned, and the picker brings it back.
 - **Widget disposal:** no rebuild after `closed`, and the listeners, glass updater and pinner are stopped.
 - **IPC** maps widget calls by sender.
 
