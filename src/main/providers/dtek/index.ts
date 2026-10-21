@@ -2,14 +2,21 @@ import { providerDisplayName, providerSingleCity } from '../../../shared/provide
 import { kyivDateKey } from '../../../shared/time';
 import type { Address, HouseInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
+import { loggable } from '../http-source';
 import {
   CaptchaRequiredError, NetworkError, OFFLINE_MESSAGE, ProviderError, type PageSession, type ScheduleProvider,
 } from '../types';
+import {
+  FEEDS_FAILED_TEXT, HOUSE_CHECK_MS, PAGE_GAP_MS, PAGE_LINGER_MS, type FeedResult, type ScheduleFeed,
+} from './feeds';
 import {
   deriveLines, factDays, hasActiveOutage, hasOutageFields, parseCurrentOutage, parseHomeNumResponse, parseHouses,
   queueLabelFromId, type DtekFact, type DtekHomeNumResponse,
 } from './parse';
 import { READ_CITIES, READ_FACT, getHomeNumScript, readStreetsScript } from './page-scripts';
+import { feedSnapshot, houseCheckDue, pageAllowed, pageCause } from './route';
+
+export { FEEDS_FAILED_TEXT };
 
 interface FactState { fact: DtekFact; schNames: Record<string, string> }
 
@@ -23,77 +30,196 @@ export const DTEK_SITES: ReadonlyArray<DtekSite> = [
   { id: 'dtek-oem', cityLevel: true },
 ];
 
+export interface DtekOptions {
+  /** Tried in order on a refresh. None: every refresh reads the page, as before the feeds. */
+  feeds?: ScheduleFeed[];
+  lingerMs?: number;
+  pageGapMs?: number;
+  houseCheckMs?: number;
+}
+
+/** Why a refresh uses the page (spec §Behaviour, steps 1, 3 and 4). */
+type PageReason = 'house check' | 'emergency' | 'fallback';
+
 export class DtekProvider implements ScheduleProvider {
   readonly id: string;
   readonly displayName: string;
   private state: FactState | null = null;
+  private readonly feeds: ScheduleFeed[];
+  private readonly lingerMs: number;
+  private readonly pageGapMs: number;
+  private readonly houseCheckMs: number;
+  /** When a page use last found the window closed, so opened it (the budget; in memory, per site). */
+  private lastPageOpenAt: number | null = null;
+  /** Page uses running now: the linger is armed when the last one ends. */
+  private pageUses = 0;
+  private linger: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly site: DtekSite, private readonly session: PageSession, private readonly log: Logger = silentLogger,
+    opts: DtekOptions = {},
   ) {
     this.id = site.id;
     this.displayName = providerDisplayName(site.id);
+    this.feeds = opts.feeds ?? [];
+    this.lingerMs = opts.lingerMs ?? PAGE_LINGER_MS;
+    this.pageGapMs = opts.pageGapMs ?? PAGE_GAP_MS;
+    this.houseCheckMs = opts.houseCheckMs ?? HOUSE_CHECK_MS;
   }
 
   listCities(): Promise<string[]> {
     return this.serial('listCities', async () => {
       if (!this.site.cityLevel) return [providerSingleCity(this.id) ?? ''];
-      await this.ready();
-      return this.session.evaluate<string[]>(READ_CITIES);
+      return this.usePage(async () => {
+        await this.ready();
+        return this.session.evaluate<string[]>(READ_CITIES);
+      });
     });
   }
 
   listStreets(city: string): Promise<string[]> {
-    return this.serial('listStreets', async () => {
+    return this.serial('listStreets', () => this.usePage(async () => {
       await this.ready();
       return this.session.evaluate<string[]>(readStreetsScript(this.site.cityLevel ? city : null));
-    });
+    }));
   }
 
   listHouses(city: string, street: string): Promise<HouseInfo[]> {
-    return this.serial('listHouses', async () => {
+    return this.serial('listHouses', () => this.usePage(async () => {
       const resp = await this.homeNum(city, street);
       const { fact, schNames } = this.state!;
       return parseHouses(resp, fact, schNames);
-    });
+    }));
   }
 
-  fetchSnapshot(address: Address): Promise<ScheduleSnapshot> {
-    return this.serial('fetchSnapshot', async () => {
-      const resp = await this.homeNum(address.city, address.street);
-      const { fact, schNames } = this.state!;
-      const entry = resp.data[address.house];
-      if (!entry) throw new ProviderError('Будинок не знайдено у відповіді ДТЕК');
-      // These fields have never been seen filled (spec §4.3): keep the raw values for later parsing work.
-      if (hasOutageFields(entry)) this.log.info(`${this.id}: outage fields for house`, { house: address.house, entry });
-      const lines = deriveLines(entry.sub_type_reason ?? [], fact, schNames);
-      // Always the saved queue: during an outage `lines` lists only the outage's queues (see hasActiveOutage).
-      const groupId = address.groupId;
-      const unknownStatuses = new Set<string>();
-      const { days, note } = factDays(fact, groupId, kyivDateKey(new Date()), s => unknownStatuses.add(s));
-      for (const s of unknownStatuses) this.log.warn(`${this.id}: unknown hour status`, { groupId, status: s });
-      return {
-        providerId: this.id,
-        address,
-        groupId,
-        groupLabel: schNames[groupId] ?? queueLabelFromId(groupId),
-        days,
-        sourceUpdatedAt: fact.update,
-        fetchedAt: new Date().toISOString(),
-        lines,
-        outageActive: hasActiveOutage(entry),
-        currentOutage: parseCurrentOutage(entry),
-        ...(note ? { note } : {}),
-      };
-    });
+  fetchSnapshot(address: Address, previous: ScheduleSnapshot | null = null): Promise<ScheduleSnapshot> {
+    return this.serial('fetchSnapshot', () => this.route(address, previous));
   }
 
   showVerification(): Promise<void> {
-    return this.session.showForUser();
+    // Not serialized: it runs while a refresh waits on ensureReady. Its end arms the linger like any page use.
+    return this.usePage(() => this.session.showForUser());
   }
 
   dispose(): void {
+    clearTimeout(this.linger);
     this.session.dispose();
+  }
+
+  /**
+   * Spec §Behaviour. 1: the house check, when due and the page is allowed. 2: the feeds in order; the first usable answer
+   * wins. 3: a YASNO emergency asks the page. 4: no feed usable: the page's error, the page, or FEEDS_FAILED_TEXT.
+   * A page failure is held while a feed may still answer, so guard() logs a refresh's error once, as before the feeds.
+   */
+  private async route(address: Address, previous: ScheduleSnapshot | null): Promise<ScheduleSnapshot> {
+    let failed: { reason: PageReason; error: unknown } | undefined; // the page was tried in this run and failed
+    const tryPage = async (reason: PageReason): Promise<ScheduleSnapshot | undefined> => {
+      try {
+        return await this.pageFor(address, reason);
+      } catch (e) {
+        failed = { reason, error: e };
+        return undefined;
+      }
+    };
+
+    if (houseCheckDue(previous, this.houseCheckMs) && this.pageAllowed()) {
+      const snap = await tryPage('house check');
+      if (snap) return snap;
+    }
+
+    let offline = this.feeds.length > 0; // every feed failed for lack of a connection
+    for (const feed of this.feeds) {
+      let result: FeedResult;
+      try {
+        result = await feed.read(address.groupId, new Date());
+      } catch (e) {
+        this.log.warn(`${this.id}: ${feed.tag} failed`, loggable(e));
+        offline &&= e instanceof NetworkError;
+        continue;
+      }
+      offline = false;
+      if (result.usable) {
+        if (failed) this.log.warn(`${this.id}: the page failed (${failed.reason}), using ${feed.tag}`, pageCause(failed.error));
+        return feedSnapshot(this.id, address, previous, result.answer);
+      }
+      this.log.warn(`${this.id}: ${feed.tag} unusable`, { reason: result.reason });
+      if (result.emergency && !failed && this.pageAllowed()) {
+        const snap = await tryPage('emergency');
+        if (snap) return snap;
+      }
+    }
+
+    if (failed) throw failed.error;
+    if (this.pageAllowed()) return this.pageFor(address, 'fallback');
+    throw offline ? new NetworkError(FEEDS_FAILED_TEXT) : new ProviderError(FEEDS_FAILED_TEXT);
+  }
+
+  /** Evaluated at the moment the page would be used. */
+  private pageAllowed(): boolean {
+    return pageAllowed(this.session.isOpen(), this.lastPageOpenAt, this.pageGapMs);
+  }
+
+  private pageFor(address: Address, reason: PageReason): Promise<ScheduleSnapshot> {
+    // With no feeds there is no choice to explain: the log stays as it was before them.
+    if (this.feeds.length > 0) this.log.info(`${this.id}: using the page`, { reason });
+    return this.usePage(() => this.pageSnapshot(address));
+  }
+
+  /** Today's page refresh: the house's lines and outage, and the days, from one getHomeNum. */
+  private async pageSnapshot(address: Address): Promise<ScheduleSnapshot> {
+    const resp = await this.homeNum(address.city, address.street);
+    const { fact, schNames } = this.state!;
+    const entry = resp.data[address.house];
+    if (!entry) throw new ProviderError('Будинок не знайдено у відповіді ДТЕК');
+    // These fields have never been seen filled (spec §4.3): keep the raw values for later parsing work.
+    if (hasOutageFields(entry)) this.log.info(`${this.id}: outage fields for house`, { house: address.house, entry });
+    const lines = deriveLines(entry.sub_type_reason ?? [], fact, schNames);
+    // Always the saved queue: during an outage `lines` lists only the outage's queues (see hasActiveOutage).
+    const groupId = address.groupId;
+    const unknownStatuses = new Set<string>();
+    const { days, note } = factDays(fact, groupId, kyivDateKey(new Date()), s => unknownStatuses.add(s));
+    for (const s of unknownStatuses) this.log.warn(`${this.id}: unknown hour status`, { groupId, status: s });
+    const now = new Date().toISOString();
+    return {
+      providerId: this.id,
+      address,
+      groupId,
+      groupLabel: schNames[groupId] ?? queueLabelFromId(groupId),
+      days,
+      sourceUpdatedAt: fact.update,
+      fetchedAt: now,
+      lines,
+      outageActive: hasActiveOutage(entry),
+      currentOutage: parseCurrentOutage(entry),
+      ...(note ? { note } : {}),
+      houseCheckedAt: now,
+    };
+  }
+
+  /**
+   * Every page operation goes through here. It stops the linger while it runs. Finding the window closed means this use
+   * opens it, which counts toward the budget whether or not the open succeeds. The last use to end arms the linger.
+   */
+  private async usePage<T>(fn: () => Promise<T>): Promise<T> {
+    clearTimeout(this.linger);
+    this.linger = undefined;
+    if (!this.session.isOpen()) this.lastPageOpenAt = Date.now();
+    this.pageUses++;
+    try {
+      return await fn();
+    } finally {
+      if (--this.pageUses === 0) this.armLinger();
+    }
+  }
+
+  private armLinger(): void {
+    const timer = setTimeout(() => {
+      this.linger = undefined;
+      this.session.release();
+      this.state = null; // the next open reads the fact afresh
+    }, this.lingerMs);
+    timer.unref?.();
+    this.linger = timer;
   }
 
   // One operation at a time: no parallel requests to the source; a failure doesn't break the chain.
