@@ -49,3 +49,23 @@ test('creating providers touches no session and makes no request', () => {
   expect(http.fetch).not.toHaveBeenCalled();
   expect(http.isOnline).not.toHaveBeenCalled();
 });
+const MIRROR = (f: string) => `https://raw.githubusercontent.com/Baskerville42/outage-data-ua/main/data/${f}.json`;
+const YASNO = 'https://app.yasno.ua/api/blackout-service/public/shutdowns/regions/25/dsos/902/planned-outages';
+test.each([
+  ['dtek-kem', [YASNO, MIRROR('kyiv')]],
+  ['dtek-krem', [MIRROR('kyiv-region')]],
+  ['dtek-dnem', [MIRROR('dnipro')]],
+  ['dtek-oem', [MIRROR('odesa')]],
+])('%s reads its feeds in order', async (id, urls) => {
+  const { session, http, providers } = setup();
+  http.fetch.mockRejectedValue(new Error('no network'));
+  const address = { providerId: id, city: 'c', street: 's', house: '1', lineIndex: 0, groupId: 'GPV1.1' };
+  const previous = {
+    providerId: id, address, groupId: 'GPV1.1', groupLabel: '1.1', days: [], lines: [],
+    fetchedAt: new Date().toISOString(), houseCheckedAt: new Date(Date.now() - 3600_000).toISOString(),
+  };
+  await providers.find(p => p.id === id)!.fetchSnapshot(address, previous).catch(() => undefined);
+  expect(http.fetch.mock.calls.map(c => c[0])).toEqual(urls);
+  // The fallback is allowed (no page opened yet): the page is asked after the feeds fail.
+  expect(session.ensureReady).toHaveBeenCalled();
+});
