@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { IPC } from '../shared/ipc';
 import { UNKNOWN_LOCATION } from '../shared/locations';
 import { providerSiteUrl } from '../shared/providers';
-import type { AppState, Location, Settings, WidgetStyle } from '../shared/types';
+import type { AppState, Settings, WidgetStyle } from '../shared/types';
 import { WIDGET_SIZES } from '../shared/widget-sizes';
 import { createActualActions, createActualRestart } from './actual/actions';
 import { EcoflowApi } from './actual/ecoflow/api';
@@ -17,8 +17,8 @@ import { ActualStateService, safeActualStatus } from './actual/service';
 import { composeAppState, widgetStateOf } from './compose-state';
 import { FileLogger } from './file-logger';
 import { broadcastState, registerIpc, throttleLive } from './ipc';
-import { guardedKeyed } from './keyed';
 import { createLocationActions } from './location-actions';
+import { LocationRuntime, opensSetupAtBoot } from './location-runtime';
 import { consoleLogger, type Logger } from './log';
 import { MainWindow } from './main-window';
 import { BrowserSession } from './providers/browser-session';
@@ -89,55 +89,48 @@ async function bootstrap(log: Logger): Promise<void> {
 
   app.on('second-instance', () => mainWindow.open());
 
-  // One scheduler per location. The first reconcile with real settings is the boot: its locations start staggered
-  // per provider, each delay used once; a location added later refreshes at once.
-  let bootDelays: Map<string, number> | null = null;
-  const schedulers = guardedKeyed<RefreshScheduler>(log, 'scheduler', id => {
-    const scheduler = new RefreshScheduler(() => service.refresh(id));
-    scheduler.start(bootDelays?.get(id) ?? 0);
-    bootDelays?.delete(id);
-    return scheduler;
-  }, scheduler => scheduler.stop());
-  const triggerAll = (reason: TriggerReason) => { for (const s of schedulers.values()) s?.trigger(reason); };
-
-  // One widget per location, each with its own pinner and, on Windows, its own glass updater.
-  // `unplaced`: the widgets the running reconcile built and has not refit yet.
-  const unplaced = new Set<string>();
-  const widgets = guardedKeyed<{ window: WidgetWindow; stopGlass(): void }>(log, 'widget', id => {
-    const window = new WidgetWindow({
-      locationId: id, store, pinner: createDesktopPinner(log), preload, log,
-      otherBounds: () => liveWidgets().filter(w => w.locationId !== id).map(w => w.getBoundsDip()),
-      quitting: () => quitting,
-    });
-    const stopGlass = process.platform === 'win32' ? startGlassUpdater(window) : () => {};
-    unplaced.add(id);
-    return { window, stopGlass };
-  }, ({ window, stopGlass }, id) => {
-    unplaced.delete(id);
-    safely(`widget: the glass updater could not be stopped for location ${id}`, stopGlass);
-    window.dispose();
+  // One scheduler and one widget per location (location-runtime.ts). The first reconcile with real settings is the
+  // boot: its locations start staggered per provider, each delay used once; a location added later refreshes at once.
+  // Each widget has its own pinner and, on Windows, its own glass updater.
+  const runtime = new LocationRuntime<RefreshScheduler, { window: WidgetWindow; stopGlass(): void }>({
+    log,
+    createScheduler: (id, delayMs) => {
+      const scheduler = new RefreshScheduler(() => service.refresh(id));
+      scheduler.start(delayMs);
+      return scheduler;
+    },
+    disposeScheduler: scheduler => scheduler.stop(),
+    // A create that throws is tried again by the next reconcile, so whatever it built so far is disposed first.
+    createWidget: id => {
+      const pinner = createDesktopPinner(log);
+      let window: WidgetWindow;
+      try {
+        window = new WidgetWindow({
+          locationId: id, store, pinner, preload, log,
+          otherBounds: () => liveWidgets().filter(w => w.locationId !== id).map(w => w.getBoundsDip()),
+          quitting: () => quitting,
+        });
+      } catch (err) {
+        pinner.dispose();
+        throw err;
+      }
+      try {
+        return { window, stopGlass: process.platform === 'win32' ? startGlassUpdater(window) : () => {} };
+      } catch (err) {
+        window.dispose();
+        throw err;
+      }
+    },
+    disposeWidget: ({ window, stopGlass }, id) => {
+      safely(`widget: the glass updater could not be stopped for location ${id}`, stopGlass);
+      window.dispose();
+    },
+    startDelays,
+    quitting: () => quitting, // the widgets have closed for good: nothing may build them again
   });
+  const triggerAll = (reason: TriggerReason) => { for (const s of runtime.schedulers()) s.trigger(reason); };
   /** The widget windows, in location order. */
-  const liveWidgets = (): WidgetWindow[] => widgets.values().flatMap(w => (w ? [w.window] : []));
-
-  /**
-   * Keeps a scheduler and a widget for exactly the locations in settings: a location that reads again (a file
-   * locked at login) gets them back, a deleted one is gone for good.
-   */
-  const reconcile = (locations: Location[]) => {
-    if (quitting) return; // the widgets have closed for good: nothing may build them again
-    bootDelays ??= startDelays(locations);
-    const ids = locations.map(l => l.id);
-    schedulers.sync(ids);
-    widgets.sync(ids);
-    // A widget's constructor sees none of the siblings built in the same sync. So the new ones refit now, in
-    // location order: a widget whose display is gone takes a free spot clear of every sibling, before its window
-    // is built there.
-    for (const w of liveWidgets()) {
-      if (unplaced.delete(w.locationId)) safely(`widget: refit failed for location ${w.locationId}`, () => w.refit());
-    }
-    for (const w of liveWidgets()) safely(`widget: could not be shown for location ${w.locationId}`, () => { w.sync(); w.show(); });
-  };
+  const liveWidgets = (): WidgetWindow[] => runtime.widgets().map(w => w.window);
 
   const applyAutostart = () => {
     // Dev runs must never write a bare electron.exe into HKCU Run.
@@ -153,8 +146,8 @@ async function bootstrap(log: Logger): Promise<void> {
   };
   const publish = () => {
     const state = getState();
-    // Only real settings drive the schedulers and widgets: the fallback has no locations.
-    if (state.settingsLoaded) safely('reconciling the locations failed', () => reconcile(state.settings.locations));
+    // Only real settings drive the schedulers and widgets (the runtime skips the fallback, which has no locations).
+    safely('reconciling the locations failed', () => runtime.reconcile(state));
     tray.update(state);
     broadcastState(state, [mainWindow]);
     // A widget gets its own location only.
@@ -214,7 +207,7 @@ async function bootstrap(log: Logger): Promise<void> {
     if (!id) return;
     await findProvider(providers, id).showVerification();
     for (const l of store.getSettings().locations) {
-      if (l.address.providerId === id) schedulers.get(l.id)?.trigger('manual');
+      if (l.address.providerId === id) runtime.scheduler(l.id)?.trigger('manual');
     }
   };
 
@@ -233,7 +226,7 @@ async function bootstrap(log: Logger): Promise<void> {
     showSchedule: () => mainWindow.open('schedule', store.getSettings().locations[0]?.id),
     refreshAll: () => triggerAll('manual'),
     setStyle,
-    moveWidget: id => widgets.get(id)?.window.beginMoveMode(),
+    moveWidget: id => runtime.widget(id)?.window.beginMoveMode(),
     openSettings: () => mainWindow.open('settings'),
     toggleAutostart: () => updateSettings({ autostart: !store.getSettings().autostart }),
     solveCaptcha: () => { solveCaptcha().catch(err => log.error('showVerification failed', err)); },
@@ -248,7 +241,7 @@ async function bootstrap(log: Logger): Promise<void> {
     if (!location) return; // deleted meanwhile: the widget is about to go
     w.popupMenu(buildWidgetMenu(location.widgetStyle, {
       setStyle: style => setStyle(id, style),
-      refreshNow: () => schedulers.get(id)?.trigger('manual'),
+      refreshNow: () => runtime.scheduler(id)?.trigger('manual'),
       openSettings: () => mainWindow.open('settings', id),
       quit: () => app.quit(),
     }));
@@ -261,7 +254,7 @@ async function bootstrap(log: Logger): Promise<void> {
     refresh: id => {
       if (id === undefined) return triggerAll('manual');
       if (!store.getLocation(id)) throw new LocationError(UNKNOWN_LOCATION);
-      schedulers.get(id)?.trigger('manual');
+      runtime.scheduler(id)?.trigger('manual');
     },
     widgets: {
       find: sender => {
@@ -309,8 +302,7 @@ async function bootstrap(log: Logger): Promise<void> {
   restartActual();
   publish(); // the first reconcile: the schedulers start (staggered) and the widgets show
   app.on('will-quit', () => {
-    widgets.clear(); // each widget's glass updater and pinner
-    schedulers.clear();
+    runtime.clear(); // each widget's glass updater and pinner, then the schedulers
     stopActualUpdates();
     stopLive();
     livePush.dispose();
@@ -330,6 +322,5 @@ async function bootstrap(log: Logger): Promise<void> {
   }, 30_000);
 
   // Only a settings file that was read and has no locations is a new install: a locked one shows its note instead.
-  const settings = store.getSettings();
-  if (store.settingsLoaded && settings.locations.length === 0) mainWindow.open('setup');
+  if (opensSetupAtBoot(store)) mainWindow.open('setup');
 }

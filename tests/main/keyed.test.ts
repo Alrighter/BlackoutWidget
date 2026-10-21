@@ -47,11 +47,34 @@ describe('guardedKeyed', () => {
     expect(keyed.values().map(v => v?.id ?? null)).toEqual(['a', null, 'c']);
     expect(log.error).toHaveBeenCalledTimes(1);
     expect(log.error.mock.calls[0][0]).toBe('widget: could not be built for location b');
-    // Not retried while its id stays; disposing the null entry does nothing.
-    keyed.sync(['a', 'b', 'c']);
-    expect(log.error).toHaveBeenCalledTimes(1);
+    // Disposing the null entry does nothing.
     keyed.sync(['a', 'c']);
     expect(events).toEqual(['+a', '+c']);
+  });
+
+  test('a create that threw is tried again on the next sync, logged once per sync, and kept once it works', () => {
+    const log = { error: vi.fn() };
+    const events: string[] = [];
+    let broken = true;
+    const keyed = guardedKeyed<{ id: string }>(
+      log, 'widget',
+      id => { if (id === 'b' && broken) throw new Error('no window'); events.push(`+${id}`); return { id }; },
+      (_item, id) => { events.push(`-${id}`); },
+    );
+    keyed.sync(['a', 'b']);
+    expect(keyed.get('b')).toBeNull();
+    expect(log.error).toHaveBeenCalledTimes(1);
+    keyed.sync(['a', 'b']); // still failing: one more line, one per sync
+    expect(keyed.get('b')).toBeNull();
+    expect(log.error).toHaveBeenCalledTimes(2);
+    broken = false;
+    keyed.sync(['a', 'b']);
+    expect(keyed.get('b')).toEqual({ id: 'b' });
+    const b = keyed.get('b');
+    keyed.sync(['a', 'b']); // built now: kept, never built twice
+    expect(keyed.get('b')).toBe(b);
+    expect(events).toEqual(['+a', '+b']);
+    expect(log.error).toHaveBeenCalledTimes(2);
   });
 
   test('a dispose that throws is logged by id, and the others still go', () => {

@@ -1,4 +1,7 @@
-/** One item per id (a scheduler, a widget window): `sync` makes the set match the ids, creating and disposing as needed. */
+/**
+ * One item per id (a scheduler, a widget window): `sync` makes the set match the ids, creating and disposing as
+ * needed. A null item (a create that failed, see guardedKeyed) counts as missing: the next sync creates it again.
+ */
 export class Keyed<T> {
   private items = new Map<string, T>();
 
@@ -10,7 +13,7 @@ export class Keyed<T> {
     const next = new Map<string, T>();
     for (const id of wanted) {
       const kept = this.items.get(id);
-      next.set(id, kept !== undefined ? kept : this.create(id));
+      next.set(id, kept !== undefined && kept !== null ? kept : this.create(id));
     }
     this.items = next;
   }
@@ -28,8 +31,8 @@ export class Keyed<T> {
 
 /**
  * A Keyed whose callbacks never throw: a throw inside sync would leave the set half-built, and every later publish
- * would hit it again. A create that throws is logged (by id only) and holds null until its id leaves, a dispose that
- * throws is logged and the item is gone all the same.
+ * would hit it again. A create that throws is logged (by id only) and holds null, tried again by the next sync (so at
+ * most one log line per sync); a dispose that throws is logged and the item is gone all the same.
  */
 export function guardedKeyed<T>(
   log: { error(message: string, err?: unknown): void }, what: string,
