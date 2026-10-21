@@ -173,6 +173,10 @@ describe('word sets', () => {
     expect(streetWords('ПРОВ. КАДЕНЮКА ЛЕОНІДА')).toEqual(streetWords('вул. КАДЕНЮКА ЛЕОНІДА ПРОВ.'));
     expect(streetWords('КАДЕНЮКА ЛЕОНІДА')).toEqual(streetWords('КАДЕНЮКА ЛЕОНIДА'));
   });
+  it('keeps the number of a numbered street', () => {
+    expect(streetWords('1-й ПРОВ.ТАДЖИЦЬКИЙ')).not.toEqual(streetWords('2-й ПРОВ.ТАДЖИЦЬКИЙ'));
+    expect(streetWords('1-й ПРОВ.ТАДЖИЦЬКИЙ')).toEqual(streetWords('1 ПРОВ. ТАДЖИЦЬКИЙ'));
+  });
   it('drops the settlement prefix', () => {
     expect(placeWords('м. Чернівці')).toEqual(['чернівці']);
     expect(placeWords('с. Нова Жучка')).toEqual(['жучка', 'нова']);

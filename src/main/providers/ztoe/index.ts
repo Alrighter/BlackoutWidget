@@ -5,7 +5,7 @@ import { silentLogger, type Logger } from '../../log';
 import { HttpSource, sourceTexts, type PlainHttpDeps, type SourceInit } from '../http-source';
 import { accidentRows, currentOutageOf, plannedRows, type OutageRow, type Place, type SubReason } from '../inneti';
 import { queueLabel } from '../lines';
-import { houseKey, nameKey } from '../names';
+import { houseKey, nameKey, nameWords } from '../names';
 import { addressNotFound, labeled, noGroup, resolveByLabel, sortedLabels, type Labeled } from '../resolve';
 import { isInt, isObj } from '../shape';
 import { addressSide, bestEffort, daysForLine, snapshotOf, type ScheduleDays } from '../snapshot';
@@ -59,17 +59,13 @@ function bareName(name: string): string | undefined {
 /** An inneti РЕМ («Хорошівський РЕМ») is the bundle's РЕМ («Хорошівський») by name. */
 const sameRem = (otg: string, rem: string): boolean => nameKey(otg).replace(/\s*рем$/u, '') === nameKey(rem);
 
-/** An ending inneti writes after a number («1-й пров.») and the site does not («1 пров.»). */
-const NUMBER_ENDINGS = new Set(['й', 'ий', 'а', 'я']);
-
 /**
  * A street's words, sorted and joined: inneti writes many streets in another order or with a number ending («вул.
  * Франка Івана», «1-й пров. Андріївський»). The words are the nameKey split on anything but letters, digits and ’,
  * without a «й», «ий», «а» or «я» right after a number.
  */
 function streetWords(name: string): string {
-  const tokens = nameKey(name).split(/[^\p{L}\p{N}’]+/u).filter((t) => t !== '');
-  return tokens.filter((t, i) => !(i > 0 && /^\d+$/.test(tokens[i - 1]) && NUMBER_ENDINGS.has(t))).sort().join(' ');
+  return nameWords(name).sort().join(' ');
 }
 
 export type ZtoeDeps = PlainHttpDeps;

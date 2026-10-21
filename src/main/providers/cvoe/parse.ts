@@ -1,6 +1,6 @@
 import type { HouseInfo, LineInfo, Slot } from '../../../shared/types';
 import { htmlText } from '../html';
-import { houseKey, nameKey } from '../names';
+import { houseKey, nameKey, nameWords } from '../names';
 import { isObj, ShapeError } from '../shape';
 
 /** The answer is not one we know. The message is a fixed reason of ours, never a piece of the response. */
@@ -173,11 +173,9 @@ export function parseOutageReply(body: unknown): { rows: CvoeOutageRow[]; pages:
   return { rows, pages };
 }
 
-const words = (s: string): string[] => nameKey(s).split(/[^\p{L}’]+/u).filter(Boolean);
-
-/** Word sets for matching across the two forms: nameKey, split on anything but letters and apostrophes, empties dropped. */
+/** Word sets for matching across the two forms: nameKey, via nameWords (digits kept). */
 export function streetWords(s: string): string[] {
-  const w = words(s);
+  const w = nameWords(s);
   if (w[0] === 'вул' || w[0] === 'вулиця') w.shift();
   return w.sort();
 }
@@ -185,7 +183,7 @@ export function streetWords(s: string): string[] {
 const PLACE_PREFIX = new Set(['м', 'с', 'смт', 'селище', 'село', 'місто', 'ще']);
 
 export function placeWords(s: string): string[] {
-  const w = words(s);
+  const w = nameWords(s);
   while (w.length && PLACE_PREFIX.has(w[0])) w.shift();
   return w.sort();
 }

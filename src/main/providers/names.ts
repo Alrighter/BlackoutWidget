@@ -38,3 +38,14 @@ export function houseKey(s: string): string {
     .replace(/(\d)[\s\-._,]+(?=\p{L})/gu, '$1')
     .replace(/\s+/g, '');
 }
+
+const NUMBER_ENDINGS = new Set(['й', 'ий', 'а', 'я']);
+
+/**
+ * The word form that matches one street across two spellings: the nameKey split on anything but letters, digits and ’,
+ * without a «й», «ий», «а» or «я» right after a number («1-й» counts as «1»). Order kept; callers sort.
+ */
+export function nameWords(s: string): string[] {
+  const tokens = nameKey(s).split(/[^\p{L}\p{N}’]+/u).filter(t => t !== '');
+  return tokens.filter((t, i) => !(i > 0 && /^\d+$/.test(tokens[i - 1]) && NUMBER_ENDINGS.has(t)));
+}

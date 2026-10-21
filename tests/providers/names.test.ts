@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { houseKey } from '../../src/main/providers/names';
+import { houseKey, nameWords } from '../../src/main/providers/names';
 
 describe('houseKey', () => {
   it.each([
@@ -20,5 +20,12 @@ describe('houseKey', () => {
 
   it.each(['9/9', '9-9', '74/А', 'ТП-334', '001'])('keeps %j as it is', (s) => {
     expect(houseKey(s)).toBe(s);
+  });
+});
+
+describe('nameWords', () => {
+  it('keeps numbers and drops the ending after one', () => {
+    expect(nameWords('1-й пров. Андріївський')).toEqual(['1', 'пров', 'андріївський']);
+    expect(nameWords('вул. Шевченка')).toEqual(['вул', 'шевченка']);
   });
 });
