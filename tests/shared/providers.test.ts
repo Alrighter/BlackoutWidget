@@ -1,6 +1,6 @@
 import { PROVIDERS, providerShortName, providerSingleCity, providerSiteUrl } from '../../src/shared/providers';
 
-test('the nine providers carry exactly the agreed metadata', () => {
+test('the ten providers carry exactly the agreed metadata', () => {
   expect(PROVIDERS).toEqual({
     'dtek-kem': { name: 'ДТЕК Київські електромережі', shortName: 'ДТЕК', region: 'м. Київ', siteUrl: 'https://www.dtek-kem.com.ua/ua/shutdowns', singleCity: 'м. Київ' },
     'voe': { name: 'Волиньобленерго', shortName: 'Волиньобленерго', region: 'Волинська область', siteUrl: 'https://energy.volyn.ua/spozhyvacham/perervy-u-elektropostachanni/hrafik-vidkliuchen/' },
@@ -11,6 +11,7 @@ test('the nine providers carry exactly the agreed metadata', () => {
     'mkoe': { name: 'Миколаївобленерго', shortName: 'Миколаївобленерго', region: 'Миколаївська область', siteUrl: 'https://off.energy.mk.ua/' },
     'dtek-oem': { name: 'ДТЕК Одеські електромережі', shortName: 'ДТЕК', region: 'Одеська область', siteUrl: 'https://www.dtek-oem.com.ua/ua/shutdowns' },
     'toe': { name: 'Тернопільобленерго', shortName: 'Тернопільобленерго', region: 'Тернопільська область', siteUrl: 'https://poweron.toe.com.ua/' },
+    'cvoe': { name: 'Чернівціобленерго', shortName: 'Чернівціобленерго', region: 'Чернівецька область', siteUrl: 'https://oblenergo.cv.ua/shutdowns/' },
   });
 });
 

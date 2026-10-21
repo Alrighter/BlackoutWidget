@@ -1,6 +1,7 @@
 import { DTEK_SITES, DtekProvider } from './dtek';
 import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek/page-scripts';
 import type { SessionOptions } from './browser-session';
+import { CvoeProvider } from './cvoe';
 import type { HttpFetch } from './http';
 import { LoeProvider } from './loe';
 import { MkoeProvider } from './mkoe';
@@ -36,6 +37,7 @@ export function createProviders(
     'mkoe': () => new MkoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
     'toe': () => new ToeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
     'ztoe': () => new ZtoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'cvoe': () => new CvoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
   };
   for (const site of DTEK_SITES) make[site.id] = () => dtek(site.id);
   return Object.keys(PROVIDERS).map(id => {

@@ -49,6 +49,10 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     name: 'Тернопільобленерго', shortName: 'Тернопільобленерго', region: 'Тернопільська область',
     siteUrl: 'https://poweron.toe.com.ua/',
   },
+  'cvoe': {
+    name: 'Чернівціобленерго', shortName: 'Чернівціобленерго', region: 'Чернівецька область',
+    siteUrl: 'https://oblenergo.cv.ua/shutdowns/',
+  },
 };
 
 const info = (id: string): ProviderInfo | undefined => (Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : undefined);
