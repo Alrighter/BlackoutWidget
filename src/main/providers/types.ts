@@ -14,6 +14,8 @@ export interface PageSession {
   reload(): Promise<void>;
   isOnline(): boolean; // the OS-level connectivity hint (electron net.isOnline())
   showForUser(): Promise<void>; // shows the window, resolves when the page is ready again
+  isOpen(): boolean; // a page window exists
+  release(): void; // closes the window; the next ensureReady() opens a new one (unlike dispose, not final)
   dispose(): void;
 }
 

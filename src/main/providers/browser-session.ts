@@ -98,6 +98,22 @@ export class BrowserSession implements PageSession {
     }
   }
 
+  isOpen(): boolean {
+    return !!this.win && !this.win.isDestroyed();
+  }
+
+  /** Closes the window but keeps the session: the next ensureReady() builds a new one on the same partition. */
+  release(): void {
+    // Never pull the window from under a verification or a load in flight; after dispose() there is nothing to do.
+    if (this.disposed || this.showing || this.pending) return;
+    const win = this.win;
+    this.win = null;
+    this.loaded = false;
+    this.netError = false;
+    this.netFailure = undefined;
+    if (win && !win.isDestroyed()) { win.removeAllListeners('close'); win.destroy(); }
+  }
+
   dispose(): void {
     this.disposed = true;
     const win = this.win;

@@ -9,7 +9,7 @@ const HOSTS: Record<string, string> = {
 };
 function setup() {
   const made: SessionOptions[] = [];
-  const session = { ensureReady: vi.fn(), evaluate: vi.fn(), showForUser: vi.fn(), dispose: vi.fn(), reload: vi.fn(), isOnline: vi.fn() };
+  const session = { ensureReady: vi.fn(), evaluate: vi.fn(), showForUser: vi.fn(), dispose: vi.fn(), reload: vi.fn(), isOnline: vi.fn(), isOpen: vi.fn(() => false), release: vi.fn() };
   const http = { fetch: vi.fn(), isOnline: vi.fn(() => true) };
   const providers = createProviders(o => { made.push(o); return session as any; }, silentLogger, http);
   return { made, session, http, providers };
