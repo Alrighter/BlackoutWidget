@@ -110,7 +110,22 @@ describe('parseDistrictPage', () => {
     };
     expect(parseDistrictPage(withTail(D1, footer), 1)).toEqual(parseDistrictPage(D1, 1));
     expect(parseDistrictPage(withTail(D3, footer), 3)).toEqual(parseDistrictPage(D3, 3));
+    expect(parseDistrictPage(withTail(D3, footer.replace('<b></b>', '<b> \n </b>')), 3)).toEqual(parseDistrictPage(D3, 3));
     expect(() => parseDistrictPage(withTail(D3, '<div class="other"><p>x</p></div>'), 3)).toThrow(CvoeShapeError);
+  });
+
+  it('a footer that counts more rows means the page cut the list: unreadable, with a fixed reason (R7)', () => {
+    const withTail = (html: string, tail: string): string => html.replace(/<\/div>(\s*<\/main>)/, `${tail}</div>$1`);
+    for (const footer of [
+      '<div class="h_total"><p>ще знайдено рядків <b>12</b></p></div>',
+      '<div class="h_total"><p>ще знайдено рядків <b>х</b></p></div>',
+      '<div class="h_total"><p>ще знайдено рядків</p></div>',
+    ]) {
+      let err: unknown;
+      try { parseDistrictPage(withTail(D3, footer), 3); } catch (e) { err = e; }
+      expect(err).toBeInstanceOf(CvoeShapeError);
+      expect((err as Error).message).not.toMatch(/12|х|ще/);
+    }
   });
 
   it('keeps an odd group raw', () => {

@@ -559,6 +559,29 @@ describe('CvoeProvider current outage', () => {
     expect(hertsa.http.posts()[0]).toMatchObject({ v_city: 'остриця', v_street: 'кишинівська', v_house: '12' });
   });
 
+  it('a word with an apostrophe is searched by its longest piece: the site writes U+0027, never ’ (R5)', async () => {
+    const kamiana = cvoeSettlements().find((s) => s.name === 'с. Кам\'яна')!;
+    expect(kamiana.district).toBe(11);
+    const district = livePage(D3, '<div><s>с. Кам\'яна</s><p>вул. Здоров\'я</p><b>буд. 22А</b><u>3</u></div>');
+    // The reply as the site writes it: a raw ', and the matched pieces in <b>.
+    const row = swap(swap(KADENIUKA_ROW, 'м. <b>Чер</b>нівці', 'с. <b>Кам</b>\'яна'), '<b>вул</b>. КАДЕНЮКА ЛЕОНІДА', 'вул. <b>Здоров</b>\'я');
+    const http = outageHttp(() => ok(reply([row])), undefined, { 'GET /shutdowns-search/11/': () => ok(district) });
+    const snap = await setup({ http, now: OCT21_10 }).p.fetchSnapshot({
+      providerId: 'cvoe', city: kamiana.label, street: 'вул. Здоров\'я', house: '22А', lineIndex: 1, groupId: '3',
+    });
+    expect(snap.lines).toEqual([{ index: 1, groupId: '3', label: 'Група 3' }]);
+    expect(snap.currentOutage).toEqual(PLANNED_22A);
+    expect(http.posts().map((f) => [f.v_diln, f.v_city, f.v_street])).toEqual([['4', 'кам', 'здоров'], ['4', 'кам', 'здоров']]);
+  });
+
+  it('a street whose longest piece between apostrophes is under 3 letters is not looked up', async () => {
+    const http = fakeHttp({ [CITY_SEARCH]: () => ok(cityPage([['Б\'ЯК', '1', '2']])) });
+    const { p } = setup({ http });
+    const snap = await p.fetchSnapshot({ providerId: 'cvoe', city: CHERNIVTSI, street: 'Б\'ЯК', house: '1', lineIndex: 1, groupId: '2' });
+    expect(snap.lines).toEqual([{ index: 1, groupId: '2', label: 'Група 2' }]);
+    expect(http.posts()).toEqual([]);
+  });
+
   it('a settlement or street without a word of 3 letters is not looked up', async () => {
     const { p, http } = setup();
     const snap = await p.fetchSnapshot({ providerId: 'cvoe', city: CHERNIVTSI, street: 'ПР ЯР', house: '1', lineIndex: 1, groupId: '2' });

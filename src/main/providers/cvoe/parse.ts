@@ -65,6 +65,8 @@ export interface CvoeRow { settlement?: string; street: string; house: string; g
 
 const CITY_ROW = /^<div><p>([\s\S]*?)<\/p><b>([\s\S]*?)<\/b><u>([\s\S]*?)<\/u><\/div>/;
 const OBL_ROW = /^<div><s>([\s\S]*?)<\/s><p>([\s\S]*?)<\/p><b>([\s\S]*?)<\/b><u>([\s\S]*?)<\/u><\/div>/;
+/** The footer after the rows; its <b> holds the count of rows left out, empty when the page holds them all. */
+const H_TOTAL = /^<div class="h_total">\s*<p>[^<]*<b>([\s\S]*?)<\/b>/;
 
 export function parseDistrictPage(html: string, district: number): CvoeRow[] {
   const city = district === 1;
@@ -84,8 +86,13 @@ export function parseDistrictPage(html: string, district: number): CvoeRow[] {
       ? { street: htmlText(m[1]), house: htmlText(m[2]), group: htmlText(m[3]) }
       : { settlement: htmlText(m[1]), street: htmlText(m[2]), house: htmlText(m[3]), group: htmlText(m[4]) });
   }
-  // The live pages close the row list with the «ще знайдено рядків» footer; any other div here is a row we do not know.
-  if (/^<div\b/.test(rest) && !rest.startsWith('<div class="h_total">')) throw new CvoeShapeError('unknown row shape');
+  if (rest.startsWith('<div class="h_total">')) {
+    // The live pages close the row list with «ще знайдено рядків <b></b>»: anything in the <b> means the page cut the list.
+    const total = H_TOTAL.exec(rest);
+    if (!total || total[1].trim() !== '') throw new CvoeShapeError('row list cut short');
+  } else if (/^<div\b/.test(rest)) {
+    throw new CvoeShapeError('unknown row shape');
+  }
   if (!rows.length) throw new CvoeShapeError('no rows');
   return rows;
 }

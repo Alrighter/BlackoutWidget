@@ -62,6 +62,12 @@ const districtGroup = (s: CvoeSettlement): string | undefined => (s.district ===
 /** The longest word (the first of equal length); '' for none. */
 const longest = (words: readonly string[]): string => words.reduce((a, w) => (w.length > a.length ? w : a), '');
 
+/**
+ * The form's search word: the longest piece of the words split at the apostrophe. nameKey writes it as ’ (U+2019),
+ * the site only ever as ' (U+0027), so a search word holding one would never match.
+ */
+const searchWord = (words: readonly string[]): string => longest(words.flatMap((w) => w.split('’')));
+
 /** A reply stamp 'YYYY-MM-DD HH:MM:SS' is Kyiv wall clock: as the ISO-like form the wall-clock helpers read. */
 const wallIso = (stamp: string): string => stamp.replace(' ', 'T');
 
@@ -182,14 +188,14 @@ export class CvoeProvider implements ScheduleProvider {
 
   /**
    * An emergency, else planned works, running now for this house. The form searches by substring, so it is asked with
-   * the longest word of the settlement and of the street (and the house's leading digits), and a row counts only when
+   * the search word of the settlement and of the street (and the house's leading digits), and a row counts only when
    * its settlement and street have the saved words and one of its houses is the saved one.
    */
   private async currentOutage(settlement: CvoeSettlement, address: Address, today: string, now: Date): Promise<CurrentOutage | undefined> {
     const place = placeWords(settlement.name);
     const street = streetWords(address.street);
-    const city = longest(place);
-    const streetWord = longest(street);
+    const city = searchWord(place);
+    const streetWord = searchWord(street);
     if (city.length < MIN_WORD || streetWord.length < MIN_WORD) return undefined;
     const digits = /^\d+/.exec(address.house.trim())?.[0];
     const house = houseKey(address.house);
