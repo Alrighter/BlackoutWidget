@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { MainView, RendererApi } from '../../../shared/ipc';
-import type { AppState } from '../../../shared/types';
+import type { AppState, WidgetStyle } from '../../../shared/types';
 import { Banner, ScheduleView } from './ScheduleView';
 import { SettingsView } from './SettingsView';
 import { SetupWizard, type WizardMode } from './SetupWizard';
 
 type Tab = 'schedule' | 'settings';
 /**
- * The wizard on show. `edit` without an id edits the selected location (main's «setup»); with one, that location
- * only. `first` stays until it is done, even once its own new location is in the state.
+ * The wizard on show. `first` stays until it is done, even once its own new location is in the state. `add` is
+ * frozen when it opens: the ids and names then, and locations[0]'s style, so the location it has just saved, landing
+ * in the state before the call returns, is never «taken». `edit` without an id edits the selected location (main's
+ * «setup»); with one, that location only.
  */
-type Wizard = { kind: 'first' } | { kind: 'add' } | { kind: 'edit'; id?: string } | null;
+type Wizard =
+  | { kind: 'first' }
+  | { kind: 'add'; before: string[]; taken: string[]; style: WidgetStyle }
+  | { kind: 'edit'; id?: string }
+  | null;
 
 const UNREADABLE = 'Не вдалося прочитати налаштування. Спробую ще раз за хвилину.';
 
@@ -23,6 +29,9 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
   const [tab, setTab] = useState<Tab>(view === 'settings' ? 'settings' : 'schedule');
   // D10: the settings open once with the EcoFlow form expanded; any other way there shows them as usual.
   const [ecoflowForm, setEcoflowForm] = useState(false);
+  // A finished add: the ids before it. The id that then appears in the state is selected, once.
+  const [addedFrom, setAddedFrom] = useState<string[] | null>(null);
+  const select = (id: string) => { setAddedFrom(null); setSelected(id); };
   const show = (next: Tab, openEcoflowForm = false) => { setTab(next); setEcoflowForm(openEcoflowForm); };
   const openWizard = (next: Wizard) => { setWizard(next); setEcoflowForm(false); };
 
@@ -32,7 +41,8 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
     const off = api.onState(setState);
     const offNav = api.onNavigate(nav => {
       setEcoflowForm(false);
-      if (nav.locationId !== undefined) setSelected(nav.locationId);
+      // An explicit location wins over a pending add's.
+      if (nav.locationId !== undefined) { setAddedFrom(null); setSelected(nav.locationId); }
       // The first setup is not left by a navigate: the window cannot be used without it.
       setWizard(w => (w?.kind === 'first' ? w : nav.view === 'setup' ? { kind: 'edit', id: nav.locationId } : null));
       if (nav.view !== 'setup') setTab(nav.view);
@@ -44,6 +54,9 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
   // A read with no locations: the first setup, kept on until it is done.
   const firstSetup = !!state && state.settingsLoaded && state.locations.length === 0;
   useEffect(() => { if (firstSetup) setWizard({ kind: 'first' }); }, [firstSetup]);
+  const added = addedFrom && state ? state.locations.find(l => !addedFrom.includes(l.location.id)) : undefined;
+  const addedId = added?.location.id;
+  useEffect(() => { if (addedId) select(addedId); }, [addedId]);
 
   if (!state) return null;
 
@@ -58,12 +71,13 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
 
   const { locations } = state;
   const names = locations.map(l => l.location.name);
-  // The selection falls back to the first location when its id is unknown or gone.
-  const loc = locations.find(l => l.location.id === selected) ?? locations[0];
+  // The selection falls back to the first location when its id is unknown or gone. A just-added location is shown
+  // at once, in the render before the effect above records it.
+  const loc = added ?? locations.find(l => l.location.id === selected) ?? locations[0];
 
   let mode: WizardMode | null = null;
   if (firstSetup || wizard?.kind === 'first') mode = { kind: 'first' };
-  else if (wizard?.kind === 'add') mode = { kind: 'add', taken: names, style: locations[0].location.widgetStyle };
+  else if (wizard?.kind === 'add') mode = { kind: 'add', taken: wizard.taken, style: wizard.style };
   else if (wizard?.kind === 'edit') {
     // The location to edit; one deleted meanwhile closes the wizard rather than edit another.
     const target = wizard.id === undefined ? loc : locations.find(l => l.location.id === wizard.id);
@@ -75,7 +89,8 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
     return (
       <div className="app">
         <SetupWizard key={mode.kind === 'edit' ? `edit:${mode.location.id}` : mode.kind} api={api} autostart={state.settings.autostart}
-          mode={mode} onDone={() => { setWizard(null); show('schedule'); }} onCancel={mode.kind === 'first' ? undefined : () => setWizard(null)} />
+          mode={mode} onDone={() => { if (wizard?.kind === 'add') setAddedFrom(wizard.before); setWizard(null); show('schedule'); }}
+          onCancel={mode.kind === 'first' ? undefined : () => setWizard(null)} />
       </div>
     );
   }
@@ -95,7 +110,7 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
             <div role="tablist" aria-label="Адреси" className="app-locs" data-capture="switcher">
               {locations.map(l => (
                 <button key={l.location.id} role="tab" aria-selected={l.location.id === id} className="app-loc" title={l.location.name}
-                  onClick={() => setSelected(l.location.id)}>
+                  onClick={() => select(l.location.id)}>
                   <span>{l.location.name}</span>
                 </button>
               ))}
@@ -113,7 +128,7 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
           ? <ScheduleView loc={loc} settings={state.settings} now={now} api={api}
               onConnectEcoflow={() => show('settings', true)} onChangeAddress={() => openWizard({ kind: 'edit', id })} />
           : <SettingsView state={state} loc={loc} api={api} ecoflowFormOpen={ecoflowForm}
-              onChangeAddress={() => openWizard({ kind: 'edit', id })} onAdd={() => openWizard({ kind: 'add' })} />}
+              onChangeAddress={() => openWizard({ kind: 'edit', id })} onAdd={() => openWizard({ kind: 'add', before: locations.map(l => l.location.id), taken: names, style: locations[0].location.widgetStyle })} />}
       </main>
     </div>
   );

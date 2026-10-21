@@ -256,6 +256,72 @@ test('the first setup stays the first setup when its own location arrives before
   expect(status('Світло є')).toBeInTheDocument();
 });
 
+describe('after «Додати адресу»', () => {
+  const COTTAGE = place('c', 'Дача');
+  /** The state main pushes once «Дача» is added: no schedule fetched for it yet. */
+  const added = () => appState([locOf(HOME), parentsDark(), locOf(COTTAGE, { snapshot: null })]);
+  async function addCottage(user: UserEvent, f: Fake) {
+    await user.click(await screen.findByRole('button', { name: 'Додати адресу' }));
+    await walkWizard(user);
+    await user.type(screen.getByRole('textbox', { name: 'Назва' }), 'Дача');
+    await user.click(screen.getByRole('button', { name: 'Завершити' }));
+    expect(f.api.addLocation).toHaveBeenCalledWith({ name: 'Дача', address: ADDRESS, widgetStyle: 'compact' });
+  }
+  const expectCottageShown = () => {
+    expect(pill('Дача')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Графік' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Дані ще не отримано')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Світло є' })).toBeNull();
+  };
+
+  test('the state lands before the add call returns: the saved name is never «taken», then the new location is selected', async () => {
+    pinDate();
+    const user = userEvent.setup();
+    const f = fake(twoState(), wizardApi);
+    let returned!: () => void;
+    (f.api.addLocation as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise<void>(r => { returned = r; }));
+    render(<App api={f.api} view="settings" />);
+    await addCottage(user, f);
+    f.push(added());
+    // Still the same add wizard: its own new name is not flagged as one already there.
+    expect(screen.getByText('Нова адреса')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Така назва вже є')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Назва' })).not.toHaveAttribute('aria-invalid');
+    await act(async () => returned());
+    expectCottageShown();
+  });
+
+  test('the add call returns before the state lands: the new location is selected once it does', async () => {
+    pinDate();
+    const user = userEvent.setup();
+    const f = fake(twoState(), wizardApi);
+    render(<App api={f.api} view="settings" locationId="b" />);
+    await addCottage(user, f);
+    // Back on the schedule; the new location is not in the state yet.
+    expect(await screen.findByRole('tab', { name: 'Графік' })).toHaveAttribute('aria-selected', 'true');
+    expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
+    f.push(added());
+    expectCottageShown();
+    // Only once: a later push does not pull the selection back.
+    await user.click(pill('Дім'));
+    f.push(added());
+    expect(pill('Дім')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('a cancelled add selects nothing new', async () => {
+    pinDate();
+    const user = userEvent.setup();
+    const f = fake(twoState(), wizardApi);
+    render(<App api={f.api} view="settings" />);
+    await user.click(await screen.findByRole('button', { name: 'Додати адресу' }));
+    await user.click(screen.getByRole('button', { name: 'Скасувати' }));
+    // A location that appears some other way (another window, a settings re-read) does not take the selection.
+    f.push(added());
+    expect(pill('Дім')).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
 test.each(['Підключити EcoFlow', 'Підключити'])('«%s» opens the settings with the EcoFlow form open, once', async name => {
   pinDate();
   render(<App api={fake().api} view="schedule" />);
