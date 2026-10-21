@@ -9,6 +9,8 @@ export interface ProviderInfo {
   siteUrl: string;
   /** Set when the source serves one city only, so the wizard can skip the city step. */
   singleCity?: string;
+  /** Added to the wizard's note for a house with no lines (a pointer to the source that may serve it). */
+  noLinesHint?: string;
 }
 
 /** Metadata of the schedule sources, shared by the main-process providers and the UI texts. */
@@ -24,6 +26,7 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
   'dtek-dnem': {
     name: 'ДТЕК Дніпровські електромережі', shortName: 'ДТЕК', region: 'Дніпропетровська область',
     siteUrl: 'https://www.dtek-dnem.com.ua/ua/shutdowns',
+    noLinesHint: 'Якщо ваш будинок обслуговує ЦЕК, оберіть «ПЕЕМ «ЦЕК»»',
   },
   'ztoe': {
     name: 'Житомиробленерго', shortName: 'Житомиробленерго', region: 'Житомирська область',
@@ -80,4 +83,9 @@ export function providerSiteUrl(id: string): string | undefined {
 /** The only city the provider serves, if it serves just one. */
 export function providerSingleCity(id: string): string | undefined {
   return info(id)?.singleCity;
+}
+
+/** A pointer for a house the provider has no lines for, if the provider has one. */
+export function providerNoLinesHint(id: string): string | undefined {
+  return info(id)?.noLinesHint;
 }

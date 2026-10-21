@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, ty
 import type { RendererApi } from '../../../shared/ipc';
 import { dayCells } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
-import { providerRegion, providerShortName, providerSingleCity } from '../../../shared/providers';
+import { providerRegion, providerNoLinesHint, providerShortName, providerSingleCity } from '../../../shared/providers';
 import type { DaySchedule, HouseInfo, LineInfo, WidgetStyle } from '../../../shared/types';
 import { lowerFirst } from '../../../shared/widget-state';
 import { Autocomplete, matches } from './Autocomplete';
@@ -158,6 +158,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   /** The picked house, when its lines come from `api.houseLines`. */
   const [pendingHouse, setPendingHouse] = useState<string | null>(null);
   const [houseOutage, setHouseOutage] = useState(false);
+  const [houseNote, setHouseNote] = useState<string | null>(null);
   const [houseQuery, setHouseQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -200,6 +201,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
       e => { if (alive) setLinesError(unwrapIpcError(e).message); },
     );
     return () => { alive = false; };
+    // resetBelow clears pendingHouse, so the effect never acts on a stale address.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingHouse, linesAttempt]);
 
@@ -240,7 +242,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
 
   const resetBelow = (from: 'city' | 'street') => {
     if (from === 'city') setStreet(null);
-    setHouse(null); setLine(null); setHouseLines([]); setLinesError(null); setPendingHouse(null); setHouseOutage(false); setHouseQuery('');
+    setHouse(null); setLine(null); setHouseLines([]); setLinesError(null); setPendingHouse(null); setHouseOutage(false); setHouseNote(null); setHouseQuery('');
   };
   /** A different provider drops everything chosen below it: a city of one region is never sent to another. */
   const pickProvider = (id: string) => {
@@ -253,7 +255,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   const pickHouse = (h: HouseInfo) => {
     // The same pending house again: its lines are already loading or loaded.
     if (h.linesPending && h.house === house) return;
-    setHouse(h.house); setLine(null); setHouseOutage(!!h.outageActive); setLinesError(null);
+    setHouse(h.house); setLine(null); setHouseOutage(!!h.outageActive); setHouseNote(h.note ?? null); setLinesError(null);
     setHouseLines(h.linesPending ? null : h.lines);
     setPendingHouse(h.linesPending ? h.house : null);
   };
@@ -362,7 +364,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                         <button className="sv-btn" onClick={() => setLinesAttempt(a => a + 1)}>Спробувати ще раз</button>
                       </Note>
                     )}
-                    {noLines && !houseOutage && <Note text={`Для цього будинку ${short(providerId)} не публікує графік відключень`} />}
+                    {noLines && !houseOutage && <Note text={houseNote ?? [`Для цього будинку ${short(providerId)} не публікує графік відключень`, providerId ? providerNoLinesHint(providerId) : undefined].filter(Boolean).join('. ')} />}
                   </>
                 );
               }}</Status>

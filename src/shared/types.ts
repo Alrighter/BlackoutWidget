@@ -6,6 +6,8 @@ export interface HouseInfo {
   house: string; lines: LineInfo[]; outageActive: boolean;
   /** `lines` is not final: the source gives a house's lines only through `houseLines`, asked once the house is picked. */
   linesPending?: boolean;
+  /** The source's own word on this house; the wizard shows it in place of the empty-lines note. */
+  note?: string;
 }
 export interface Address { providerId: string; city: string; street: string; house: string; lineIndex: number; groupId: string }
 /** `groups`: the queues the outage applies to (DTEK `sub_type_reason` while an outage is active); empty/absent = unknown. */
