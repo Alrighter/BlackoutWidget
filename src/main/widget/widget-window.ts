@@ -65,9 +65,10 @@ export class WidgetWindow {
   }
 
   /**
-   * A monitor came or went (or its work area / scale changed): back to the saved position, or — its display gone —
-   * to a free spot on the primary display, clear of the other widgets. That spot is not saved, so the widget returns
-   * with its display. Main calls it on every widget in location order, so each one finds its own spot.
+   * A monitor came or went (or its work area / scale changed): back to the saved position (no saved position: the
+   * primary display's corner), or — its display gone — to a free spot on the primary display, clear of the other
+   * widgets. That spot is not saved, so the widget returns with its display. Main calls it on every widget in
+   * location order, so each one finds its own spot.
    */
   refit(): void {
     if (this.disposed || this.dragFrom) return;

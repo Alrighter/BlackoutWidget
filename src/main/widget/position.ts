@@ -62,15 +62,18 @@ const primaryOf = (displays: DisplayLike[], primaryId: number) => displays.find(
 
 /**
  * Where a widget goes (DIP). A saved position on a live display is pulled fully inside that display's work area,
- * neighbours or not (moving it is up to the user). No saved position, or its display is gone → the first free
- * spot on the primary display, clear of `others` (the other widgets), else its top-right corner. The caller does
- * not save that spot, so the widget returns once its display does.
+ * neighbours or not (moving it is up to the user). No saved position (a widget never dragged, such as the migrated
+ * first one) → the primary display's top-right corner, as today, neighbours or not: it must not wander off when a
+ * sibling appears or its style changes. A saved position whose display is gone → the first free spot on the
+ * primary display, clear of `others` (the other widgets), else its corner. The caller does not save either one, so
+ * the widget returns once its display does.
  */
 export function placeWidget(
   pos: WidgetPosition | null, size: Size, displays: DisplayLike[], primaryId: number, others: Rect[] = [],
 ): WidgetPosition {
-  const own = pos ? displays.find(d => d.id === pos.displayId) : undefined;
-  if (pos && own) {
+  if (!pos) return corner(primaryOf(displays, primaryId), size);
+  const own = displays.find(d => d.id === pos.displayId);
+  if (own) {
     const a = own.workArea;
     return {
       x: clamp(Math.round(pos.x), a.x, a.x + a.width - size.width),

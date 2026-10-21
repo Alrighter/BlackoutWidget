@@ -49,6 +49,17 @@ test('placeWidget: a gone display takes a free spot', () => {
   expect(placeWidget(null, size, [primary], 1, [{ ...primary.workArea }])).toEqual({ x: 1606, y: 24, displayId: 1 });
 });
 
+test('placeWidget: a widget never dragged (no saved position) keeps the corner, neighbours or not', () => {
+  // A sibling right below the corner, and one parked snug left of it: neither moves the corner widget.
+  const below = { x: 1606, y: 190, ...size };
+  const snugLeft = { x: 1310, y: 24, ...size };
+  expect(placeWidget(null, size, [primary], 1, [below])).toEqual({ x: 1606, y: 24, displayId: 1 });
+  expect(placeWidget(null, size, [primary], 1, [snugLeft])).toEqual({ x: 1606, y: 24, displayId: 1 });
+  expect(placeWidget(null, size, [primary], 1, [inCorner])).toEqual({ x: 1606, y: 24, displayId: 1 });
+  // A style change: the bigger size takes the timeline's corner, even if it now overlaps the sibling below.
+  expect(placeWidget(null, WIDGET_SIZES.timeline, [primary], 1, [below])).toEqual({ x: 1920 - 400 - 24, y: 24, displayId: 1 });
+});
+
 test('placeNewWidget: anchor display, else primary', () => {
   const corner2 = { x: 1920 + 1280 - 290 - 24, y: 24, displayId: 2 };
   expect(placeNewWidget(size, [primary, second], 1, 2, [])).toEqual(corner2);

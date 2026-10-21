@@ -142,6 +142,39 @@ test('refit on a lost display takes a free spot next to the others and saves not
   expect(store.getLocation('a')!.widgetPosition).toEqual({ x: 2000, y: 100, displayId: 2 }); // it comes back with the display
 });
 
+test('a widget never dragged keeps its corner through a boot, a refit and a style change, a sibling next to it or not', () => {
+  const store = twoLocations();
+  store.updateLocation('a', l => ({ ...l, widgetPosition: null })); // the migrated «Дім», never dragged
+  // «Батьки» parked snug left of the corner: closer than the 16 DIP a free spot keeps.
+  const sibling = { x: 1310, y: 24, ...compact };
+  const update = vi.spyOn(store, 'updateLocation');
+  const { w } = widget(store, { otherBounds: () => [sibling] });
+  expect(w.getBoundsDip()).toEqual({ x: 1606, y: 24, ...compact }); // the boot
+  shown(w);
+  w.refit();
+  expect(w.getBoundsDip()).toEqual({ x: 1606, y: 24, ...compact });
+  update.mockRestore();
+  store.updateLocation('a', l => ({ ...l, widgetStyle: 'timeline' }));
+  const save = vi.spyOn(store, 'updateLocation');
+  w.sync();
+  // The timeline's corner, overlapping the sibling: moving it is up to the user.
+  expect(w.getBoundsDip()).toEqual({ x: 1920 - 400 - 24, y: 24, width: 400, height: 200 });
+  expect(save).not.toHaveBeenCalled();
+  expect(store.getLocation('a')!.widgetPosition).toBeNull();
+});
+
+test('a widget never dragged keeps its corner when a sibling sits right below it', () => {
+  const store = twoLocations();
+  store.updateLocation('a', l => ({ ...l, widgetPosition: null }));
+  const { w } = widget(store, { otherBounds: () => [{ x: 1606, y: 190, ...compact }] });
+  shown(w);
+  store.updateLocation('a', l => ({ ...l, widgetStyle: 'timeline' }));
+  w.sync();
+  expect(w.getBoundsDip()).toEqual({ x: 1496, y: 24, width: 400, height: 200 });
+  w.refit();
+  expect(w.getBoundsDip()).toEqual({ x: 1496, y: 24, width: 400, height: 200 });
+});
+
 test('a disposed widget is never rebuilt', () => {
   vi.useFakeTimers();
   const store = twoLocations();
