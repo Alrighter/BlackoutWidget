@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   CvoeShapeError, parseCvoePage, parseDistrictPage, groupLines, groupLabel, cvoeStreets, cvoeHouses,
-  parseOutageReply, streetWords, placeWords, type CvoeRow,
+  parseOutageReply, streetWords, placeWords, settlementKey, type CvoeRow,
 } from '../../src/main/providers/cvoe/parse';
 import { ShapeError } from '../../src/main/providers/shape';
 
@@ -224,8 +224,49 @@ describe('word sets', () => {
     expect(streetWords('1-й ПРОВ.ТАДЖИЦЬКИЙ')).not.toEqual(streetWords('2-й ПРОВ.ТАДЖИЦЬКИЙ'));
     expect(streetWords('1-й ПРОВ.ТАДЖИЦЬКИЙ')).toEqual(streetWords('1 ПРОВ. ТАДЖИЦЬКИЙ'));
   });
-  it('drops the settlement prefix', () => {
+  it('drops the settlement type, keeping the words in their order (R11)', () => {
     expect(placeWords('м. Чернівці')).toEqual(['чернівці']);
-    expect(placeWords('с. Нова Жучка')).toEqual(['жучка', 'нова']);
+    expect(placeWords('с. Нова Жучка')).toEqual(['нова', 'жучка']);
+    expect(placeWords('с-ще Глибока')).toEqual(['глибока']);
+    expect(placeWords('с.Мариничі')).toEqual(placeWords('с. село Мариничі'));
+    expect(placeWords('с. Драниця (Негринці)')).toEqual(['драниця', 'негринці']);
+    expect(placeWords('с. Негринці (Драниця)')).toEqual(['негринці', 'драниця']);
+  });
+});
+
+describe('settlementKey (R11)', () => {
+  it('one settlement under the operator\'s spellings is one key', () => {
+    expect(settlementKey('с. Мариничі')).toBe('с мариничі');
+    expect(settlementKey('с.Мариничі')).toBe('с мариничі');
+    expect(settlementKey('с.Бісків')).toBe(settlementKey('с. село Бісків'));
+    expect(settlementKey('с. РІпень')).toBe(settlementKey('с.Ріпень'));
+    expect(settlementKey('с. с. Заболоття')).toBe(settlementKey('с. Заболоття'));
+    expect(settlementKey('село Мариничі')).toBe('с мариничі');
+    expect(settlementKey('с. Мaриничі')).toBe('с мариничі'); // a Latin «a»
+  });
+
+  it('folds the leading type words to one type: м, else смт, else с', () => {
+    expect(settlementKey('м. Чернівці')).toBe('м чернівці');
+    expect(settlementKey('місто Чернівці')).toBe('м чернівці');
+    expect(settlementKey('смт Глибока')).toBe('смт глибока');
+    expect(settlementKey('селище Глибока')).toBe('смт глибока');
+    // «с-ще» splits into «с» and «ще»: the «ще» makes it a селище.
+    expect(settlementKey('с-ще Глибока')).toBe('смт глибока');
+    expect(settlementKey('с. смт Глибока')).toBe('смт глибока');
+    expect(settlementKey('м. с. Герца')).toBe('м герца');
+    expect(settlementKey('Глибока')).toBe('глибока');
+  });
+
+  it('keeps two types, and two orders of the words, apart', () => {
+    expect(settlementKey('м. Герца')).not.toBe(settlementKey('с. Герца'));
+    expect(settlementKey('смт Герца')).not.toBe(settlementKey('с. Герца'));
+    expect(settlementKey('Герца')).not.toBe(settlementKey('с. Герца'));
+    expect(settlementKey('с. Драниця (Негринці)')).toBe('с драниця негринці');
+    expect(settlementKey('с. Негринці (Драниця)')).toBe('с негринці драниця');
+  });
+
+  it('a type word after the name is a word of the name', () => {
+    expect(settlementKey('с. Нове Село')).toBe('с нове село');
+    expect(settlementKey('с. Нове Село')).not.toBe(settlementKey('с. Нове'));
   });
 });

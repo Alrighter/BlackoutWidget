@@ -191,10 +191,33 @@ export function streetWords(s: string): string[] {
   return w.sort();
 }
 
-const PLACE_PREFIX = new Set(['м', 'с', 'смт', 'селище', 'село', 'місто', 'ще']);
+/** The words that name a settlement's type when they lead its name; «с-ще» splits into «с» and «ще». */
+const PLACE_TYPES = new Set(['с', 'ще', 'село', 'селище', 'смт', 'м', 'місто']);
 
+/** A settlement's name as its type (м, смт, с, or '' for none) and the words after its leading type words, in order. */
+function placeParts(name: string): { type: string; words: string[] } {
+  const words = nameWords(name);
+  let i = 0;
+  while (i < words.length && PLACE_TYPES.has(words[i])) i++;
+  const lead = new Set(words.slice(0, i));
+  const type = lead.has('м') || lead.has('місто') ? 'м'
+    : lead.has('ще') || lead.has('селище') || lead.has('смт') ? 'смт'
+      : lead.has('с') || lead.has('село') ? 'с' : '';
+  return { type, words: words.slice(i) };
+}
+
+/**
+ * The key the spellings of one settlement share: its type folded to м, смт or с, then its words in their order, so
+ * «с.Мариничі» is «с. Мариничі» and «с.Бісків» is «с. село Бісків», but «м. X» is not «с. X» and «с. Драниця
+ * (Негринці)» is not «с. Негринці (Драниця)». scripts/gen-cvoe-settlements.mjs groups the bundle by a copy of it.
+ * Never shown.
+ */
+export function settlementKey(name: string): string {
+  const { type, words } = placeParts(name);
+  return (type ? [type, ...words] : words).join(' ');
+}
+
+/** A settlement's words without its type, in their order: an outage row's settlement is matched by them. */
 export function placeWords(s: string): string[] {
-  const w = nameWords(s);
-  while (w.length && PLACE_PREFIX.has(w[0])) w.shift();
-  return w.sort();
+  return placeParts(s).words;
 }

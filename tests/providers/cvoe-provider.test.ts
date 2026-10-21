@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CvoeProvider, cvoeStaleNote } from '../../src/main/providers/cvoe';
-import { cvoeStreets, parseCvoePage, parseDistrictPage } from '../../src/main/providers/cvoe/parse';
+import { cvoeStreets, parseCvoePage, parseDistrictPage, settlementKey } from '../../src/main/providers/cvoe/parse';
 import { cvoeSettlements } from '../../src/main/providers/cvoe/settlements';
 import { AddressNotFoundError, sortedLabels } from '../../src/main/providers/resolve';
 import { NetworkError, ProviderError } from '../../src/main/providers/types';
@@ -214,6 +214,24 @@ describe('CvoeProvider address lookup', () => {
     // «м. Чернівці» is a settlement of district 3 too: one row on this page.
     expect(await p.listStreets('м. Чернівці (Герцаївська дільниця)')).toEqual(['вул. Південно-Кільцева']);
     expect(http.gets('/shutdowns-search/3/')).toHaveLength(1);
+  });
+
+  it('the rows of «с. Мариничі» and «с.Мариничі» are one settlement\'s rows (R11)', async () => {
+    // District 9 writes some settlements both ways; the bundle has the one entry, whichever spelling it shows.
+    const marynychi = cvoeSettlements().filter((s) => s.district === 9 && settlementKey(s.name) === settlementKey('с. Мариничі'));
+    expect(marynychi).toHaveLength(1);
+    const district = livePage(D3, [
+      ['с. Мариничі', 'вул. Центральна', 'буд. 1', '3'], ['с.Мариничі', 'вул. Центральна', 'буд. 1', '7'],
+      ['с.Мариничі', 'вул. Лісова', 'буд. 2', '7'], ['с. Мариничі', 'вул. Шкільна', 'буд. 5', '3'],
+    ].map(([s, st, h, g]) => `<div><s>${s}</s><p>${st}</p><b>${h}</b><u>${g}</u></div>`).join(''));
+    const { p } = setup({ http: fakeHttp({ 'GET /shutdowns-search/9/': () => ok(district) }) });
+    const city = marynychi[0].label;
+    expect(await p.listStreets(city)).toEqual(['вул. Лісова', 'вул. Центральна', 'вул. Шкільна']);
+    const lines = [{ index: 1, groupId: '3', label: 'Група 3' }, { index: 2, groupId: '7', label: 'Група 7' }];
+    expect(await p.listHouses(city, 'вул. Центральна')).toEqual([{ house: '1', lines, outageActive: false }]);
+    const snap = await p.fetchSnapshot({ providerId: 'cvoe', city, street: 'вул. Центральна', house: '1', lineIndex: 2, groupId: '7' });
+    expect(snap.lines).toEqual(lines);
+    expect(snap.days).toEqual([{ date: '2025-11-05', slots: tableOf(NOV05).groups['7'] }]);
   });
 
   it('keeps a district\'s rows for the run, but not a failed read', async () => {
@@ -522,6 +540,25 @@ describe('CvoeProvider current outage', () => {
     const other = reply([swap(KADENIUKA_ROW, 'м. <b>Чер</b>нівці', 'с. Нові <b>Чер</b>нівці')]);
     const snap = await setup({ http: outageHttp(() => ok(other)), now: OCT21_10 }).p.fetchSnapshot(kadeniuka('КАДЕНЮКА ЛЕОНІДА'));
     expect('currentOutage' in snap).toBe(false);
+  });
+
+  it('a row of «с. Негринці (Драниця)» never counts for «с. Драниця (Негринці)»: the words keep their order (R11)', async () => {
+    // Two villages of district 8, each named after the other in brackets.
+    const dranytsia = cvoeSettlements().find((s) => s.name === 'с. Драниця (Негринці)')!;
+    expect(dranytsia.district).toBe(8);
+    expect(cvoeSettlements().some((s) => s.district === 8 && s.name === 'с. Негринці (Драниця)')).toBe(true);
+    const district = livePage(D3, '<div><s>с. Драниця (Негринці)</s><p>вул. Центральна</p><b>буд. 22А</b><u>4</u></div>');
+    const row = (settlement: string) => swap(swap(KADENIUKA_ROW, 'м. <b>Чер</b>нівці', settlement), '<b>вул</b>. КАДЕНЮКА ЛЕОНІДА', 'вул. <b>Центральна</b>');
+    const address: Address = { providerId: 'cvoe', city: dranytsia.label, street: 'вул. Центральна', house: '22А', lineIndex: 1, groupId: '4' };
+    const run = async (settlement: string) => {
+      const http = outageHttp(() => ok(reply([row(settlement)])), undefined, { 'GET /shutdowns-search/8/': () => ok(district) });
+      return setup({ http, now: OCT21_10 }).p.fetchSnapshot(address);
+    };
+    const other = await run('с. <b>Негринці</b> (Драниця)');
+    expect(other.lines).toEqual([{ index: 1, groupId: '4', label: 'Група 4' }]);
+    expect('currentOutage' in other).toBe(false);
+    // The village's own row does count.
+    expect((await run('с. Драниця (<b>Негринці</b>)')).currentOutage).toEqual(PLANNED_22A);
   });
 
   it('counts from its start up to, not at, its end', async () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { cvoeSettlements, CVOE_DISTRICTS } from '../../src/main/providers/cvoe/settlements';
 import { nameKey } from '../../src/main/providers/names';
+import { settlementKey } from '../../src/main/providers/cvoe/parse';
 
 describe('cvoeSettlements', () => {
   const list = cvoeSettlements();
@@ -39,12 +40,24 @@ describe('cvoeSettlements', () => {
       'с. Остриця (Новоселицька дільниця)',
     ].sort());
   });
-  it('has no two entries of one district with the same nameKey', () => {
+  it('has no two entries of one district with the same settlementKey (R11)', () => {
     const seen = new Set<string>();
     for (const s of list) {
-      const k = `${s.district}|${nameKey(s.name)}`;
-      expect(seen.has(k)).toBe(false);
+      const k = `${s.district}|${settlementKey(s.name)}`;
+      expect(seen.has(k), k).toBe(false);
       seen.add(k);
     }
+  });
+  it('holds each Путильська settlement once, whichever way a row spells it (R11)', () => {
+    // Before R11 the district had 72 entries, 19 of them a second spelling: «с.Мариничі» beside «с. Мариничі».
+    const putyla = list.filter(s => s.district === 9);
+    expect(putyla.length).toBeLessThan(72);
+    expect(putyla.filter(s => settlementKey(s.name) === settlementKey('с. Мариничі'))).toHaveLength(1);
+    expect(putyla.filter(s => settlementKey(s.name) === settlementKey('с. село Бісків'))).toHaveLength(1);
+  });
+  it('keeps «с. Драниця (Негринці)» and «с. Негринці (Драниця)» apart', () => {
+    const names = list.filter(s => s.district === 8).map(s => s.name);
+    expect(names).toContain('с. Драниця (Негринці)');
+    expect(names).toContain('с. Негринці (Драниця)');
   });
 });

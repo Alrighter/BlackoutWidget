@@ -10,8 +10,8 @@ import { addressNotFound, resolveByLabel, sortedLabels } from '../resolve';
 import { addressSide, bestEffort, daysForLine, snapshotOf, type ScheduleDays } from '../snapshot';
 import type { ScheduleProvider } from '../types';
 import {
-  cvoeHouses, cvoeStreets, groupLabel, groupLines, parseCvoePage, parseDistrictPage, parseOutageReply, placeWords, streetWords,
-  type CvoeOutageRow, type CvoePage, type CvoeRow,
+  cvoeHouses, cvoeStreets, groupLabel, groupLines, parseCvoePage, parseDistrictPage, parseOutageReply, placeWords, settlementKey,
+  streetWords, type CvoeOutageRow, type CvoePage, type CvoeRow,
 } from './parse';
 import { cvoeSettlements, CVOE_DISTRICTS, type CvoeSettlement } from './settlements';
 
@@ -210,7 +210,8 @@ export class CvoeProvider implements ScheduleProvider {
   /**
    * An emergency, else planned works, running now for this house. The form searches by substring, so it is asked with
    * the search word of the settlement and of the street (and the house's leading digits), and a row counts only when
-   * its settlement and street have the saved words and one of its houses is the saved one.
+   * its settlement has the saved one's words in their order (the type aside), its street the saved street's words, and
+   * one of its houses is the saved one.
    */
   private async currentOutage(settlement: CvoeSettlement, address: Address, today: string, now: Date): Promise<CurrentOutage | undefined> {
     const place = placeWords(settlement.name);
@@ -259,12 +260,15 @@ export class CvoeProvider implements ScheduleProvider {
     return resolveByLabel(list, list.map((s) => s.label), label, (s) => s.name, districtGroup, NAME);
   }
 
-  /** The settlement's rows: the whole city page for district 1, else the district's rows naming it (by nameKey). */
+  /**
+   * The settlement's rows: the whole city page for district 1, else the district's rows naming it under any spelling
+   * (by settlementKey: «с.Мариничі» rows are «с. Мариничі» rows).
+   */
   private async settlementRows(settlement: CvoeSettlement): Promise<CvoeRow[]> {
     const rows = await this.districtRows(settlement.district);
     if (settlement.district === 1) return rows;
-    const name = nameKey(settlement.name);
-    return rows.filter((r) => r.settlement !== undefined && nameKey(r.settlement) === name);
+    const key = settlementKey(settlement.name);
+    return rows.filter((r) => r.settlement !== undefined && settlementKey(r.settlement) === key);
   }
 
   /** The street's rows, found by nameKey; none is AddressNotFoundError. */
