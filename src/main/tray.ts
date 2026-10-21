@@ -28,8 +28,8 @@ export class AppTray {
   update(state: AppState, now = new Date()): void {
     this.view = trayView(state, now);
     this.updateIcon();
-    this.tray.setToolTip(trayTooltip(this.view));
-    this.tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenu(state, this.actions, process.platform, this.view)));
+    this.tray.setToolTip(trayTooltip(state, now));
+    this.tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenu(state, this.actions, process.platform, now)));
   }
 
   /** The icon for the last view on the current panel theme; also when only the theme changed. */
