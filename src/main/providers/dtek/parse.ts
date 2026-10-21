@@ -108,3 +108,18 @@ export function isQuietToday(fact: DtekFact, todayKey: string): boolean {
   if (typeof fact.update !== 'string' || fact.update.trim() === '') return false;
   return !Object.keys(fact.data ?? {}).some(ts => kyivDateKey(new Date(Number(ts) * 1000)) === todayKey);
 }
+
+/**
+ * The days of one queue from a fact. A quiet today (nothing published for it, see isQuietToday) is power on by
+ * schedule: 48 `on` slots for today, sorted in with the other days, plus the quiet note. Tomorrow without a schedule is left out.
+ */
+export function factDays(
+  fact: DtekFact, groupId: string, todayKey: string, onUnknownStatus?: (status: string) => void,
+): { days: DaySchedule[]; note?: string } {
+  const days = factToDays(fact, groupId, onUnknownStatus);
+  if (!isQuietToday(fact, todayKey)) return { days };
+  return {
+    days: [{ date: todayKey, slots: Array<Slot>(48).fill('on') }, ...days].sort((a, b) => a.date.localeCompare(b.date)),
+    note: DTEK_QUIET_NOTE,
+  };
+}

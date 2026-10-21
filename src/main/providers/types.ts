@@ -25,7 +25,8 @@ export interface ScheduleProvider {
   listHouses(city: string, street: string): Promise<HouseInfo[]>;
   /** Sources whose `listHouses` marks houses `linesPending` give the picked house's lines here (one request per house). */
   houseLines?(city: string, street: string, house: string): Promise<LineInfo[]>;
-  fetchSnapshot(address: Address): Promise<ScheduleSnapshot>;
+  /** `previous`: the stored snapshot of the same address (null when none), for sources that reuse parts of it. */
+  fetchSnapshot(address: Address, previous?: ScheduleSnapshot | null): Promise<ScheduleSnapshot>;
   showVerification(): Promise<void>;
   dispose(): void;
 }
