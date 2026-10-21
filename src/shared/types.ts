@@ -23,14 +23,37 @@ export interface ScheduleSnapshot {
 }
 export type WidgetStyle = 'compact' | 'ring' | 'timeline';
 export interface WidgetPosition { x: number; y: number; displayId: number }
+export interface Location {
+  /** Made once when the location is created; never changed or reused. */
+  id: string;
+  /** Trimmed, 1–24 characters, unique among the locations ignoring case. */
+  name: string;
+  address: Address; widgetStyle: WidgetStyle; widgetPosition: WidgetPosition | null;
+}
 export interface Settings {
-  address: Address | null; widgetStyle: WidgetStyle; autostart: boolean; widgetPosition: WidgetPosition | null;
+  /** 0–5, in the order created. `locations[0]` is the tray's location. */
+  locations: Location[];
+  /** The location EcoFlow belongs to; null with no locations, or after that location was deleted. */
+  actualLocationId: string | null;
+  autostart: boolean;
   actualSource: ActualSourceConfig | null; ecoflowClientId?: string;
   /** 32 upper-case hex characters, made once on the first account save; the middle of the app MQTT clientId. */
   ecoflowAppClientUuid?: string;
 }
 export type RefreshPhase = 'idle' | 'refreshing' | 'ok' | 'error' | 'captcha';
-export interface AppState { settings: Settings; snapshot: ScheduleSnapshot | null; phase: RefreshPhase; lastError?: string; lineChanged: boolean; actual?: ActualStatus | null }
+export interface LocationState {
+  location: Location; snapshot: ScheduleSnapshot | null; phase: RefreshPhase; lastError?: string; lineChanged: boolean;
+  /** Only on the EcoFlow location (settings.actualLocationId). */
+  actual?: ActualStatus | null;
+}
+export interface AppState {
+  settings: Settings; locations: LocationState[];
+  /** The station's own status, for the EcoFlow card only; views read LocationState.actual. */
+  actual?: ActualStatus | null;
+  /** False until a read of settings.json has succeeded: the settings shown are then only a display fallback. */
+  settingsLoaded: boolean;
+}
+export interface WidgetState { location: LocationState; showName: boolean }
 export type WidgetBackground = { kind: 'image'; dataUrl: string } | { kind: 'tint' };
 export type EcoflowRegion = 'eu' | 'us';
 export type ActualPower = 'on' | 'off' | 'unknown';

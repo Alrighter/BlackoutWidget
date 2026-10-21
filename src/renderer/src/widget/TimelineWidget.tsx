@@ -1,7 +1,7 @@
 import { addDays, formatDM } from '../../../shared/time';
 import { countdownText, type WidgetView } from '../../../shared/widget-state';
 import { DayBar, DayTicks } from './DayBar';
-import { Caption, Status, WarnLine } from './parts';
+import { Caption, captionLabel, Status, WarnLine } from './parts';
 
 function DayLabel({ name, dateKey }: { name: string; dateKey: string }) {
   return <div className="w-tl-label"><span className="w-tl-day">{name}</span> <span className="w-tl-date">{formatDM(dateKey)}</span></div>;
@@ -11,13 +11,13 @@ function DayLabel({ name, dateKey }: { name: string; dateKey: string }) {
  * Timeline (widget-timeline.html): the status and the next change with the big countdown beside them, today's and
  * tomorrow's strips, and a caption that also names the provider.
  */
-export function TimelineWidget({ view, lineChanged, provider }: { view: WidgetView; lineChanged: boolean; provider: string }) {
+export function TimelineWidget({ view, lineChanged, provider, name }: { view: WidgetView; lineChanged: boolean; provider: string; name: string }) {
   const tomorrowKey = view.tomorrow?.date ?? addDays(view.todayKey, 1);
   // On a mismatch nextText already carries «з HH:MM».
   const since = view.actual && !view.actual.mismatch ? view.actual.sinceText : undefined;
   const count = countdownText(view);
   // The provider name comes last in the one ellipsized label, so it gives way first.
-  const label = [view.lineLabel, provider].filter(Boolean).join(' · ');
+  const label = captionLabel(name, view.lineLabel, provider);
   return (
     <>
       <div className="w-tl-head">

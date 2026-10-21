@@ -3,7 +3,8 @@ import type { RendererApi } from '../../../shared/ipc';
 import { dayCells } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
 import { providerRegion, providerNoLinesHint, providerShortName, providerSingleCity } from '../../../shared/providers';
-import type { DaySchedule, HouseInfo, LineInfo, WidgetStyle } from '../../../shared/types';
+import { HOME_NAME, NAME_MAX, nameProblem } from '../../../shared/locations';
+import type { DaySchedule, HouseInfo, LineInfo, Location, WidgetStyle } from '../../../shared/types';
 import { lowerFirst } from '../../../shared/widget-state';
 import { Autocomplete, matches } from './Autocomplete';
 import { DayStrip } from './DayStrip';
@@ -21,6 +22,8 @@ const RAIL: { step: Step; label: string }[] = [
 const TITLES: Record<Step, string> = {
   provider: 'Регіон і компанія', city: 'Місто', street: 'Вулиця', house: 'Будинок', line: 'Лінія', style: 'Стиль віджета', done: 'Готово',
 };
+/** The rail's heading names what the wizard is doing. */
+const RAIL_TITLES: Record<WizardMode['kind'], string> = { first: 'Перше налаштування', add: 'Нова адреса', edit: 'Зміна адреси' };
 const OUTAGE_NOTE = 'Зараз для цього будинку діє відключення — список ліній може бути неповним. Якщо вашої лінії немає, спробуйте пізніше.';
 /** The thumbnails' scale on the style cards (setup-wizard.html). */
 const THUMB_SCALE: Record<WidgetStyle, number> = { compact: 0.36, ring: 0.28, timeline: 0.26 };
@@ -134,23 +137,33 @@ function Status<T>({ res, api, providerId, children }: { res: Loaded<T>; api: Re
   return <>{children(res.data as T)}</>;
 }
 
-export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
+/** What the wizard is for: the very first location, a further one, or the new address of an existing one. */
+export type WizardMode =
+  | { kind: 'first' }
+  /** `taken`: the other locations' names; `style`: `locations[0]`'s. */
+  | { kind: 'add'; taken: string[]; style: WidgetStyle }
+  /** `taken` excludes the location's own name. */
+  | { kind: 'edit'; location: Location; taken: string[] };
+
+export function SetupWizard({ api, autostart, mode, onDone, onCancel }: {
   api: RendererApi;
   /** settings.autostart, for the «Готово» step's switch (it works as the one in the settings). */
   autostart: boolean;
-  /** settings.widgetStyle: the style step starts from it, so changing the address keeps the style. */
-  widgetStyle: WidgetStyle;
+  mode: WizardMode;
   onDone(): void;
-  /** Leave without saving; shown when an address is already set. */
+  /** Leave without saving; App passes it for `add` and `edit`, never for `first`. */
   onCancel?(): void;
 }) {
+  const taken = mode.kind === 'first' ? [] : mode.taken;
   const [step, setStep] = useState<Step>('provider');
   const [providerId, setProviderId] = useState<string | null>(null);
   const [city, setCity] = useState<string | null>(null);
   const [street, setStreet] = useState<string | null>(null);
   const [house, setHouse] = useState<string | null>(null);
   const [line, setLine] = useState<LineInfo | null>(null);
-  const [style, setStyle] = useState<WidgetStyle>(widgetStyle);
+  const [style, setStyle] = useState<WidgetStyle>(mode.kind === 'first' ? 'compact' : mode.kind === 'add' ? mode.style : mode.location.widgetStyle);
+  const [name, setName] = useState(mode.kind === 'first' ? HOME_NAME : mode.kind === 'edit' ? mode.location.name : '');
+  const [nameTouched, setNameTouched] = useState(false);
   /** The picked house's lines; `null` while a pending house's lines are loading (or failed: see `linesError`). */
   const [houseLines, setHouseLines] = useState<LineInfo[] | null>([]);
   const [linesError, setLinesError] = useState<string | null>(null);
@@ -214,7 +227,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
     : step === 'house' ? house !== null && houseLines !== null && !noLines
     : step === 'line' ? !!line
     : step === 'style' ? true
-    : !saving;
+    : !saving && nameProblem(name, taken) === null;
 
   // During an outage the list holds only the outage's queues, so the line must always be chosen explicitly.
   const needsLineStep = lineCount > 1 || houseOutage;
@@ -231,8 +244,9 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
     if (!providerId || !city || !street || !house || !line) return;
     setSaving(true); setSaveError(null);
     try {
-      await api.saveAddress({ providerId, city, street, house, lineIndex: line.index, groupId: line.groupId });
-      await api.setWidgetStyle(style);
+      const input = { name, address: { providerId, city, street, house, lineIndex: line.index, groupId: line.groupId }, widgetStyle: style };
+      if (mode.kind === 'edit') await api.editLocation(mode.location.id, input);
+      else await api.addLocation(input);
       onDone();
     } catch (e) {
       setSaveError(unwrapIpcError(e).message);
@@ -260,6 +274,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
     setPendingHouse(h.linesPending ? h.house : null);
   };
 
+  const problem = nameTouched ? nameProblem(name, taken) : null;
   const num = RAIL.findIndex(r => r.step === step) + 1;
   const place = `${city}, ${street}, ${house}`;
   const choice = line ? `Лінія ${line.index} · ${lowerFirst(line.label)} · стиль «${STYLES.find(s => s.id === style)?.name}»` : '';
@@ -267,7 +282,7 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
   return (
     <div className="wz" data-capture="wizard">
       <nav className="wz-rail" aria-label="Кроки" data-capture="wz-rail">
-        <div className="wz-rail-title">Перше налаштування</div>
+        <div className="wz-rail-title">{RAIL_TITLES[mode.kind]}</div>
         <ol className="wz-steps">
           {RAIL.map(({ step: s, label }, i) => {
             const state = i + 1 < num ? 'done' : i + 1 === num ? 'now' : 'next';
@@ -424,6 +439,11 @@ export function SetupWizard({ api, autostart, widgetStyle, onDone, onCancel }: {
                   <span className="wz-summary-sub" title={choice} data-capture="summary-choice">{choice}</span>
                 </span>
               </div>
+              <label className="st-label wz-label wz-name-label" htmlFor={`${uid}-name`}>Назва</label>
+              <input id={`${uid}-name`} className="st-input wz-input wz-name" value={name} placeholder="Наприклад, Батьки" maxLength={NAME_MAX}
+                aria-invalid={problem ? true : undefined} aria-describedby={problem ? `${uid}-name-err` : undefined}
+                onChange={e => { setName(e.target.value); setNameTouched(true); }} />
+              {problem && <p className="wz-name-err" id={`${uid}-name-err`} role="alert">{problem}</p>}
               <div className="wz-card wz-auto">
                 <label className="wz-auto-label" htmlFor="wz-autostart" id="wz-autostart-name">Запускати разом із системою</label>
                 <button id="wz-autostart" role="switch" aria-checked={autostart} aria-labelledby="wz-autostart-name"

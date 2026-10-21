@@ -39,7 +39,7 @@ export interface ActualActionsDeps {
   secrets: Pick<SecretStore, 'save' | 'remove'>;
   getSettings(): Settings;
   /** Throws when the settings cannot be written: save and disconnect must not report a change that did not happen. */
-  updateSettings(patch: Partial<Settings>): void;
+  updateSettings(patch: Partial<Omit<Settings, 'locations'>>): void;
   /** Re-reads the settings and keys and restarts ActualStateService. */
   restartActual(): void;
   log: Logger;
@@ -161,7 +161,7 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
    * `hidden`: secrets beyond the input that an error text must not carry.
    */
   const store = (
-    input: Input, id: string, secret: Record<string, string>, patch: () => Partial<Settings>, others: string[], hidden: readonly string[] = [],
+    input: Input, id: string, secret: Record<string, string>, patch: () => Partial<Omit<Settings, 'locations'>>, others: string[], hidden: readonly string[] = [],
   ): ActionResult => {
     try {
       deps.secrets.save(id, secret);
@@ -308,7 +308,7 @@ export function createActualActions(deps: ActualActionsDeps): ActualActions {
 
 export interface ActualRestartDeps {
   getSettings(): Settings;
-  updateSettings(patch: Partial<Settings>): void;
+  updateSettings(patch: Partial<Omit<Settings, 'locations'>>): void;
   secrets: Pick<SecretStore, 'load'>;
   service: Pick<ActualStateService, 'start' | 'stop'>;
   sources: ActualSourceFactory[];

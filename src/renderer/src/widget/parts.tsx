@@ -91,18 +91,22 @@ export function WarnLine() {
   );
 }
 
+/** The caption's label: the location's name (only among several locations) before the line. */
+export const captionLabel = (...parts: string[]): string => parts.filter(Boolean).join(' · ');
+
 /**
  * Footer, one row always kept inside the fixed window: «оновлено HH:MM» and the stale pill never shrink, only the
  * optional label before them ellipsizes.
  */
 export function Caption({ view, label, updated }: { view: WidgetView; label?: string; updated: string }) {
-  if (!updated) return null;
+  if (!updated && !label) return null;
   const title = [label, updated, view.stale ? 'дані застаріли' : ''].filter(Boolean).join(' · ');
   return (
     <div className="w-foot">
       <div className="w-cap" title={title} data-capture="caption">
-        {label && <><span className="w-ellipsis" data-capture="label">{label}</span><span className="w-sep"> · </span></>}
-        <span className="w-fixed" data-capture="updated">{updated}</span>
+        {label && <span className="w-ellipsis" data-capture="label">{label}</span>}
+        {label && updated && <span className="w-sep"> · </span>}
+        {updated && <span className="w-fixed" data-capture="updated">{updated}</span>}
         {view.stale && <span className="w-stale" data-capture="stale">дані застаріли</span>}
       </div>
     </div>

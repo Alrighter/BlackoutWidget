@@ -87,6 +87,10 @@ const LINES = [{ index: 1, groupId: 'GPV1.2', label: 'Черга 1.2' }, { index
 const ADDRESS = {
   providerId: 'dtek-krem', city: 'м. Біла Церква', street: 'бул. Грушевського Михайла', house: '40', lineIndex: 1, groupId: 'GPV1.2',
 };
+/** The second location's house: another address, so nothing implies the two share data (only the fake schedule is the same). */
+const PARENTS_ADDRESS = {
+  providerId: 'dtek-krem', city: 'м. Біла Церква', street: 'вул. Ярослава Мудрого', house: '12', lineIndex: 1, groupId: 'GPV1.2',
+};
 const ECOFLOW_DEVICE = { sn: 'R331ZEB4ZEA00142', label: 'Delta 2' };
 
 /** 'HH:MM' = that Kyiv time on DEFAULT_DATE; anything else is parsed as a date-time (e.g. 2026-10-17T11:50:00+03:00). */
@@ -100,8 +104,10 @@ function parseNow(text) {
 /**
  * The scenario's AppState, the clock (ms) the renderer must see, and what the stubbed window.api returns.
  * `now` (optional, see parseNow) moves only the clock: the scenario's times stay on the clock's Kyiv day.
+ * `locations` 1 or 2: the second is «Батьки» (id `parents`) with the same schedule at its own address. `widget` is the
+ * first location's WidgetState, as widgetStateOf in src/main/compose-state.ts builds it.
  */
-function buildScenario(name, { style = 'compact', now } = {}) {
+function buildScenario(name, { style = 'compact', now, locations = 1 } = {}) {
   const s = SCENARIOS[name];
   if (!s) throw new Error(`unknown scenario "${name}" (one of: ${SCENARIO_NAMES.join(', ')})`);
   const nowMs = now ? parseNow(now) : kyivWall(DEFAULT_DATE, mins(s.now));
@@ -143,10 +149,20 @@ function buildScenario(name, { style = 'compact', now } = {}) {
     actualSource = { id: 'ecoflow', region: 'eu', deviceSn: ECOFLOW_DEVICE.sn, deviceName: ECOFLOW_DEVICE.label, accessKeyHint: 'Fp4S…' };
   }
 
+  const own = (id, name, address) => ({
+    location: { id, name, address, widgetStyle: style, widgetPosition: null },
+    snapshot: { ...snapshot, address }, phase: 'ok', lineChanged: s.lineChanged === true,
+  });
+  const states = [{ ...own('home', 'Дім', ADDRESS), actual }];
+  if (locations >= 2) states.push(own('parents', 'Батьки', PARENTS_ADDRESS));
+  // As composeAppState: the station's status is on the EcoFlow location and, for the EcoFlow card, on AppState.
   const state = {
-    settings: { address: ADDRESS, widgetStyle: style, autostart: true, widgetPosition: null, actualSource },
-    snapshot, phase: 'ok', lineChanged: s.lineChanged === true, actual,
+    settings: {
+      locations: states.map(l => l.location), actualLocationId: 'home', autostart: true, actualSource,
+    },
+    locations: states, actual, settingsLoaded: true,
   };
+  const widget = { location: states[0], showName: states.length > 1 };
   const stubs = {
     // Same name as PROVIDER_NAMES in src/shared/providers.ts.
     providers: [{ id: 'dtek-krem', displayName: 'ДТЕК Київські регіональні електромережі' }],
@@ -157,6 +173,7 @@ function buildScenario(name, { style = 'compact', now } = {}) {
       { house: '40', lines: LINES, outageActive: false },
       { house: '42', lines: [LINES[1]], outageActive: false },
     ],
+    houseLines: LINES,
     previewLines: [{ line: LINES[0], today: { date: day, slots: T_A } }, { line: LINES[1], today: { date: day, slots: T_C } }],
     // What window.api's EcoFlow calls resolve with; --stubs replaces them ("pending": never settles).
     ecoflowTest: { ok: true, devices: [{ ...ECOFLOW_DEVICE, online: true }] },
@@ -164,7 +181,7 @@ function buildScenario(name, { style = 'compact', now } = {}) {
     ecoflowPreview: { ok: true, online: true, power: 'on', detail: 'на вході 229 В' },
     ecoflowSave: { ok: true },
   };
-  return { nowMs, state, stubs };
+  return { nowMs, state, widget, stubs };
 }
 
 module.exports = { SCENARIO_NAMES, DEFAULT_DATE, buildScenario };

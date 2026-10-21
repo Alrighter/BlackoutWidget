@@ -3,7 +3,7 @@ import type { StripPart } from '../../../shared/actual-view';
 import { dayCells, type DayCell } from '../../../shared/day-cells';
 import { countdownText, lowerFirst, type WidgetView } from '../../../shared/widget-state';
 import { OutageBadge } from './OutageBadge';
-import { Caption, EcoBolt, StateDot, Status, WarnLine } from './parts';
+import { Caption, captionLabel, EcoBolt, StateDot, Status, WarnLine } from './parts';
 
 /** Ring diameter; under the line-changed warning row it shrinks to make room (widget-ring.html). */
 const RING = 208;
@@ -80,7 +80,7 @@ function nowDot(size: number, nowFraction: number): CSSProperties {
   return { left: `${(size / 2 + r * Math.sin(angle)).toFixed(1)}px`, top: `${(size / 2 - r * Math.cos(angle)).toFixed(1)}px` };
 }
 
-export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChanged: boolean }) {
+export function RingWidget({ view, lineChanged, name }: { view: WidgetView; lineChanged: boolean; name: string }) {
   const size = lineChanged ? RING_SMALL : RING;
   const cells = dayCells(view.today?.slots ?? null, Math.round(view.nowFraction * 1440), view.emergency);
   const actual = view.actualStrip?.length ? view.actualStrip : null;
@@ -122,7 +122,7 @@ export function RingWidget({ view, lineChanged }: { view: WidgetView; lineChange
       </div>
       <div className="w-spacer" />
       {lineChanged && <WarnLine />}
-      <Caption view={view} label={view.lineLabel} updated={view.updatedText} />
+      <Caption view={view} label={captionLabel(name, view.lineLabel)} updated={view.updatedText} />
     </>
   );
 }

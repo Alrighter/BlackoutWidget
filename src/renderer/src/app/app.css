@@ -13,8 +13,9 @@ p { margin: 6px 0; }
 
 /* Window (main-schedule.html, D9): the tab row with ⟳, then the scrolling body. The title bar is the system's. */
 .app { height: 100%; display: flex; flex-direction: column; }
-.app-bar { flex: none; height: 48px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
-.app-tabs { display: flex; gap: 4px; }
+.app-bar { flex: none; height: 48px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.app-nav { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 16px; }
+.app-tabs { flex: none; display: flex; gap: 4px; }
 .app-tab {
   height: 34px; padding: 0 14px; border: 0; border-radius: var(--bw-r-btn); font-size: 14px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -23,13 +24,25 @@ p { margin: 6px 0; }
 .app-tab:hover { background: var(--bw-ctl); }
 .app-tab[aria-selected='true'] { font-weight: 600; background: var(--bw-ctl-on); box-shadow: var(--bw-ctl-on-shadow); color: var(--bw-app-ink); }
 .app-tab[aria-selected='true']::after { content: ''; width: 16px; height: 3px; border-radius: 2px; background: var(--bw-accent); }
+/* The location switcher (2+ locations): one pill per name beside the tabs. The pills shrink to fit the 760-px
+   window, five 24-character names included; a cut name ends in «…» and keeps its full text in the tooltip. */
+.app-locs { flex: 0 1 auto; min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: var(--bw-r-pill); background: var(--bw-ctl); }
+.app-loc {
+  flex: 0 1 auto; min-width: 44px; max-width: 160px; height: 28px; padding: 0 12px; border: 0; border-radius: var(--bw-r-pill);
+  font-size: 13px; background: transparent; color: var(--bw-app-ink-2);
+}
+.app-loc > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.app-loc:hover { color: var(--bw-app-ink); }
+.app-loc[aria-selected='true'] { font-weight: 600; background: var(--bw-ctl-on); box-shadow: var(--bw-ctl-on-shadow); color: var(--bw-app-ink); }
 .app-refresh {
-  width: 34px; height: 34px; padding: 0; border-radius: var(--bw-r-btn); display: flex; align-items: center; justify-content: center;
+  flex: none; width: 34px; height: 34px; padding: 0; border-radius: var(--bw-r-btn); display: flex; align-items: center; justify-content: center;
   background: var(--bw-btn); border: 1px solid var(--bw-btn-edge); color: var(--bw-app-ink-2);
 }
 .app-refresh svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .app-refresh:hover, .sv-btn:hover { background: var(--bw-ctl-on); }
 .app-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
+/* Settings that cannot be read yet: the note alone, with no tab row above it. */
+.app-body.app-unread { padding-top: 20px; }
 
 /* «Графік» tab (main-schedule.html). */
 .sv { display: flex; flex-direction: column; gap: 12px; }
@@ -177,6 +190,19 @@ p { margin: 6px 0; }
 .st-icon.st-icon-lg { width: 40px; height: 40px; }
 .st-icon svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 
+/* The location's name, its inline rename and the delete question. */
+.st-loc-name { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.st-loc-name-text { min-width: 0; font-size: 16px; line-height: 21px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-loc-name .st-link { flex: none; font-size: 12.5px; }
+.st-rename { display: flex; flex-direction: column; gap: 8px; }
+.st-confirm {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px;
+  background: rgb(from var(--bw-emergency) r g b / 0.06); border: 1px solid rgb(from var(--bw-emergency) r g b / 0.3);
+}
+.st .sv-primary.st-danger:not(:disabled) { background: var(--bw-badge); color: #ffffff; }
+.st-add { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sv-btn.st-add-btn { display: flex; align-items: center; gap: 6px; }
+.st-add-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .st-addr { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 .st-addr-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .st-addr-main, .st-addr-sub, .st-device-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -418,6 +444,10 @@ p { margin: 6px 0; }
 .st-label.wz-label { flex: none; margin-bottom: 6px; }
 .st-input.wz-input { flex: none; height: 36px; padding: 0 12px; font-size: 14px; }
 .st-input.wz-filter { margin-bottom: 10px; }
+.st-input.wz-name { margin-top: 16px; }
+/* A name the rules refuse (the wizard's and the settings' rename): the alerts' error text. */
+.wz-name-err, .st-name-err { margin: 0; font-size: 13px; line-height: 19px; color: var(--bw-danger-ink); }
+.wz-name-err { flex: none; margin-top: 6px; }
 .wz-list {
   flex: 0 1 auto; min-height: 0; overflow-y: auto; margin-top: 6px; padding: 4px; border-radius: 10px; display: flex; flex-direction: column;
   background: var(--bw-field); border: 1px solid rgb(from var(--bw-app-ink) r g b / 0.10); box-shadow: var(--bw-pop-shadow);

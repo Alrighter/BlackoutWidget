@@ -186,10 +186,10 @@ async function viaService(body: unknown, address: typeof addr) {
   const s = fakeSession({ [READ_FACT]: [factReply()], [homeNum]: [{ status: 200, body: JSON.stringify(body) }] });
   const provider = new DtekProvider(KREM, s as any);
   const store = new AppStore(mkdtempSync(join(tmpdir(), 'bw-')));
-  store.updateSettings({ address });
+  const { id } = store.addLocation({ name: 'Дім', address, widgetStyle: 'compact', widgetPosition: null });
   const svc = new RefreshService({ store, getProvider: () => provider });
-  expect(await svc.refresh()).toBe('ok');
-  return svc.getState();
+  expect(await svc.refresh(id)).toBe('ok');
+  return svc.getStates()[0];
 }
 test('active outage listing only GPV1.2: a Лінія 2 / GPV4.2 address keeps the GPV4.2 schedule and gets no line warning', async () => {
   const body = withHouse40({ type: '2', sub_type: SUB, start_date: '15:11 17.10.2026', end_date: '19:00 17.10.2026', sub_type_reason: ['GPV1.2'] });

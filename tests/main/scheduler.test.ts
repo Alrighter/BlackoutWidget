@@ -1,4 +1,5 @@
-import { RefreshScheduler, type RunOutcome } from '../../src/main/scheduler';
+import { RefreshScheduler, STAGGER_MS, startDelays, type RunOutcome } from '../../src/main/scheduler';
+import type { Location } from '../../src/shared/types';
 
 beforeEach(() => vi.useFakeTimers()); afterEach(() => vi.useRealTimers());
 const min = 60_000;
@@ -85,4 +86,17 @@ test('a throwing run counts as a failure that reached the source (5-min floor), 
   await vi.advanceTimersByTimeAsync(0); expect(run).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(5 * min - 1); expect(run).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(1); expect(run).toHaveBeenCalledTimes(2);
+});
+
+test('start(delay): the first run happens at the delay and not before', async () => {
+  const run = always('ok'); const s = new RefreshScheduler(run, { random: () => 0.5 }); s.start(30_000);
+  await vi.advanceTimersByTimeAsync(29_999); expect(run).toHaveBeenCalledTimes(0);
+  await vi.advanceTimersByTimeAsync(1); expect(run).toHaveBeenCalledTimes(1);
+  s.stop();
+});
+test('startDelays staggers locations that share a provider', () => {
+  const loc = (id: string, providerId: string) => ({ id, address: { providerId } }) as unknown as Location;
+  const delays = startDelays([loc('A', 'dtek-krem'), loc('B', 'dtek-krem'), loc('C', 'voe'), loc('D', 'dtek-krem')]);
+  expect(delays.get('A')).toBe(0); expect(delays.get('B')).toBe(STAGGER_MS); expect(delays.get('C')).toBe(0); expect(delays.get('D')).toBe(2 * STAGGER_MS);
+  expect(STAGGER_MS).toBe(30_000);
 });

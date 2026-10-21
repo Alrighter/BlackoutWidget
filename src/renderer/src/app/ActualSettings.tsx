@@ -3,8 +3,12 @@ import { BLE_LINK_TEXT, BLE_PROBLEM_TEXT, isRiver2Family } from '../../../shared
 import type { ActualLive, EcoflowDeviceView, EcoflowInput, EcoflowPreviewResult, EcoflowScanResult, RendererApi } from '../../../shared/ipc';
 import { formatHM } from '../../../shared/time';
 import type { AppState, EcoflowRegion } from '../../../shared/types';
+import { unwrapIpcError } from './ipc-error';
 
-/** `initiallyOpen`: start with the connect / change form expanded (D10). */
+/**
+ * `initiallyOpen`: start with the connect / change form expanded (D10). The card reads the station's own status
+ * (`state.actual`) and `settings.actualLocationId`, the location it stands at.
+ */
 type SettingsProps = { state: AppState; api: RendererApi; initiallyOpen?: boolean };
 type Mode = 'account' | 'keys';
 const MODES: { value: Mode; label: string }[] = [
@@ -109,7 +113,7 @@ function Head({ title, chip, headRef }: { title: string; chip?: string; headRef:
   );
 }
 
-function Alert({ text }: { text: string }) {
+export function Alert({ text }: { text: string }) {
   return (
     <div className="st-alert" role="alert">
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5" /><path d="M12 16.4v.1" /></svg>
@@ -427,6 +431,40 @@ function EcoflowForm({ api, initialRegion, initialMode, preferSn, onClose }: {
   );
 }
 
+const UNASSIGNED = 'Оберіть, де стоїть станція';
+
+/**
+ * «Станція стоїть у:» — which location the station belongs to. Offered with 2+ locations, and with any location at
+ * all once the station stands at none (its location was deleted): then nothing is picked until the user picks.
+ */
+function StationPlace({ state, api }: { state: AppState; api: RendererApi }) {
+  const { locations, actualLocationId } = state.settings;
+  const [error, setError] = useState<string | null>(null);
+  const id = useId();
+  const unassigned = actualLocationId === null || !locations.some(l => l.id === actualLocationId);
+  if (locations.length < 2 && !(unassigned && locations.length > 0)) return null;
+  const pick = (next: string) => {
+    setError(null);
+    api.setActualLocation(next).catch(e => setError(unwrapIpcError(e).message));
+  };
+  return (
+    <div className="st-field">
+      <label className="st-label" htmlFor={`${id}-place`}>Станція стоїть у:</label>
+      <span className="st-select">
+        <select id={`${id}-place`} value={unassigned ? '' : actualLocationId} aria-describedby={unassigned ? `${id}-hint` : undefined}
+          onChange={e => { if (e.target.value) pick(e.target.value); }}>
+          {/* While nothing is picked, the one name is not shown as chosen: picking it must be a change. */}
+          {unassigned && <option value="" disabled hidden>—</option>}
+          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+        <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </span>
+      {unassigned && <p className="st-hint" id={`${id}-hint`}>{UNASSIGNED}</p>}
+      {error && <Alert text={error} />}
+    </div>
+  );
+}
+
 function EcoflowPanel({ state, api, initiallyOpen = false }: SettingsProps) {
   const source = state.settings.actualSource;
   const [editing, setEditing] = useState(initiallyOpen);
@@ -444,6 +482,7 @@ function EcoflowPanel({ state, api, initiallyOpen = false }: SettingsProps) {
       <div className="st-panel">
         <Head title="Фактичний стан світла" chip="EcoFlow" headRef={headRef} />
         <p className="st-text">Зарядна станція EcoFlow може показувати, чи є світло насправді.</p>
+        <StationPlace state={state} api={api} />
         <div className="st-actions"><button className="sv-primary" onClick={() => setEditing(true)}>Підключити EcoFlow</button></div>
       </div>
     );
@@ -463,6 +502,7 @@ function EcoflowPanel({ state, api, initiallyOpen = false }: SettingsProps) {
           {source.id === 'ecoflow-ble' && <BleLive api={api} />}
         </div>
       </div>
+      <StationPlace state={state} api={api} />
       <div className="st-actions">
         <button className="sv-btn" onClick={() => { setError(null); setEditing(true); }}>Змінити</button>
         <button className="sv-btn st-ghost" onClick={() => { setError(null); api.actualDisconnect().catch(() => setError(SAVE_FAILED)); }}>Вимкнути</button>
