@@ -1,5 +1,5 @@
 import { providerDisplayName } from '../../../shared/providers';
-import { addDays, kyivDateKey } from '../../../shared/time';
+import { addDays, kyivDateKey, kyivWallTimeToInstant } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot, Slot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import { HttpSource, sourceTexts, type PlainHttpDeps, type SourceInit } from '../http-source';
@@ -68,6 +68,16 @@ const longest = (words: readonly string[]): string => words.reduce((a, w) => (w.
  */
 const searchWord = (words: readonly string[]): string => longest(words.flatMap((w) => w.split('’')));
 
+/**
+ * A table's «станом на» time as 'HH:MM DD.MM.YYYY'. The page gives no date for it: the table's date, or the day before
+ * when that would put it after now (today's table, published the evening before).
+ */
+function updatedAt(table: CvoeTable, now: Date): string {
+  const [h, m] = table.updatedHM.split(':').map(Number);
+  const future = kyivWallTimeToInstant(table.date, h * 60 + m).getTime() > now.getTime();
+  return `${table.updatedHM} ${dmy(future ? addDays(table.date, -1) : table.date)}`;
+}
+
 /** A reply stamp 'YYYY-MM-DD HH:MM:SS' is Kyiv wall clock: as the ISO-like form the wall-clock helpers read. */
 const wallIso = (stamp: string): string => stamp.replace(' ', 'T');
 
@@ -81,8 +91,9 @@ function running(row: CvoeOutageRow, now: Date): boolean {
 /**
  * Чернівціобленерго over plain HTTPS: the bundled settlements, then the district's search page (every row of the
  * district, read once per run) for streets, houses and their groups, the one-day schedule page (and tomorrow's view when
- * linked), and the current-outage form. The table's own date decides the day: an older table is a quiet day, a later
- * one is unreadable. On refresh the address side is soft (every line is a group of the oblast-wide table).
+ * linked), and the current-outage form. Each table's own date decides its day: an older table is a quiet day unless its
+ * ?next holds today's, a later one is unreadable. On refresh the address side is soft (every line is a group of the
+ * oblast-wide table).
  */
 export class CvoeProvider implements ScheduleProvider {
   readonly id = 'cvoe';
@@ -129,7 +140,7 @@ export class CvoeProvider implements ScheduleProvider {
       let emergency = false;
       const schedule = await daysForLine(lines, address.groupId, today, async () => {
         const page = await this.page(SCHEDULE);
-        if (page.kind === 'table') return this.days(page, address.groupId, today);
+        if (page.kind === 'table') return this.days(page, address.groupId, today, now);
         emergency = true;
         return { days: [{ date: today, slots: daySlots('unknown') }] };
       });
@@ -158,21 +169,31 @@ export class CvoeProvider implements ScheduleProvider {
   }
 
   /**
-   * The default page's table by its own date. Today's gives the group's slots, the «станом на» time with that date, and
-   * tomorrow from ?next when linked (a ?next of any other date, or without a table, is ignored). An older table is the
-   * one the operator left up: a quiet day with the dated note. A later one has never been seen and is unreadable.
+   * The day by each table's own date. The default page dated today gives the group's slots, its «станом на» time, and
+   * tomorrow from ?next when linked (a ?next of any other date, or without a table, is ignored). An older default page
+   * with a ?next link means a newer table exists (just after midnight, say): a ?next dated today is today's schedule,
+   * one dated tomorrow leaves today the quiet day and gives tomorrow, any other is unreadable. An older page without the
+   * link is the one the operator left up: a quiet day with the dated note. A later one has never been seen: unreadable.
    */
-  private async days(page: CvoeTable, groupId: string, today: string): Promise<ScheduleDays> {
+  private async days(page: CvoeTable, groupId: string, today: string, now: Date): Promise<ScheduleDays> {
     const slots = this.slots(page, groupId);
-    if (page.date < today) return { days: [{ date: today, slots: daySlots('on') }], note: cvoeStaleNote(page.date) };
     if (page.date > today) throw this.http.unreadable({ what: 'schedule', reason: 'table dated after today' });
-    const days: DaySchedule[] = [{ date: today, slots }];
-    if (page.nextLink) {
-      const next = await this.page(NEXT);
-      const tomorrow = addDays(today, 1);
-      if (next.kind === 'table' && next.date === tomorrow) days.push({ date: tomorrow, slots: this.slots(next, groupId) });
+    const tomorrow = addDays(today, 1);
+    if (page.date === today) {
+      const days: DaySchedule[] = [{ date: today, slots }];
+      if (page.nextLink) {
+        const next = await this.page(NEXT);
+        if (next.kind === 'table' && next.date === tomorrow) days.push({ date: tomorrow, slots: this.slots(next, groupId) });
+      }
+      return { days, sourceUpdatedAt: updatedAt(page, now) };
     }
-    return { days, sourceUpdatedAt: `${page.updatedHM} ${dmy(page.date)}` };
+    const quiet: DaySchedule = { date: today, slots: daySlots('on') };
+    if (!page.nextLink) return { days: [quiet], note: cvoeStaleNote(page.date) };
+    const next = await this.page(NEXT);
+    if (next.kind !== 'table') throw this.http.unreadable({ what: 'schedule', reason: 'next view without a table' });
+    if (next.date === today) return { days: [{ date: today, slots: this.slots(next, groupId) }], sourceUpdatedAt: updatedAt(next, now) };
+    if (next.date === tomorrow) return { days: [quiet, { date: tomorrow, slots: this.slots(next, groupId) }], note: cvoeStaleNote(page.date) };
+    throw this.http.unreadable({ what: 'schedule', reason: 'next table of another date' });
   }
 
   /** The group's 48 cells; a group the table lacks is unreadable, on a quiet day too (never all `on`). */

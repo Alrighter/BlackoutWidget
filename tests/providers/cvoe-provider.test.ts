@@ -283,7 +283,8 @@ describe('CvoeProvider schedule', () => {
     const snap = await p.fetchSnapshot(BOHUSLAVSKA_1);
     expect(NOV05_12).toContain('off');
     expect(snap.days).toEqual([{ date: '2025-11-05', slots: NOV05_12 }]);
-    expect(snap.sourceUpdatedAt).toBe('20:00 05.11.2025');
+    // «станом на 20:00», read at 12:00: published the evening before (M2).
+    expect(snap.sourceUpdatedAt).toBe('20:00 04.11.2025');
     expect(snap).toMatchObject({
       providerId: 'cvoe', address: BOHUSLAVSKA_1, groupId: '12', groupLabel: 'Група 12', fetchedAt: at('2025-11-05', 12).toISOString(),
     });
@@ -293,6 +294,15 @@ describe('CvoeProvider schedule', () => {
     expect(http.gets('/shutdowns/')).toHaveLength(1);
     expect(http.gets('/shutdowns/?next')).toHaveLength(0);
     expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it('the «станом на» time is never in the future: a time after now is of the day before the table\'s date (M2)', async () => {
+    // The 05.11 table says «станом на 20:00».
+    const stamp = async (now: Date) => (await setup({ now }).p.fetchSnapshot(BOHUSLAVSKA_1)).sourceUpdatedAt;
+    expect(await stamp(at('2025-11-05', 0, 5))).toBe('20:00 04.11.2025');
+    expect(await stamp(at('2025-11-05', 19, 59))).toBe('20:00 04.11.2025');
+    expect(await stamp(at('2025-11-05', 20))).toBe('20:00 05.11.2025');
+    expect(await stamp(at('2025-11-05', 23, 30))).toBe('20:00 05.11.2025');
   });
 
   it('adds tomorrow from ?next when the page links to it and its table is dated tomorrow', async () => {
@@ -318,15 +328,18 @@ describe('CvoeProvider schedule', () => {
     }
   });
 
-  it('a failed or unreadable ?next fails the snapshot', async () => {
+  it('a failed or unreadable ?next fails the snapshot, from today\'s page or an old one', async () => {
     const page = () => ok(defaultPage(OCT31, '04.11.2025', '05.11.2025'));
-    for (const [route, message] of [
-      [() => new Error('ECONNRESET'), NO_ANSWER],
-      [() => failStatus(502), HTTP_ERROR],
-      [() => ok('<html>Технічні роботи</html>'), UNREADABLE],
-    ] as const) {
-      const { p } = setup({ http: fakeHttp({ [SCHEDULE]: page, [NEXT]: route }), now: at('2025-11-04', 21) });
-      await expectError(p.fetchSnapshot(BOHUSLAVSKA_1), ProviderError, message);
+    // The 04.11 page read on 04.11, and the same page still up on 05.11.
+    for (const now of [at('2025-11-04', 21), at('2025-11-05', 9)]) {
+      for (const [route, message] of [
+        [() => new Error('ECONNRESET'), NO_ANSWER],
+        [() => failStatus(502), HTTP_ERROR],
+        [() => ok('<html>Технічні роботи</html>'), UNREADABLE],
+      ] as const) {
+        const { p } = setup({ http: fakeHttp({ [SCHEDULE]: page, [NEXT]: route }), now });
+        await expectError(p.fetchSnapshot(BOHUSLAVSKA_1), ProviderError, message);
+      }
     }
   });
 
@@ -342,12 +355,37 @@ describe('CvoeProvider schedule', () => {
     expect(http.gets('/shutdowns/?next')).toHaveLength(0);
   });
 
-  it('a stale table never reads ?next, even when the page links to it', async () => {
-    const http = fakeHttp({ [SCHEDULE]: () => ok(defaultPage(OCT31, '03.11.2025', '04.11.2025')), [NEXT]: () => ok(NOV05) });
-    const snap = await setup({ http, now: at('2025-11-05', 9) }).p.fetchSnapshot(BOHUSLAVSKA_1);
-    expect(snap.days).toEqual([{ date: '2025-11-05', slots: fill('on') }]);
+  it('an old page linking ?next dated today: today is ?next\'s table with its time, and no tomorrow (R9)', async () => {
+    // Just after midnight the default page still holds 04.11's table; ?next (the real capture) already holds 05.11's,
+    // «станом на 20:00» of 04.11.
+    const http = fakeHttp({ [SCHEDULE]: () => ok(defaultPage(OCT31, '04.11.2025', '05.11.2025')), [NEXT]: () => ok(NOV05) });
+    const snap = await setup({ http, now: at('2025-11-05', 0, 30) }).p.fetchSnapshot(BOHUSLAVSKA_1);
+    expect(snap.days).toEqual([{ date: '2025-11-05', slots: NOV05_12 }]);
+    expect(snap.sourceUpdatedAt).toBe('20:00 04.11.2025');
+    expect('note' in snap).toBe(false);
+    expect(http.gets('/shutdowns/?next')).toHaveLength(1);
+  });
+
+  it('an old page linking ?next dated tomorrow: today is the quiet day with the old date, tomorrow from ?next (R9)', async () => {
+    const http = fakeHttp({ [SCHEDULE]: () => ok(defaultPage(OCT31, '03.11.2025', '05.11.2025')), [NEXT]: () => ok(NOV05) });
+    const snap = await setup({ http, now: at('2025-11-04', 21) }).p.fetchSnapshot(BOHUSLAVSKA_1);
+    expect(snap.days).toEqual([{ date: '2025-11-04', slots: fill('on') }, { date: '2025-11-05', slots: NOV05_12 }]);
     expect(snap.note).toBe(cvoeStaleNote('2025-11-03'));
-    expect(http.gets('/shutdowns/?next')).toHaveLength(0);
+    expect('sourceUpdatedAt' in snap).toBe(false);
+    expect(http.gets('/shutdowns/?next')).toHaveLength(1);
+  });
+
+  it('an old page linking ?next of any other date, or without a table, is unreadable (R9)', async () => {
+    for (const [next, reason] of [
+      [nextView(NOV05, '03.11.2025', '03.11.2025'), 'next table of another date'],
+      [nextView(NOV05, '03.11.2025', '04.11.2025'), 'next table of another date'],
+      [nextView(NOV05, '05.11.2025', '07.11.2025'), 'next table of another date'],
+      [EMERGENCY, 'next view without a table'],
+    ] as const) {
+      const http = fakeHttp({ [SCHEDULE]: () => ok(defaultPage(OCT31, '03.11.2025', '04.11.2025')), [NEXT]: () => ok(next) });
+      const err = await expectError(setup({ http, now: at('2025-11-05', 9) }).p.fetchSnapshot(BOHUSLAVSKA_1), ProviderError, UNREADABLE);
+      expect(err.cause).toEqual({ what: 'schedule', reason });
+    }
   });
 
   it('a default page dated tomorrow, or the day after, is unreadable (Review Focus 2)', async () => {
