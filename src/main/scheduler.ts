@@ -1,5 +1,8 @@
 export const INTERVAL_MS = 15 * 60_000, JITTER_MS = 60_000, MIN_GAP_MS = 5 * 60_000;
 export const BACKOFF_MS = [60_000, 120_000, 240_000, 480_000, 900_000];
+import type { Location } from '../shared/types';
+
+export const STAGGER_MS = 30_000;
 export type TriggerReason = 'resume' | 'online' | 'manual';
 /**
  * 'ok' — success (or nothing to do); 'failed' — the attempt reached the source and failed (bound by the 5-min floor);
@@ -21,10 +24,10 @@ export class RefreshScheduler {
     this.random = deps.random ?? Math.random;
   }
 
-  start(): void {
+  start(delayMs = 0): void {
     if (this.active) return;
     this.active = true;
-    this.schedule(0);
+    this.schedule(delayMs);
   }
 
   trigger(reason: TriggerReason): void {
@@ -76,4 +79,16 @@ export class RefreshScheduler {
     // Anything that reached the source never runs again automatically within MIN_GAP_MS of its start.
     this.schedule(outcome === 'failed' ? Math.max(backoff, started + MIN_GAP_MS - Date.now()) : backoff);
   }
+}
+
+/** First-run delay per location: the n-th location on one provider waits n * step, so one source is never hit all at once. */
+export function startDelays(locations: Location[], step = STAGGER_MS): Map<string, number> {
+  const seen = new Map<string, number>();
+  const delays = new Map<string, number>();
+  for (const l of locations) {
+    const n = seen.get(l.address.providerId) ?? 0;
+    seen.set(l.address.providerId, n + 1);
+    delays.set(l.id, n * step);
+  }
+  return delays;
 }
