@@ -92,6 +92,9 @@ export function parseDistrictPage(html: string, district: number): CvoeRow[] {
     if (!total || total[1].trim() !== '') throw new CvoeShapeError('row list cut short');
   } else if (/^<div\b/.test(rest)) {
     throw new CvoeShapeError('unknown row shape');
+  } else if (!rest.startsWith('</div>')) {
+    // Only the footer or the container's end may follow the rows: anything else would end the list unseen.
+    throw new CvoeShapeError('unknown content after the rows');
   }
   if (!rows.length) throw new CvoeShapeError('no rows');
   return rows;

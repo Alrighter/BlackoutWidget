@@ -128,6 +128,25 @@ describe('parseDistrictPage', () => {
     }
   });
 
+  it('after the rows only the footer or the container\'s end may follow: a stray element is unreadable, never a silent stop (T5)', () => {
+    const first = '<div><s>с. Остриця</s><p>вул. Кишинівська</p><b>буд. 12</b><u>1</u></div>';
+    const last = '<div><s>с. Цурень</s><p>вул. Зелена </p><b>буд. 1</b><u>5</u></div>';
+    for (const [name, html] of [
+      ['a <p> among the rows', D3.replace(first, `${first}<p>реклама</p>`)],
+      ['a <p> after the last row', D3.replace(last, `${last}<p>реклама</p>`)],
+      ['text among the rows', D3.replace(first, `${first}реклама`)],
+      ['a <span> among the rows', D3.replace(first, `${first}<span>x</span>`)],
+    ]) {
+      expect(html, name).not.toBe(D3);
+      let err: unknown;
+      try { parseDistrictPage(html, 3); } catch (e) { err = e; }
+      expect(err, name).toBeInstanceOf(CvoeShapeError);
+      expect((err as Error).message, name).not.toMatch(/реклама|<|x/);
+    }
+    // Whitespace between the rows and before the container's end is fine.
+    expect(parseDistrictPage(D3.replace(first, `${first}\n  `).replace(last, `${last}\n`), 3)).toEqual(parseDistrictPage(D3, 3));
+  });
+
   it('keeps an odd group raw', () => {
     const rows = parseDistrictPage(D3.replace('<b>буд. 12</b><u>1</u>', '<b>буд. 12</b><u>А</u>'), 3);
     expect(rows[0].group).toBe('А');
