@@ -73,7 +73,7 @@ async function bootstrap(log: Logger): Promise<void> {
   const userData = app.getPath('userData');
   const store = new AppStore(userData);
   const providers = createProviders(o => new BrowserSession(o, log), log, { fetch: electronHttp, isOnline: () => net.isOnline() });
-  const service = new RefreshService({ store, getProvider: id => findProvider(providers, id) });
+  const service = new RefreshService({ store, getProvider: id => findProvider(providers, id), log });
   const secrets = new SecretStore(join(userData, 'secrets.json'), electronEncryptor);
   const actualService = new ActualStateService({ history: new HistoryStore(join(userData, 'actual-history.json')), log });
   const bleLink = new BleLink({ spawn: spawnBleHost, log });

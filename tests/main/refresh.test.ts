@@ -196,8 +196,23 @@ test('a store failure while saving is an error state, not a rejection or a wedge
   const { svc, store, id, state } = setup(async () => fixtureSnapshot());
   vi.spyOn(store, 'setSnapshot').mockImplementationOnce(() => { throw new Error('EBUSY'); });
   expect(await svc.refresh(id)).toBe('failed');
-  expect(state()).toMatchObject({ phase: 'error', lastError: 'EBUSY' });
+  expect(state()).toMatchObject({ phase: 'error' });
   expect(await svc.refresh(id)).toBe('ok');
+});
+
+test('a snapshot that cannot be saved shows a fixed text; the raw error goes to the log, by location id only', async () => {
+  const store = newStore();
+  const loc = place(store, 'Дім');
+  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const provider = { fetchSnapshot: vi.fn(async () => fixtureSnapshot()) } as unknown as ScheduleProvider;
+  const svc = new RefreshService({ store, getProvider: () => provider, log });
+  const raw = Object.assign(new Error("EBUSY: resource busy or locked, open 'C:\\Users\\someone\\AppData\\Roaming\\Blackout Widget\\snapshots.json'"), { code: 'EBUSY' });
+  vi.spyOn(store, 'setSnapshot').mockImplementationOnce(() => { throw raw; });
+  expect(await svc.refresh(loc.id)).toBe('failed');
+  expect(svc.getStates()[0]).toMatchObject({ phase: 'error', lastError: 'Не вдалося зберегти графік на цьому комп’ютері' });
+  expect(log.error).toHaveBeenCalledTimes(1);
+  expect(log.error).toHaveBeenCalledWith(`refresh: the schedule could not be saved for location ${loc.id}`, raw);
+  expect(log.error.mock.calls[0][0]).not.toMatch(/Дім|snapshots/);
 });
 
 test('a queue missing from lines is not a line change while the source reports an outage', () => {

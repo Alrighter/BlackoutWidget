@@ -1,9 +1,13 @@
 import { sameAddress } from '../shared/locations';
 import type { LocationState, RefreshPhase } from '../shared/types';
+import { silentLogger, type Logger } from './log';
 import { CaptchaRequiredError, NetworkError } from './providers/types';
 import type { ScheduleProvider } from './providers/types';
 import type { RunOutcome } from './scheduler';
 import type { AppStore } from './store';
+
+/** The location's error when a fetched schedule cannot be written to snapshots.json (a locked or unwritable file). */
+export const SAVE_FAILED_TEXT = 'Не вдалося зберегти графік на цьому комп’ютері';
 
 interface Progress { phase: RefreshPhase; lastError?: string }
 
@@ -12,7 +16,7 @@ export class RefreshService {
   private inFlight = new Map<string, Promise<RunOutcome>>();
   private listeners = new Set<() => void>();
 
-  constructor(private readonly deps: { store: AppStore; getProvider(id: string): ScheduleProvider }) {}
+  constructor(private readonly deps: { store: AppStore; getProvider(id: string): ScheduleProvider; log?: Logger }) {}
 
   /** One entry per location, in settings order. `actual` is not set here: main adds it for the EcoFlow location. */
   getStates(): LocationState[] {
@@ -88,7 +92,9 @@ export class RefreshService {
       try {
         this.deps.store.setSnapshot(id, snapshot);
       } catch (err) {
-        return this.fail(id, err);
+        // The raw fs error names a path under the user's profile: it goes to the log, the location gets a fixed text.
+        (this.deps.log ?? silentLogger).error(`refresh: the schedule could not be saved for location ${id}`, err);
+        return this.fail(id, new Error(SAVE_FAILED_TEXT));
       }
       this.progress.set(id, { phase: 'ok' });
       this.emit();
