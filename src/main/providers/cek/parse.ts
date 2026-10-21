@@ -94,6 +94,9 @@ const QUIET = 'На цей день відключень немає.';
 const SELECT = /<select id="queue"[^>]*>([\s\S]*?)<\/select>/;
 const OPTION = /<option\b[^>]*\bvalue="([^"]*)"/g;
 const BLOCK = /\bid="tableView_([^"]*)"/g;
+/** The form's date field, found by its id: the answer echoes the date it was asked for in its value. */
+const DATE_FIELD = /<input\b[^>]*\bid="date"[^>]*>/;
+const VALUE = /\bvalue="([^"]*)"/;
 const PAIR = /<td>(\d\d):(\d\d):(\d\d)<\/td>\s*<td>(\d\d):(\d\d):(\d\d)<\/td>/g;
 
 /** Minutes of the day of HH:MM:SS; an hour past 23, or a minute or second past 59, throws. */
@@ -102,10 +105,11 @@ function minutes(h: string, m: string, s: string): number {
   return Number(h) * 60 + Number(m);
 }
 
-/** One row's [start, end) in minutes; an end of 23:59 is the end of the day. */
+/** One row's [start, end) in minutes; an end of 23:59 is the end of the day, once its seconds read too. */
 function interval(p: RegExpExecArray | RegExpMatchArray): [number, number] {
   const start = minutes(p[1], p[2], p[3]);
-  const end = p[4] === '23' && p[5] === '59' ? 24 * 60 : minutes(p[4], p[5], p[6]);
+  const until = minutes(p[4], p[5], p[6]);
+  const end = until === 23 * 60 + 59 ? 24 * 60 : until;
   if (start >= end) throw new CekShapeError('interval does not start before its end');
   return [start, end];
 }
@@ -126,14 +130,21 @@ function blockSlots(block: string): Slot[] {
     (intervals.some(([a, b]) => a < 30 * k + 30 && 30 * k < b) ? 'off' : 'on'));
 }
 
-/** One day's answer of the schedule form: queue id → 48 slots, or undefined for the quiet sentinel. */
-export function parseCekDay(html: string): Record<string, Slot[]> | undefined {
+/**
+ * The form's answer for `date` (YYYY-MM-DD): queue id → 48 slots, or undefined for the quiet sentinel. The answer must
+ * echo that date in its date field: an answer for another day, or without the field, throws.
+ */
+export function parseCekDay(html: string, date: string): Record<string, Slot[]> | undefined {
   // The page comments rows and cells out (<!--<td>2026-01-15</td>-->): nothing commented counts.
   const page = html.replace(/<!--[\s\S]*?-->/g, '');
   const select = SELECT.exec(page);
   const options = new Set(select ? [...select[1].matchAll(OPTION)].map((m) => m[1]) : []);
   if (!select || QUEUES.some((q) => !options.has(q))) throw new CekShapeError('no queue form');
   if (!/\bid="heading"/.test(page)) throw new CekShapeError('no heading');
+  const field = DATE_FIELD.exec(page);
+  const echoed = field ? VALUE.exec(field[0]) : null;
+  if (!echoed) throw new CekShapeError('no date echoed');
+  if (echoed[1] !== date) throw new CekShapeError('answer for another date');
 
   const blocks = [...page.matchAll(BLOCK)];
   const quiet = page.includes(QUIET);

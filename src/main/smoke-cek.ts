@@ -40,10 +40,10 @@ function mapCounts(html: string): unknown {
   }
 }
 
-/** A form answer as the reader sees it: quiet, or the queues with tables. */
-function dayKind(html: string): unknown {
+/** A form answer for the posted date as the reader sees it: quiet, or the queues with tables. */
+function dayKind(html: string, date: string): unknown {
   try {
-    const day = parseCekDay(html);
+    const day = parseCekDay(html, date);
     return day ? { kind: 'tables', queues: Object.keys(day) } : { kind: 'quiet' };
   } catch (e) {
     return { kind: 'unreadable', reason: (e as Error).message };
@@ -64,7 +64,7 @@ const recordingHttp: HttpFetch = async (url, init) => {
     req.bytes = buf.byteLength;
     req.ms = Date.now() - t0;
     const text = new TextDecoder('utf-8').decode(buf);
-    if (res.ok) req.read = init.method === 'GET' ? mapCounts(text) : dayKind(text);
+    if (res.ok) req.read = init.method === 'GET' ? mapCounts(text) : dayKind(text, req.form?.date ?? '');
     return { ok: res.ok, status: res.status, text: async () => text, arrayBuffer: async () => buf };
   } catch (e) {
     req.status = (e as Error).name;

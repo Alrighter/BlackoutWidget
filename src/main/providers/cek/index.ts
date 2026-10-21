@@ -135,11 +135,11 @@ export class CekProvider implements ScheduleProvider {
     return todayTables ? { days } : { days, note: CEK_QUIET_NOTE };
   }
 
-  /** One date's answer of the form, for all queues at once. */
+  /** One date's answer of the form, for all queues at once; an answer for another date is unreadable. */
   private async day(date: string): Promise<Record<string, Slot[]> | undefined> {
     const body = new URLSearchParams({ queue: 'all', date }).toString();
     const html = await this.http.text(FORM, { ...FORM_POST, body });
-    return this.http.read('schedule', () => parseCekDay(html));
+    return this.http.read('schedule', () => parseCekDay(html, date));
   }
 
   private async locations(): Promise<CekMap> {

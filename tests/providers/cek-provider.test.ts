@@ -53,15 +53,19 @@ const failStatus = (status: number): HttpResponse => ({
 const MAP = `GET ${MAP_PATH}`;
 const FORM = `POST ${FORM_PATH}`;
 
+const DATE_FIELD = /(<input type="date" id="date" name="date" value=")\d{4}-\d{2}-\d{2}"/;
+/** A saved answer as the form gives it for `date`: its date field echoes that date. */
+const answerFor = (html: string, date: string): string => swap(html, DATE_FIELD, `$1${date}"`);
+
 /**
  * Routes by method and path. The form answers each date from `days` (default: 15.01.2026 has its outages), any other
- * date quiet. Any other request rejects.
+ * date quiet, each answer echoing the posted date. Any other request rejects.
  */
 function fakeHttp(over: Record<string, Route> = {}, days: Record<string, string> = { '2026-01-15': DAY }) {
   const calls: { url: string; init: Init }[] = [];
   const routes: Record<string, Route> = {
     [MAP]: () => ok(MAP_PAGE),
-    [FORM]: (f) => ok(days[f.get('date') ?? ''] ?? QUIET),
+    [FORM]: (f) => ok(answerFor(days[f.get('date') ?? ''] ?? QUIET, f.get('date') ?? '')),
     ...over,
   };
   const fetch = vi.fn<HttpFetch>(async (url, init) => {
@@ -111,7 +115,7 @@ const FILATOVA_1 = address('вул. Філатова', '1', '1.1');
 const ROBOCHA_65 = address('вул. Робоча', '65', '3.2');
 const line = (index: number, groupId: string) => ({ index, groupId, label: `Черга ${groupId}` });
 const fill = (s: Slot): Slot[] => Array<Slot>(48).fill(s);
-const DAY_SLOTS = parseCekDay(DAY)!;
+const DAY_SLOTS = parseCekDay(DAY, '2026-01-15')!;
 
 describe('CekProvider address lookup', () => {
   it('listCities makes one map request, and a second call makes none', async () => {
@@ -291,6 +295,24 @@ describe('CekProvider schedule', () => {
         expect(logged(log)).not.toContain('Технічні');
       }
     }
+  });
+
+  it('an answer whose date field is not the asked date is unreadable, never a quiet day (M1)', async () => {
+    // The saved quiet answer as served, echoing 20.10, for the 21.10 asked; then the same without its date field.
+    for (const [page, reason] of [
+      [QUIET, 'answer for another date'],
+      [swap(QUIET, /<input type="date"[^>]*>/, ''), 'no date echoed'],
+    ] as const) {
+      const { p, log } = setup({ http: fakeHttp({ [FORM]: () => ok(page) }), now: at('2026-10-21', 12) });
+      const err = await expectError(p.fetchSnapshot(FILATOVA_1), ProviderError, UNREADABLE);
+      expect(err.cause).toEqual({ what: 'schedule', reason });
+      expect(logged(log)).not.toContain('2026-10-20');
+    }
+    // Tomorrow's answer too: today reads, but tomorrow's answer echoes today.
+    const http = fakeHttp({ [FORM]: () => ok(answerFor(DAY, '2026-01-15')) });
+    const err = await expectError(setup({ http }).p.fetchSnapshot(FILATOVA_1), ProviderError, UNREADABLE);
+    expect(err.cause).toEqual({ what: 'schedule', reason: 'answer for another date' });
+    expect(http.posts()).toEqual(['queue=all&date=2026-01-15', 'queue=all&date=2026-01-16']);
   });
 
   it('an odd answer is unreadable with a fixed reason', async () => {
