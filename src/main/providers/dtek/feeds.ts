@@ -1,6 +1,6 @@
-import type { Logger } from '../../log';
+import { silentLogger, type Logger } from '../../log';
 import type { DaySchedule, Slot } from '../../../shared/types';
-import { addDays, kyivDateKey, kyivStamp } from '../../../shared/time';
+import { addDays, dtekStamp, kyivDateKey } from '../../../shared/time';
 import type { HttpFetch } from '../http';
 import { HttpSource, sourceTexts } from '../http-source';
 import { instant, isObj } from '../shape';
@@ -37,13 +37,17 @@ const YASNO_URL = 'https://app.yasno.ua/api/blackout-service/public/shutdowns/re
 
 const unusable = (reason: string): FeedResult => ({ usable: false, reason });
 
-/** A feed's request plumbing and its two-minute cache of the last good parsed body (a failure is never cached). */
+/**
+ * A feed's request plumbing and its two-minute cache of the last good parsed body (a failure is never cached). `parse`
+ * runs once per fetched body, so what it logs is logged once per body, not on every read.
+ */
 function cachedBody<T>(
   tag: string, url: string, deps: FeedDeps, parse: (json: unknown, source: HttpSource) => T,
 ): () => Promise<T> {
   const clock = deps.clock ?? Date.now;
+  // The source's own error log is silenced: the route logs a failed feed once, as a warning, with `loggable`.
   const source = new HttpSource({
-    fetch: deps.fetch, isOnline: deps.isOnline, log: deps.log, tag, texts: sourceTexts('джерела графіків ДТЕК'), clock,
+    fetch: deps.fetch, isOnline: deps.isOnline, log: silentLogger, tag, texts: sourceTexts('джерела графіків ДТЕК'), clock,
   });
   let cached: { at: number; body: T } | undefined;
   return () => source.serial('fetch', async () => {
@@ -93,20 +97,45 @@ export function mirrorFeed(file: 'kyiv' | 'kyiv-region' | 'dnipro' | 'odesa', de
 }
 
 interface YasnoRange { start: number; end: number; type: string }
-interface YasnoDay { date: string; status: string; slots: YasnoRange[] }
+/** A day as parsed: `dateKey` is the Kyiv date of its `date` instant (undefined when unreadable), `slots` already converted. */
+interface YasnoDay { dateKey: string | undefined; status: string; slots: Slot[] }
 interface YasnoEntry { today: YasnoDay; tomorrow?: YasnoDay; updatedOn?: string }
+
+/**
+ * Half-hour i covers [30i, 30i+30): `off` when a Definite range touches it, `on` when NotPlanned covers all of it, else
+ * `unknown`. A range of another type covers nothing and is counted through `onUnknown`.
+ */
+function slotsOf(ranges: YasnoRange[], onUnknown: () => void): Slot[] {
+  const definite = new Array<boolean>(1440).fill(false);
+  const planned = new Array<boolean>(1440).fill(false);
+  for (const r of ranges) {
+    const mask = r.type === 'Definite' ? definite : r.type === 'NotPlanned' ? planned : undefined;
+    if (!mask) { onUnknown(); continue; }
+    for (let m = Math.max(0, r.start); m < Math.min(1440, r.end); m++) mask[m] = true;
+  }
+  return Array.from({ length: 48 }, (_, i): Slot => {
+    const half = (mask: boolean[]) => mask.slice(30 * i, 30 * i + 30);
+    if (half(definite).some(Boolean)) return 'off';
+    return half(planned).every(Boolean) ? 'on' : 'unknown';
+  });
+}
 
 export function yasnoFeed(deps: FeedDeps): ScheduleFeed {
   const tag = 'yasno';
   const load = cachedBody<Record<string, YasnoEntry>>(tag, YASNO_URL, deps, (json, source) => {
     const fail = (reason: string): never => { throw source.unreadable({ what: 'yasno', reason }); };
     if (!isObj(json)) return fail('not an object');
+    let unknownTypes = 0;
     const day = (v: unknown): YasnoDay => {
       if (!isObj(v) || typeof v.date !== 'string' || typeof v.status !== 'string' || !Array.isArray(v.slots)) return fail('day');
       for (const s of v.slots) {
         if (!isObj(s) || typeof s.start !== 'number' || typeof s.end !== 'number' || typeof s.type !== 'string') return fail('slot');
       }
-      return v as unknown as YasnoDay;
+      const at = instant(v.date);
+      return {
+        dateKey: at && kyivDateKey(at), status: v.status,
+        slots: slotsOf(v.slots as YasnoRange[], () => { unknownTypes++; }),
+      };
     };
     const out: Record<string, YasnoEntry> = {};
     for (const [key, e] of Object.entries(json)) {
@@ -117,24 +146,10 @@ export function yasnoFeed(deps: FeedDeps): ScheduleFeed {
         updatedOn: typeof e.updatedOn === 'string' ? e.updatedOn : undefined,
       };
     }
+    // Once per parsed body, and a count only: the type names are response text.
+    if (unknownTypes > 0) deps.log.warn(`${tag}: unknown slot types`, { count: unknownTypes });
     return out;
   });
-
-  /** Half-hour i covers [30i, 30i+30): `off` when a Definite range touches it, `on` when NotPlanned covers all of it, else `unknown`. */
-  const slotsOf = (ranges: YasnoRange[]): Slot[] => {
-    const definite = new Array<boolean>(1440).fill(false);
-    const planned = new Array<boolean>(1440).fill(false);
-    for (const r of ranges) {
-      const mask = r.type === 'Definite' ? definite : r.type === 'NotPlanned' ? planned : undefined;
-      if (!mask) { deps.log.warn(`${tag}: unknown slot type`, { type: r.type.slice(0, 40) }); continue; }
-      for (let m = Math.max(0, r.start); m < Math.min(1440, r.end); m++) mask[m] = true;
-    }
-    return Array.from({ length: 48 }, (_, i): Slot => {
-      const half = (mask: boolean[]) => mask.slice(30 * i, 30 * i + 30);
-      if (half(definite).some(Boolean)) return 'off';
-      return half(planned).every(Boolean) ? 'on' : 'unknown';
-    });
-  };
 
   return {
     tag,
@@ -145,12 +160,12 @@ export function yasnoFeed(deps: FeedDeps): ScheduleFeed {
       if (!entry) return unusable('queue absent');
       const todayKey = kyivDateKey(now);
       const { today, tomorrow } = entry;
-      if (today.date.slice(0, 10) !== todayKey) return unusable('not today');
+      if (today.dateKey !== todayKey) return unusable('not today');
       if (today.status === 'EmergencyShutdowns') return { usable: false, reason: 'emergency', emergency: true };
       const days: DaySchedule[] = [];
       let note: string | undefined;
       if (today.status === 'ScheduleApplies') {
-        days.push({ date: todayKey, slots: slotsOf(today.slots) });
+        days.push({ date: todayKey, slots: [...today.slots] }); // a copy: the cached body stays as parsed
       } else if (today.status === 'NoOutages') {
         days.push({ date: todayKey, slots: Array<Slot>(48).fill('on') });
         note = DTEK_QUIET_NOTE;
@@ -158,12 +173,12 @@ export function yasnoFeed(deps: FeedDeps): ScheduleFeed {
         return unusable('waiting for schedule');
       }
       const tomorrowKey = addDays(todayKey, 1);
-      if (tomorrow && tomorrow.status === 'ScheduleApplies' && tomorrow.date.slice(0, 10) === tomorrowKey) {
-        days.push({ date: tomorrowKey, slots: slotsOf(tomorrow.slots) });
+      if (tomorrow && tomorrow.status === 'ScheduleApplies' && tomorrow.dateKey === tomorrowKey) {
+        days.push({ date: tomorrowKey, slots: [...tomorrow.slots] });
       }
       const answer: FeedAnswer = { days };
       const updated = instant(entry.updatedOn);
-      if (updated) answer.sourceUpdatedAt = kyivStamp(updated);
+      if (updated) answer.sourceUpdatedAt = dtekStamp(updated); // DTEK's order: the footer reads alike for every source
       if (note !== undefined) answer.note = note;
       return { usable: true, answer };
     },

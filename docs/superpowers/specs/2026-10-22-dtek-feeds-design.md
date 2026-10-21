@@ -116,20 +116,20 @@ Calls that were mine, not the user's, are marked *(my call)*.
 
 - **URL:** `https://app.yasno.ua/api/blackout-service/public/shutdowns/regions/25/dsos/902/planned-outages`.
 - **Key.** The response is keyed `"20.1"`. The saved `GPV20.1` maps to it by `/^GPV(\d+\.\d+)$/`. A groupId that does not match, or a key that is absent, makes the feed unusable.
-- **Today.** `today.date` (ISO, local midnight with an offset) must be today's Kyiv date by its first 10 characters. Otherwise the feed is unusable.
+- **Today.** `today.date` (ISO, local midnight with an offset) is read as an instant, and its Kyiv date must be today's. So `2026-10-21T21:00:00Z` is the 22nd. A date that is not an instant with its zone, or another day, makes the feed unusable.
 - **Statuses:**
   - `ScheduleApplies`: the slots are converted.
   - `NoOutages`: 48 `on` slots plus `DTEK_QUIET_NOTE` *(my call: the same quiet-day rule the user chose for every source)*.
   - `EmergencyShutdowns`: unusable, flagged as emergency (step 3).
   - `WaitingForSchedule` or anything else: unusable.
-- **Tomorrow:** included only when `tomorrow.status` is `ScheduleApplies` and `tomorrow.date` is tomorrow's Kyiv date. Otherwise it is left out, as the page path leaves out a tomorrow with no schedule.
+- **Tomorrow:** included only when `tomorrow.status` is `ScheduleApplies` and `tomorrow.date`, read as an instant, is tomorrow's Kyiv date. Otherwise it is left out, as the page path leaves out a tomorrow with no schedule; an unreadable date leaves it out too.
 - **Slot conversion.** Slots are minute ranges `[start, end)` within 0..1440. For each of the 48 half-hours:
   - `off` if any part of it is covered by a `Definite` range *(my call: when unsure, show the outage)*;
   - else `on` if it is covered by `NotPlanned`;
   - else `unknown`.
 
-  A slot type other than those two is logged and counts as not covering its range.
-- **`sourceUpdatedAt`:** `kyivStamp(updatedOn)` for that group. It is omitted when `updatedOn` is not a valid date.
+  A slot type other than those two counts as not covering its range. The conversion runs once per fetched body, when it is parsed and cached, and the body's unknown types are logged once as a count (`yasno: unknown slot types`, `{ count }`), never by name, since the names are response text.
+- **`sourceUpdatedAt`:** that group's `updatedOn` in DTEK's own order, `dd.mm.yyyy HH:MM` in Kyiv time (`dtekStamp`), so the footer reads the same for every source. For example, `2026-10-21T17:45:03+00:00` becomes `21.10.2026 20:45`. It is omitted when `updatedOn` is not a valid date.
 - **`groupLabel`:** none from YASNO, so the fallback chain above applies.
 
 ### Requests
@@ -137,6 +137,7 @@ Calls that were mine, not the user's, are marked *(my call)*.
 - Feeds use the main-process `HttpFetch` (`electronHttp`) through `HttpSource`: a 20 s timeout, its offline / no-answer / HTTP-error texts, and one request at a time per feed.
 - **Cache.** A feed keeps its last good parsed body for **2 minutes** *(my call)*, so two locations on one site, staggered 30 s, make one request. The cache is in memory only.
 - **Failure texts.** A feed's own failure texts are only logged, never shown, so the user never sees «дзеркало» or «YASNO» in an error *(my call)*. The shown text is step 4's, or the page's own.
+- **One log line per failed feed.** The feed's `HttpSource` logs nothing itself. The route logs the failure once, as a warning (`<site>: <feed> failed`), with `loggable`, which keeps the url and status cause.
 
 ### The page's life
 

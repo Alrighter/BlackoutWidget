@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DtekProvider, FEEDS_FAILED_TEXT } from '../../src/main/providers/dtek';
-import { PAGE_LINGER_MS, type FeedAnswer, type FeedResult } from '../../src/main/providers/dtek/feeds';
+import { PAGE_LINGER_MS, mirrorFeed, type FeedAnswer, type FeedResult } from '../../src/main/providers/dtek/feeds';
 import { READ_FACT, getHomeNumScript, readStreetsScript } from '../../src/main/providers/dtek/page-scripts';
 import { factToDays } from '../../src/main/providers/dtek/parse';
 import { AddressNotFoundError } from '../../src/main/providers/resolve';
@@ -183,6 +183,23 @@ test('a feed that rejects is logged without its message and the next one is trie
   expect((await p.fetchSnapshot(addr, fresh())).days).toEqual(FEED_DAYS);
   expect(log.warn).toHaveBeenCalledWith('dtek-krem: yasno failed', { error: 'TypeError' });
   expect(log.warn).toHaveBeenCalledWith('dtek-krem: mirror kyiv failed', expect.any(ProviderError));
+  expect(JSON.stringify(log.warn.mock.calls)).not.toContain('SECRET');
+});
+
+test('a real feed whose request fails is logged once, as the route\'s warning, never at error', async () => {
+  const log = fakeLog();
+  const fetch = vi.fn(async () => ({
+    ok: false, status: 500, text: async () => 'SECRET BODY', arrayBuffer: async () => new ArrayBuffer(0),
+  }));
+  const mirror = mirrorFeed('kyiv-region', { fetch, isOnline: () => true, log });
+  const p = new DtekProvider(KREM, fakeSession() as any, log, { feeds: [mirror, feed('mirror kyiv', answer())] });
+  expect((await p.fetchSnapshot(addr, fresh())).days).toEqual(FEED_DAYS);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(log.error).not.toHaveBeenCalled();
+  const failedWarns = log.warn.mock.calls.filter(c => c[0] === 'dtek-krem: mirror kyiv-region failed');
+  expect(failedWarns).toHaveLength(1);
+  expect(failedWarns[0][1]).toBeInstanceOf(ProviderError);
+  expect((failedWarns[0][1] as ProviderError).cause).toEqual({ url: expect.stringContaining('kyiv-region.json'), status: 500 });
   expect(JSON.stringify(log.warn.mock.calls)).not.toContain('SECRET');
 });
 

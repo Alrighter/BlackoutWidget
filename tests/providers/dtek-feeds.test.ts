@@ -112,13 +112,15 @@ describe('mirror feed', () => {
     const t = deps(() => failStatus(500));
     const err = await mirrorFeed('kyiv', t.d).read('GPV1.1', now).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ProviderError);
-    expect(JSON.stringify(t.log.error.mock.calls, (_, v: unknown) => (v instanceof Error ? { m: v.message, c: v.cause } : v)))
-      .not.toContain('SECRET');
+    expect((err as ProviderError).cause).toEqual({ url: expect.stringContaining('/kyiv.json'), status: 500 });
+    // The route logs a failed feed once, as a warning: the feed itself logs nothing at error.
+    expect(t.log.error).not.toHaveBeenCalled();
   });
 
   it('fetch throws while offline', async () => {
     const t = deps(() => new TypeError('net'), { isOnline: () => false });
     await expect(mirrorFeed('kyiv', t.d).read('GPV1.1', now)).rejects.toBeInstanceOf(NetworkError);
+    expect(t.log.error).not.toHaveBeenCalled();
   });
 
   it('cache', async () => {
@@ -160,7 +162,7 @@ describe('yasno feed', () => {
       const a = usableAnswer(await read(YASNO, 'GPV' + k).result);
       expect(a.days).toEqual(factToDays(kemFact, 'GPV' + k));
       expect(a.days).toHaveLength(1);
-      expect(a.sourceUpdatedAt).toBe('20:45 21.10.2026');
+      expect(a.sourceUpdatedAt).toBe('21.10.2026 20:45'); // DTEK's own order, Kyiv time
     }
   });
 
@@ -182,6 +184,16 @@ describe('yasno feed', () => {
     expect(r.usable).toBe(false);
   });
 
+  it("yasno: today's date is an instant, read in Kyiv time", async () => {
+    // Kyiv midnight of the 22nd written in UTC: the 21st by its first 10 characters, today by its instant.
+    const utc = usableAnswer(await read(entry({ today: { date: '2026-10-21T21:00:00Z' } }), 'GPV20.1').result);
+    expect(utc.days.map((d) => d.date)).toEqual(['2026-10-22']);
+    // A date that is not an instant is not today.
+    for (const date of ['2026-10-22', '2026-10-22T00:00:00', 'завтра']) {
+      expect((await read(entry({ today: { date } }), 'GPV20.1').result).usable).toBe(false);
+    }
+  });
+
   it('yasno: tomorrow', async () => {
     const slots = [{ start: 0, end: 1440, type: 'NotPlanned' }];
     const applies = { status: 'ScheduleApplies', slots };
@@ -189,6 +201,11 @@ describe('yasno feed', () => {
     expect(a.days.map((d) => d.date)).toEqual(['2026-10-22', '2026-10-23']);
     const b = usableAnswer(await read(entry({ tomorrow: { ...applies, date: '2026-10-24T00:00:00+03:00' } }), 'GPV20.1').result);
     expect(b.days.map((d) => d.date)).toEqual(['2026-10-22']);
+    const utc = usableAnswer(await read(entry({ tomorrow: { ...applies, date: '2026-10-22T21:00:00Z' } }), 'GPV20.1').result);
+    expect(utc.days.map((d) => d.date)).toEqual(['2026-10-22', '2026-10-23']);
+    // An unreadable tomorrow date leaves tomorrow out; today still answers.
+    const bad = usableAnswer(await read(entry({ tomorrow: { ...applies, date: '2026-10-23' } }), 'GPV20.1').result);
+    expect(bad.days.map((d) => d.date)).toEqual(['2026-10-22']);
   });
 
   it('DST tomorrow', async () => {
@@ -218,14 +235,20 @@ describe('yasno feed', () => {
       expect(s[22]).toBe('on');
     });
 
-    it('an unknown type is unknown and logged', async () => {
-      const r = read(
+    it('an unknown type is unknown and logged once per body, as a count without response text', async () => {
+      const t = deps(json(
         entry({ today: { status: 'ScheduleApplies', slots: [{ start: 0, end: 600, type: 'NotPlanned' }, { start: 600, end: 660, type: 'Possible' }, { start: 660, end: 1440, type: 'NotPlanned' }] } }),
-        'GPV20.1',
-      );
-      const s = usableAnswer(await r.result).days[0].slots;
+      ));
+      const feed = yasnoFeed(t.d);
+      const s = usableAnswer(await feed.read('GPV20.1', now)).days[0].slots;
       expect(s.slice(20, 22)).toEqual(['unknown', 'unknown']);
-      expect(r.t.log.warn).toHaveBeenCalled();
+      // Two more reads from the cached body (another refresh, another location): no new warn.
+      await feed.read('GPV20.1', now);
+      await feed.read('GPV1.1', now);
+      expect(t.fetch).toHaveBeenCalledTimes(1);
+      expect(t.log.warn).toHaveBeenCalledTimes(1);
+      expect(t.log.warn).toHaveBeenCalledWith('yasno: unknown slot types', { count: 1 });
+      expect(JSON.stringify(t.log.warn.mock.calls)).not.toContain('Possible');
     });
   });
 
