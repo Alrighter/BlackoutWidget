@@ -36,6 +36,11 @@ import { WidgetWindow } from './widget/widget-window';
 
 const ECOFLOW_HELP_URL = 'https://developer-eu.ecoflow.com/';
 
+// Windows: software compositing. The widgets repaint once a minute and the main window rarely, so the GPU buys
+// nothing here, while its process held about 40 MB more than the software one (smoke-memory, --no-gpu).
+// Must run before the app is ready.
+if (process.platform === 'win32') app.disableHardwareAcceleration();
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
