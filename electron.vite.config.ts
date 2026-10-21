@@ -22,6 +22,7 @@ export default defineConfig({
           'smoke-mkoe': resolve(__dirname, 'src/main/smoke-mkoe.ts'),
           'smoke-ztoe': resolve(__dirname, 'src/main/smoke-ztoe.ts'),
           'smoke-cvoe': resolve(__dirname, 'src/main/smoke-cvoe.ts'),
+          'smoke-cek': resolve(__dirname, 'src/main/smoke-cek.ts'),
           'smoke-ecoflow': resolve(__dirname, 'src/main/smoke-ecoflow.ts'),
           'smoke-ble': resolve(__dirname, 'src/main/smoke-ble.ts'),
         },

@@ -17,7 +17,7 @@ export function sourceTexts(name: string): SourceTexts {
 }
 
 /** The note for a day the operator published nothing for; `verb` agrees with the operator's gender. */
-export function quietNote(name: string, verb: 'опублікувало' | 'опублікував'): string {
+export function quietNote(name: string, verb: 'опублікувало' | 'опублікував' | 'опублікувала'): string {
   return `${name} не ${verb} графік на сьогодні — зазвичай це означає, що відключень за графіком немає`;
 }
 

@@ -28,6 +28,10 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     siteUrl: 'https://www.dtek-dnem.com.ua/ua/shutdowns',
     noLinesHint: 'Якщо ваш будинок обслуговує ЦЕК, оберіть «ПЕЕМ «ЦЕК»»',
   },
+  'cek': {
+    name: 'ПЕЕМ «ЦЕК»', shortName: 'ЦЕК', region: 'Дніпропетровська область',
+    siteUrl: 'https://cek.dp.ua/index.php/cpojivaham/vidkliuchennia/2-uncategorised/921-grafik-pogodinikh-vidklyuchen.html',
+  },
   'ztoe': {
     name: 'Житомиробленерго', shortName: 'Житомиробленерго', region: 'Житомирська область',
     siteUrl: 'https://www.ztoe.com.ua/unhooking-search.php',

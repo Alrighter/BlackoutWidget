@@ -1,0 +1,721 @@
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-96624539-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+<!DOCTYPE html>
+<html lang="uk-ua" dir="ltr">
+<head>
+
+<meta name="SKYPE_TOOLBAR" content="SKYPE_TOOLBAR_PARSER_COMPATIBLE" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, height=device-height" />
+<base href="https://cek.dp.ua/index.php/cpojivaham/pobutovi-spozhyvachi/viznachennya-chergy.html" />
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<meta name="keywords" content="Центральна енергетична компанія, ЦЕК, дніпро, постачання електроенергії, вимірювання,
+високовольтна лабораторія, електротехнічна лабораторія, випробування" />
+	<meta name="rights" content="Центральна енергетична компанія" />
+	<meta name="author" content="zolha" />
+	<meta name="description" content="Центральна енергетична компанія, ЦЕК, дніпро, постачання електроенергії, вимірювання,
+високовольтна лабораторія, електротехнічна лабораторія, випробування" />
+	<title>Визначення черги</title>
+	<link href="/templates/tzec/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
+	<link href="/components/com_rsform/assets/calendar/calendar.css" rel="stylesheet" type="text/css" />
+	<link href="/components/com_rsform/assets/css/front.css" rel="stylesheet" type="text/css" />
+	<script src="/media/jui/js/jquery.min.js?00573b63581a3e55d13f2ff697ab4b80" type="text/javascript"></script>
+	<script src="/media/jui/js/jquery-noconflict.js?00573b63581a3e55d13f2ff697ab4b80" type="text/javascript"></script>
+	<script src="/media/jui/js/jquery-migrate.min.js?00573b63581a3e55d13f2ff697ab4b80" type="text/javascript"></script>
+	<script src="/media/system/js/caption.js?00573b63581a3e55d13f2ff697ab4b80" type="text/javascript"></script>
+	<script src="/components/com_rsform/assets/js/script.js" type="text/javascript"></script>
+	<script src="/templates/tzec/js/jquery.colorbox-min.js" type="text/javascript"></script>
+	<script src="/templates/tzec/js/engine.js" type="text/javascript"></script>
+	<script src="/templates/tzec/js/jquery.maskedinput.js" type="text/javascript"></script>
+	<script src="/templates/tzec/js/gmap3.js" type="text/javascript"></script>
+	<script type="text/javascript">
+jQuery(window).on('load',  function() {
+				new JCaption('img.caption');
+			});
+	</script>
+	<link rel="stylesheet" href="https://cek.dp.ua//plugins/system/videobox/css/videobox.css" type="text/css" media="screen" />
+	<link rel="stylesheet" href="https://cek.dp.ua//libraries/videobox/css/videobox.css" type="text/css" media="screen" />
+	<link rel="stylesheet" href="https://cek.dp.ua//libraries/videobox/css/functions.css" type="text/css" media="screen" />
+	<script type="text/javascript" src="https://cek.dp.ua//libraries/videobox/js/videobox.js"></script>
+	<script type="text/javascript" src="https://cek.dp.ua//libraries/videobox/js/functions.js"></script>
+
+
+<link href="/templates/tzec/favicon.ico" rel="shortcut icon" />
+<link rel="stylesheet" type="text/css" href="/templates/tzec/css/template.css" />
+<link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&amp;subset=cyrillic" rel="stylesheet">
+
+    <!--[if lt IE 9]>
+        <script src="http://css3-mediaqueries-js.googlecode.com/svn/trunk/css3-mediaqueries.js"></script>
+    <![endif]-->
+
+
+
+<script type="text/javascript">
+//$(window).on('load', function() {
+// $('#slider').nivoSlider(); 
+//});
+
+(function ($) {
+
+        $(document).ready(function () {
+            var maps_zoom = 8,
+                maps_center = [48.498460, 35.243950], 
+                maps = $('#map-google').gmap3({
+                    map: {
+                        options: {
+                            center: maps_center,
+                            zoom: maps_zoom,
+                            navigationControl: true
+                        }
+                    },
+                    marker: {
+                        values: [
+                            {
+                                latLng: [48.446234, 35.002481],  
+                                data: "м. Дніпро, вул.Кедріна,28",                               
+                                options: {icon: "/templates/tzec/images/Logo.png"}
+                            },
+                            {
+                                latLng: [48.396079, 34.973960], 
+                                data: "м.Дніпро, вул.Бориса Кротова, 44",                               
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            },
+                            {
+                                latLng: [47.649645, 33.715329],  
+                                data: "м.Апостолове, вул.Лесі Українки, 37",                                 
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            },
+                            {
+                                latLng: [48.484311, 34.013878], 
+                                data: "м. Вільногірськ, вул. Центральна, 39",                               
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            },
+                            {
+                                latLng: [48.735750, 35.326694],  
+                                data: "Новомосковський р-н, смт Гвардійське, вул.Сетьова,10",                             
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            },
+                            {
+                                latLng: [48.342484, 33.509025],
+                                data: "м. Жовті Води, вул. Хмельницького, 32",                                
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            }, 
+                            {
+                                latLng: [47.686725, 33.155682],
+                                data: "м. Кривий Ріг, вул. Недєліна 43А",                                
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            },
+                            {
+                                latLng: [48.090671, 33.393019],
+                                data: "м. Кривий Ріг, с. Мирівське, вул. Двінська 8/1",                                
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            }, 
+                            {
+                                latLng: [48.494720, 35.941855],
+                                data: "м. Павлоград, вул. Нова, 5",                                
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            }, 
+			    {
+                                latLng: [47.8910548,35.0119734],
+                                data: "м. Запоріжжя вул. Будівельників 72",                                
+                                options: {icon: "/templates/tzec/images/lamp.png"}
+                            },                                     
+                        ],
+                        options: {
+                            draggable: false
+                        },
+                        events: {
+                            mouseover: function (marker, event, context) {
+                                var map = $(this).gmap3("get"),
+                                    infowindow = $(this).gmap3({get: {name: "infowindow"}});
+                                if (infowindow) {
+                                    infowindow.open(map, marker);
+                                    infowindow.setContent(context.data);
+                                } else {
+                                    $(this).gmap3({
+                                        infowindow: {
+                                            anchor: marker,
+                                            options: {content: context.data}
+                                        }
+                                    });
+                                }
+                            },
+                            mouseout: function () {
+                                var infowindow = $(this).gmap3({get: {name: "infowindow"}});
+                                if (infowindow) {
+                                    infowindow.close();
+                                }
+                            }
+                        }
+                    }
+
+
+
+
+                });
+
+            $('#map-button-click').on('click', 'a', function (event) {
+                event.preventDefault();
+
+		    setTimeout(function () {
+                        document.body.scrollTop = document.body.scrollHeight - (document.body.clientHeight+350)
+                    }, 500); 
+		
+                var mark = $(this);
+
+                if (mark.hasClass('clear')) {
+                    maps.gmap3({
+                        map: {
+                            options: {
+                                center: maps_center,
+                                zoom: maps_zoom,
+                            }
+                        }
+                    });
+                } else {
+                    maps.gmap3({
+                        map: {
+                            options: {
+                                center: [
+                                    mark.data('lat'),
+                                    mark.data('lng')
+                                ],
+                                zoom: mark.data('zoom'),
+                            }
+                        }
+                    });
+                }
+            });
+
+//var myLatlng = new google.maps.LatLng(59.928242, 30.347073);
+//        var pos1 = new google.maps.LatLng(59.939175, 30.327326);
+ //       var pos2 = new google.maps.LatLng(59.938830, 30.339343);
+ //       var pos3 = new google.maps.LatLng(59.944133, 30.227353);
+//        var pos4 = new google.maps.LatLng(59.956754, 30.354808);
+//  var mapOptions = {
+//    zoom: 10,
+//    center: myLatlng
+//  }
+//  var map = new google.maps.Map(document.getElementById('map'), mapOptions);
+ 
+//  var marker = new google.maps.Marker({
+//      position: pos1,
+//      map: map,
+//      title: 'Нaбережная канала Грибоедова д.7(внутри двора)'
+//  });
+        
+//  var marker = new google.maps.Marker({
+ //     position: pos2,
+ //     map: map,
+//      title: 'Кленовая Улица д.2'
+// });
+        
+ // var marker = new google.maps.Marker({
+//      position: pos3,
+ //     map: map,
+ //     title: 'Наличная улица д.32'
+//  });
+        
+//  var marker = new google.maps.Marker({
+//      position: pos4,
+///      map: map,
+//      title: 'ст. м. Площадь Ленинаб Финский пер. д.8а'
+//  });
+    
+//}
+//google.maps.event.addDomListener(window, 'load', initialize);
+
+
+//('.ref_a').onclick = function() {
+//	document.body.scrollTop = document.body.scrollHeight - document.body.clientHeight
+//}
+        });
+
+
+          //height = document.body.scrollHeight;
+    	  //window.scrollTo(0, height);  
+
+	      // $('body, html').scrollTop($(document).height());
+	
+
+	    
+
+    })(jQuery);
+
+</script>
+ 
+ 
+</head>
+<body class="">   
+
+<div id="page">
+ 
+      <div class="head-wrap">
+        <div class="head">
+          <div class="wrap">
+            <div class="ticker">
+              
+            </div>
+            <div class="logo-wrap">
+              <div class="logo">              
+                 	
+		<div class="moduletable">
+					
+
+<div class="custom"  >
+	<p><a href="/"><img src="/images/Logo.png" alt="logo" /></a></p></div>
+            <div class="clr"></div>
+		</div>
+	              
+              </div>
+              <div class="name-company">              
+                                
+              </div>
+            </div>
+            <div class="head-info">
+              <div class="search">                
+                <div class="rp"></div>
+                <div class="rr"></div>              
+                               
+              </div>
+              <div class="head-phone">              
+                                
+              </div>
+              <div class="languages">              
+                                
+              </div>
+            </div>
+            
+            <div class="logo_ESFL">
+ 					
+		<div class="moduletable">
+					
+
+<div class="custom"  >
+	<p style="text-align: center;"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/peredacha-pokaznykiv/2-uncategorised/446-peredacha-pokaznikiv.html"> <img src="/images/document/viber.jpeg" alt="logo_ESFL.jpg - 14.46 kB" width="120" height="100" style="display: block; margin-left: auto; margin-right: auto;" /> <strong><span class="esfl_label">Передача показів лічільника</span></strong></a><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/peredacha-pokaznykiv/2-uncategorised/446-peredacha-pokaznikiv.html"><span class="esfl_label1"><br /></span></a></p></div>
+            <div class="clr"></div>
+		</div>
+	  
+            </div>
+            
+            <div class="slidetoogle"></div>    
+            <div class="menu-top">
+                		<div class="moduletable">
+						<ul class="nav menu">
+<li class="item-104"><a class="uy" href="/index.php" ><span>Головна</span></a></li><li class="item-105 deeper parent"><a href="/index.php/tovarystvo.html" ><span>Товариство</span></a><ul class="nav-child unstyled small"><li class="item-305"><a href="/index.php/tovarystvo/pro-tovarystvo.html" ><span>Про Товариство</span></a></li><li class="item-304"><a href="/index.php/tovarystvo/istoriia.html" ><span>Історія</span></a></li><li class="item-156"><a href="/index.php/tovarystvo/kerivnytstvo.html" ><span>Правління</span></a></li><li class="item-306"><a href="/index.php/tovarystvo/directing.html" ><span>Керівництво</span></a></li><li class="item-159 deeper parent"><a href="/index.php/tovarystvo/strukturni-pidrozdily.html" ><span>Структурні підрозділи</span></a><ul class="nav-child unstyled small"><li class="item-165"><a href="/index.php/tovarystvo/strukturni-pidrozdily/rozpodilni-elektromerezhi.html" ><span>Розподільні електромережі</span></a></li></ul></li><li class="item-164"><a href="/index.php/tovarystvo/investytsiina-prohrama.html" ><span>Інвестиційна програма</span></a></li><li class="item-340 deeper parent"><a href="/index.php/tovarystvo/tekhnichna-polityka.html" ><span>Технічна політика</span></a><ul class="nav-child unstyled small"><li class="item-341"><a href="/index.php/tovarystvo/tekhnichna-polityka/plan-rozvytku-osr.html" ><span>План розвитку ОСР</span></a></li></ul></li><li class="item-307 deeper parent"><a href="/index.php/tovarystvo/personal.html" ><span>Персонал</span></a><ul class="nav-child unstyled small"><li class="item-162"><a href="/index.php/tovarystvo/personal/vakansii.html" ><span>Вакансії</span></a></li></ul></li><li class="item-323 deeper parent"><a href="https://smarttender.biz/TenderMirror?mirrorId=21825" ><span>Закупівлі</span></a><ul class="nav-child unstyled small"><li class="item-116"><a href="/index.php/tovarystvo/zakup/potochni-vytraty.html" ><span>Проведені закупівлі</span></a></li><li class="item-384"><a href="https://smarttender.biz/TenderMirror?mirrorId=21825" ><span>Посилання на торги в Prozorro</span></a></li></ul></li><li class="item-309"><a href="/index.php/tovarystvo/kontakts.html" ><span>Контакти</span></a></li><li class="item-371 deeper parent"><a href="/index.php/tovarystvo/zvitna-informatsiia.html" ><span>Звітна інформація </span></a><ul class="nav-child unstyled small"><li class="item-372"><a href="/index.php/tovarystvo/zvitna-informatsiia/ozp.html" ><span>ОЗП</span></a></li><li class="item-408"><a href="/index.php/tovarystvo/zvitna-informatsiia/finansova-zvitnist.html" ><span>Фінансова звітність</span></a></li></ul></li></ul></li><li class="item-110 active deeper parent"><span ><span>Споживачам</span></span><ul class="nav-child unstyled small"><li class="item-163"><a href="/index.php/cpojivaham/hrafik-pryiomu-hromadian.html" ><span>Графік прийому громадян</span></a></li><li class="item-320 deeper parent"><a href="/index.php/cpojivaham/yurydychni-spozhyvachi.html" ><span>Юридичні споживачі</span></a><ul class="nav-child unstyled small"><li class="item-177"><a href="/index.php/cpojivaham/yurydychni-spozhyvachi/taryfy-na-peredachu-za-klasamy-napruhy.html" ><span>Тарифи на розподіл за класами напруги</span></a></li><li class="item-178"><a href="/index.php/cpojivaham/yurydychni-spozhyvachi/zrazky-zaiav-ta-dokumentiv.html" ><span>Зразки заяв та документів</span></a></li><li class="item-296"><a href="/index.php/cpojivaham/yurydychni-spozhyvachi/kvalifikovane-obslugovuvannya.html" ><span>Кваліфіковане обслуговування</span></a></li><li class="item-330"><a href="/index.php/cpojivaham/yurydychni-spozhyvachi/publichnyi-dohovor.html" ><span>Публічний договір</span></a></li><li class="item-401"><a href="https://www.nerc.gov.ua/news/osoblivosti-perehodu-spozhivachiv-z-ploshchadkami-komercijnogo-obliku-grupi-na-distancijne-zchituvannya-pokaziv-lichilnikiv-elektrichnoyi-energiyi" ><span>Роз’яснення НКРЕКП щодо особливостей переходу споживачів з площадками комерційного обліку групи «а» на дистанційне зчитування показів лічильників електричної енергії</span></a></li></ul></li><li class="item-321 active deeper parent"><span ><span>Побутові споживачі</span></span><ul class="nav-child unstyled small"><li class="item-289"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/zelenyi-taryf.html" ><span>&quot;Зелений тариф&quot;</span></a></li><li class="item-331"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/publichnyi-dohovir.html" ><span>Публічний договір</span></a></li><li class="item-345"><a href="/abonent" ><span>Особистий кабінет побутового споживача</span></a></li><li class="item-359"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/pasport-tochky-rozpodilu.html" ><span>Паспорт точки розподілу</span></a></li><li class="item-391 deeper parent"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku.html" ><span>Прилади обліку</span></a><ul class="nav-child unstyled small"><li class="item-350"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku/peredacha-pokaznykiv1.html" ><span>Передача показників</span></a></li><li class="item-393"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku/vstanovlennia-zonoho-lichylnyka.html" ><span>Встановлення багатозонного лічильника</span></a></li><li class="item-394"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku/rekomendatsii-shchodo-kharakternystyk-zasobiv-vymiriuvalnoi-mekhaniky-lichylnykiv.html" ><span>Рекомендації щодо характеристик засобів вимірювальної техніки (лічильників)</span></a></li><li class="item-395"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku/taryfni-zony-dlia-rozrakhunkiv-za-spozhytu-elektroenerhii.html" ><span>Тарифні зони для розрахунків за спожиту електроенергію</span></a></li><li class="item-396"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku/rozshyfruvannia-kodiv-zonnykh-lichylnykiv.html" ><span>Розшифрування кодів багатозонних лічильників</span></a></li><li class="item-380"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku/poriadok-zniattia-pokaziv-ta-oplaty-spozhytoi-e-e.html" ><span>Порядок зняття показів та оплати спожитої е/е</span></a></li><li class="item-404"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/prulady-obliku/perevahy-vstanovlennya-rozumnoho-lichylnyka.html" ><span> ПЕРЕВАГИ ВСТАНОВЛЕННЯ РОЗУМНОГО ЛІЧИЛЬНИКА </span></a></li></ul></li><li class="item-405"><a class="https://cek.dp.ua/index.php/cpojivaham/pobutovi-spozhyvachi.html" href="/index.php/cpojivaham/pobutovi-spozhyvachi/poshireni-pitannya.html" title="Поширені питання" ><span>Поширені питання</span></a></li><li class="item-400"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/cpysky-adres-na-vidklyuchennya-elektroenerhiyi.html" ><span>CПИСКИ АДРЕС НА ВІДКЛЮЧЕННЯ ЕЛЕКТРОЕНЕРГІЇ </span></a></li><li class="item-402 current active divider"><span class="separator ">
+	<span>Визначення черги</span></span>
+</li><li class="item-175"><a href="/index.php/cpojivaham/pobutovi-spozhyvachi/elektroopalennia.html" ><span>Електроопалення</span></a></li></ul></li><li class="item-297"><a href="/index.php/cpojivaham/prava-spozhyvachiv-elektroenerhii.html" ><span>Права споживачів електроенергії</span></a></li><li class="item-172 deeper parent"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh.html" ><span>Приєднання до електромереж</span></a><ul class="nav-child unstyled small"><li class="item-386"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/poriadok-rozhliadu-proiektno-koshtorysnoi-dokumentatsii.html" ><span>Порядок розгляду проєктно-кошторисної документації</span></a></li><li class="item-181 deeper parent"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/poriadok-pryiednannia-do-elektrychnykh-merezh.html" ><span>Процедура отримання послуги з приєднання</span></a><ul class="nav-child unstyled small"><li class="item-363"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/poriadok-pryiednannia-do-elektrychnykh-merezh/pryiednannia-do-elektrychnykh-merezh.html" ><span>Приєднання до електричних мереж</span></a></li><li class="item-362"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/poriadok-pryiednannia-do-elektrychnykh-merezh/forma-zaiavy-ta-perelik-neobkhidnykh-dokumentiv.html" ><span>Форма заяви та перелік необхідних документів</span></a></li><li class="item-182"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/poriadok-pryiednannia-do-elektrychnykh-merezh/stavky-za-standartne-pryiednannia.html" ><span>Ставки за стандартне приєднання</span></a></li><li class="item-344"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/poriadok-pryiednannia-do-elektrychnykh-merezh/stavky-za-nestandartne-pryiednannia.html" ><span>Ставки за нестандартне приєднання</span></a></li><li class="item-390"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/poriadok-pryiednannia-do-elektrychnykh-merezh/koeficient-trans.html" ><span>Коефіцієнт завантаження трансформаторних підстанцій </span></a></li></ul></li><li class="item-364"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/publichnyi-dohovir.html" ><span>Публічний договір</span></a></li><li class="item-327"><a href="https://www.nerc.gov.ua/calculator-standart" target="_blank" ><span>Калькулятор приєднання (Стандартне)</span></a></li><li class="item-413"><a href="https://www.nerc.gov.ua/calculator-nonstandart" target="_blank" ><span>Калькулятор приєднання (Нестандартне)</span></a></li><li class="item-325"><a href="/Connect" ><span>Особистий кабінет приєднання</span></a></li><li class="item-366"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/reiestr-chynnykh-tekhnichnykh-umov.html" ><span>Реєстр чинних технічних умов</span></a></li><li class="item-326"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/kontakty-sluzhby-pidkliuchennia.html" ><span>Контакти сервісного центру</span></a></li><li class="item-381"><a href="/index.php/cpojivaham/pryiednannia-do-elektromerezh/tymchasovi-pryiednannia.html" ><span>Тимчасові приєднання</span></a></li></ul></li><li class="item-361"><a href="/index.php/cpojivaham/typovi-tekhnichni-rekomendatsii.html" ><span>Типові технічні рекомендації</span></a></li><li class="item-397"><a href="/index.php/cpojivaham/vimogi-do-generuyuchikh-ustanovok-ta-uze.html" ><span>Вимоги до генеруючих установок та УЗЕ</span></a></li><li class="item-171"><a href="/index.php/cpojivaham/vidkliuchennia.html" ><span>Відключення</span></a></li><li class="item-322"><a href="/index.php/cpojivaham/stymuliuiuche-rehuliuvannia.html" ><span>Стимулююче регулювання</span></a></li><li class="item-158"><a href="/index.php/cpojivaham/merezhi-prat-peem-tsek.html" ><span>Мережі ПрАТ &quot;ПЕЕМ &quot;ЦЕК&quot;</span></a></li><li class="item-343"><a href="/index.php/cpojivaham/heoinformatsiina-systema.html" ><span>Геоінформаційна система</span></a></li><li class="item-173 deeper parent"><a href="/index.php/cpojivaham/zahalna-informatsiia.html" ><span>Загальна інформація</span></a><ul class="nav-child unstyled small"><li class="item-387"><a href="/index.php/cpojivaham/zahalna-informatsiia/serednya-tsina-kupivli-elektrichnoji-energiji-operatorom-sistemi-na-balansuyuchomu-rinku.html" ><span>Середня ціна купівлі електричної енергії оператором системи на балансуючому ринку</span></a></li><li class="item-406"><a href="/index.php/cpojivaham/zahalna-informatsiia/serednya-tsina-kupivli-elektrichnoji-energiji-operatorom-sistemi-na-balansuyuchomu-rinku-2.html" ><span>Типові протоколи параметризації</span></a></li><li class="item-354"><a href="/index.php/cpojivaham/zahalna-informatsiia/pokazniki-nadiynosti.html" ><span>Показники надійності електропостачання</span></a></li><li class="item-185"><a href="/index.php/cpojivaham/zahalna-informatsiia/nashi-posluhy.html" ><span>Наші послуги</span></a></li><li class="item-186"><a href="/index.php/cpojivaham/zahalna-informatsiia/dostup-do-publichnoi-informatsii.html" ><span>Доступ до публічної інформації</span></a></li><li class="item-189"><a href="/index.php/cpojivaham/zahalna-informatsiia/okhorona-elektrychnykh-merezh.html" ><span>Охорона електричних мереж</span></a></li><li class="item-377"><a href="/index.php/cpojivaham/zahalna-informatsiia/poriadok-vidkliuchennia-vidnovlennia-elektrozhyvlennia-spozhyvacha.html" ><span>Порядок відключення/відновлення електроживлення споживача</span></a></li><li class="item-378"><a href="/index.php/cpojivaham/zahalna-informatsiia/kontaktni-dani-dlia-podannia-povidomlen-pro-zahrozu-elektrobezpetsi.html" ><span>Контактні дані для подання повідомлень про загрозу електробезпеці</span></a></li><li class="item-379"><a href="/index.php/cpojivaham/zahalna-informatsiia/posylannnia-na-veb-storinky-rehuliatora-tsentralnoho-orhanu-vykonavchoi-vlady-operatoriv-systemy-administratora-rynku-antymonopolnoho-komitetu-ukrainy.html" ><span>Посиланння на веб-сторінки Регулятора, центрального органу виконавчої влади, операторів системи, адміністратора ринку, Антимонопольного комітету України</span></a></li></ul></li><li class="item-347"><a href="/index.php/cpojivaham/reiestr-postachalnykiv.html" ><span>Реєстр постачальників</span></a></li><li class="item-376"><a href="/index.php/cpojivaham/poriadok-zminy-elektropostachalnyka.html" ><span>Порядок зміни електропостачальника</span></a></li><li class="item-355 deeper parent"><a href="/index.php/cpojivaham/informatsiino-konsultatsiinyi-tsentr-ikts.html" ><span>Центр розгляду скарг</span></a><ul class="nav-child unstyled small"><li class="item-360"><a href="/index.php/cpojivaham/informatsiino-konsultatsiinyi-tsentr-ikts/zvernennya-spozhyvachiv.html" ><span>ЗВЕРНЕННЯ СПОЖИВАЧІВ</span></a></li><li class="item-351"><a href="/index.php/cpojivaham/informatsiino-konsultatsiinyi-tsentr-ikts/poriadok-nadannia-ta-protsedura-rozhliadu-zvernennia-skarhy-pretenzii.html" ><span>Порядок надання та процедура розгляду звернення/скарги/претензії</span></a></li><li class="item-410"><a href="/index.php/cpojivaham/informatsiino-konsultatsiinyi-tsentr-ikts/standarty-ta-vymohy-do-iakosti-obsluhovuvannia-spozhyvachiv.html" ><span>Стандарти та вимоги до якості обслуговування споживачів</span></a></li><li class="item-411"><a class="https://cek.dp.ua/index.php/cpojivaham/pobutovi-spozhyvachi.html" href="/index.php/cpojivaham/informatsiino-konsultatsiinyi-tsentr-ikts/poshireni-pitannya-2.html" title="Поширені питання" ><span>Поширені питання </span></a></li></ul></li><li class="item-310"><a href="/index.php/cpojivaham/zakonodavcha-baza.html" ><span>Законодавча база</span></a></li><li class="item-161"><a href="/index.php/cpojivaham/call-tsentr.html" ><span>Call-центр</span></a></li><li class="item-398"><a href="/index.php/cpojivaham/typovi-proyekt.html" ><span>ТИПОВІ ПРОЄКТИ</span></a></li><li class="item-407"><a href="/index.php/cpojivaham/poriadok-peredachi-elektrychnykh-merezh-na-balans-osr.html" ><span>Порядок передачі електричних мереж на баланс ОСР</span></a></li><li class="item-409"><a href="/index.php/cpojivaham/osoblyvosti-nadannia-posluhy-z-hnuchkoho-pryiednannia.html" ><span>Особливості надання послуги з гнучкого приєднання</span></a></li></ul></li><li class="item-338 deeper parent"><a href="/index.php/elektropostachalnykam.html" ><span>Електропостачальникам</span></a><ul class="nav-child unstyled small"><li class="item-339"><a href="/index.php/elektropostachalnykam/publichnyi-dohovir.html" ><span>Публічний договір</span></a></li><li class="item-342"><a href="/index.php/elektropostachalnykam/reiestr-postachalnykiv.html" ><span>Реєстр постачальників</span></a></li></ul></li><li class="item-111 deeper parent"><a href="/index.php/akcioneram.html" ><span>Акціонерам</span></a><ul class="nav-child unstyled small"><li class="item-207"><a href="/index.php/akcioneram/korporatyvni-akty.html" ><span>Основні документи - Корпоративні акти</span></a></li><li class="item-209"><a href="http://cek.dp.ua/images/document/LAW/svidoctvoreestr.pdf" ><span>Основні документи - Свідоцтво про реєстрацію ЦП</span></a></li><li class="item-208"><a href="/index.php/akcioneram/osoblyva-informatsiia2.html" ><span>Особлива інформація</span></a></li><li class="item-193"><a href="/index.php/akcioneram/zvity.html" ><span>Звіти</span></a></li><li class="item-194"><a href="/index.php/akcioneram/povidomlennia-aktsioneram.html" ><span>Повідомлення акціонерам</span></a></li><li class="item-382"><a href="/index.php/akcioneram/zahalni-zbory.html" target="_blank" ><span>ЗАГАЛЬНІ ЗБОРИ</span></a></li></ul></li><li class="item-113 deeper parent"><a href="/index.php/pres-tsentr.html" ><span>Прес-центр</span></a><ul class="nav-child unstyled small"><li class="item-197"><a href="/index.php/pres-tsentr/novyny-tovarystva.html" ><span>Новини Товариства</span></a></li><li class="item-198"><a href="/index.php/pres-tsentr/halereia-video.html" ><span>Відеоматеріали</span></a></li><li class="item-199"><a href="/index.php/pres-tsentr/fotohalereia.html" ><span>Фотогалерея</span></a></li><li class="item-357"><a href="/index.php/pres-tsentr/anonsy.html" ><span>Порядок запиту інформації для ЗМІ</span></a></li></ul></li><li class="item-114"><a href="/index.php/kontakty.html" ><span>Контакти</span></a></li><li class="item-348"><a class="circle" href="/index.php/osobysti-kabinety.html" ><span>Особисті кабінети</span></a></li><li class="item-130"><a href="/index.php/osobystyi-kabinet.html" ><span>Тарифи</span></a></li></ul>
+		</div>
+	
+            </div>
+          </div>                                   
+        </div>
+      </div>
+      <div class="slider-wrap">
+        <div class="slider">              
+          
+          <div class="background-slide">
+              <div class="left"></div>
+              <div class="right"></div>
+          </div>              
+        </div>
+      </div>            
+
+      <div class="services">
+        <div class="wrap">
+          
+        </div>
+      </div>
+
+       <div class="main-news-title">
+          <div class="wrap">
+            
+          </div>
+        </div>
+
+        <div class="main-news">
+          <div class="wrap">
+            
+          </div>
+        </div>
+
+      <div class="wrap presswrap">
+        <div class="news">              
+                          
+        </div>        
+        <div id="form">          
+                                  
+        </div>
+        <div class="video-main">   
+		                
+              
+		 <div class="soc_buttons1">
+			  
+		</div>       
+        </div>
+
+	 	    
+
+        <div class="press">        
+                  
+        </div>
+      </div>
+      
+      <div id="content">     
+          <div class="wrap">
+              <div id="breadcrumbs">
+                  <div class="wrap">
+                                        
+                 </div>
+              </div>              
+           
+              <div id="left">
+                                
+              </div>
+                   
+              <div id="component">
+                <div class="item-page">
+
+		
+
+	
+		
+
+
+
+
+
+	
+			<div class="article-info muted">
+			<dl class="article-info">
+			<dt class="article-info-term">Деталі</dt>
+
+									
+			
+																<dd class="create">
+						<span class="icon-calendar"></span> Створено: 17 вересня 2024					</dd>
+				
+										</dl>
+		</div>
+	
+
+	
+
+				
+	
+
+
+
+
+
+
+
+
+	
+		
+				
+
+
+
+
+			<p></p> 
+ 
+
+ 
+<!DOCTYPE html> 
+<html lang="uk"> 
+<head> 
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>Форма з полями</title> 
+    <style> 
+    body { 
+        font-family: Arial, sans-serif; 
+        padding: 20px; 
+        overflow-y: hidden; 
+        overflow-x: hidden; 
+    } 
+    .form-container { 
+        max-width: 100%; 
+        margin: 0 auto; 
+    } 
+    .form-row { 
+        display: flex; 
+        gap: 10px; 
+        align-items: flex-start; 
+    } 
+    label { 
+        display: block; 
+        margin-bottom: 5px; 
+    } 
+    input, select { 
+        width: 100%; 
+        padding: 8px; 
+    } 
+    select:disabled, input:disabled { 
+        background-color: #f0f0f0; 
+    } 
+    .field { 
+        flex: 1; 
+        <!-- position: relative; -->/* Обеспечиваем относительное позиционирование для подсказок */ 
+    } 
+    .error { 
+        color: red; 
+    } 
+    .message { 
+        color: green; 
+    } 
+    .suggestions { 
+        position: absolute; 
+        background: white; 
+        border: 1px solid #ddd; 
+        max-height: 150px; 
+        overflow-y: auto; 
+        width: calc(100% - 20px); 
+        z-index: 1000; 
+        display: none; /* Скрываем подсказки по умолчанию */ 
+    } 
+    .suggestion-item { 
+        padding: 8px; 
+        cursor: pointer; 
+    } 
+    .suggestion-item:hover { 
+        background-color: #e6e6e6; 
+    } 
+    #group { 
+        padding: 8px; 
+        font-weight: bold; 
+        text-align: left; 
+        color: #333; 
+        margin-left: 20px; 
+    } 
+    </style> 
+</head> 
+<body> 
+
+ 
+<div class="form-container"> 
+     
+     
+
+ 
+    <form action="form.php" method="POST"> 
+        <div class="form-row"> 
+            <div class="field"> 
+                <label for="city">Введіть нас. пункт</label> 
+                <input type="text" id="city" name="city" oninput="filterCity()" placeholder="Наприклад: м. Дніпро"> 
+                <div id="city-suggestions" class="suggestions"></div> 
+            </div> 
+
+ 
+            <div class="field"> 
+                <label for="street">Введіть вулицю</label> 
+                <input type="text" id="street" name="street" oninput="filterStreet()" placeholder="Наприклад: вул. Хмельницького" disabled> 
+                <div id="street-suggestions" class="suggestions"></div> 
+            </div> 
+
+ 
+            <div class="field"> 
+                <label for="house">Номер будинку</label> 
+                <input type="text" id="house" name="house" placeholder="Наприклад: 10А" disabled oninput="filterHouse()"> 
+                <div id="house-suggestions" class="suggestions"></div> 
+            </div> 
+            <br> 
+
+ 
+<br> 
+
+ 
+<br> 
+
+ 
+<br> 
+            <div class="field"> 
+                <br><div id="group"></div> 
+            </div> 
+        </div> 
+    </form> 
+</div> 
+
+ 
+<script> 
+    const locations = {"\u043c. \u0414\u043d\u0456\u043f\u0440\u043e":{"\u0416\u041a \"\u0413\u0440\u0430\u043d\u0438\"":{"\u0423\u0441\u0456 \u0431\u0443\u0434\u0438\u043d\u043a\u0438":"\u0427\u0435\u0440\u0433\u0430 3"},"\u043f\u0440\u043e\u0432. \u0422\u044e\u043b\u0435\u043d\u0456\u043d\u0430":{"1":"\u0427\u0435\u0440\u0433\u0430 2","2":"\u0427\u0435\u0440\u0433\u0430 2","3":"\u0427\u0435\u0440\u0433\u0430 2","4":"\u0427\u0435\u0440\u0433\u0430 2","5":"\u0427\u0435\u0440\u0433\u0430 2","6":"\u0427\u0435\u0440\u0433\u0430 2","7":"\u0427\u0435\u0440\u0433\u0430 2","8":"\u0427\u0435\u0440\u0433\u0430 2"},"\u0432\u0443\u043b. \u0424\u0456\u043b\u0430\u0442\u043e\u0432\u0430":{"1":"\u0427\u0435\u0440\u0433\u0430 1.1","2":"\u0427\u0435\u0440\u0433\u0430 1.1","3":"\u0427\u0435\u0440\u0433\u0430 1.1","4":"\u0427\u0435\u0440\u0433\u0430 1.1","5":"\u0427\u0435\u0440\u0433\u0430 1.1","6":"\u0427\u0435\u0440\u0433\u0430 1.1","7":"\u0427\u0435\u0440\u0433\u0430 1.1"},"\u0432\u0443\u043b. \u0420\u043e\u0431\u043e\u0447\u0430":{"65":"\u0427\u0435\u0440\u0433\u0430 3.2","71":"\u0427\u0435\u0440\u0433\u0430 3.2","73":"\u0427\u0435\u0440\u0433\u0430 3.2","75":"\u0427\u0435\u0440\u0433\u0430 3.2","79":"\u0427\u0435\u0440\u0433\u0430 3.2","81":"\u0427\u0435\u0440\u0433\u0430 3.2","83":"\u0427\u0435\u0440\u0433\u0430 3.2","85":"\u0427\u0435\u0440\u0433\u0430 3.2","87":"\u0427\u0435\u0440\u0433\u0430 3.2","89":"\u0427\u0435\u0440\u0433\u0430 3.2","91":"\u0427\u0435\u0440\u0433\u0430 3.2","91\u0410":"\u0427\u0435\u0440\u0433\u0430 3.2","91\u0411":"\u0427\u0435\u0440\u0433\u0430 3.2","93":"\u0427\u0435\u0440\u0433\u0430 3.2","95":"\u0427\u0435\u0440\u0433\u0430 3.2","95\u0410":"\u0427\u0435\u0440\u0433\u0430 3.2","97":"\u0427\u0435\u0440\u0433\u0430 3.2","97\u0410":"\u0427\u0435\u0440\u0433\u0430 3.2","97\u0411":"\u0427\u0435\u0440\u0433\u0430 3.2","99":"\u0427\u0435\u0440\u0433\u0430 3.2","99\u0410":"\u0427\u0435\u0440\u0433\u0430 3.2","146":"\u0427\u0435\u0440\u0433\u0430 3.2","146\u0413":"\u0427\u0435\u0440\u0433\u0430 3.2","146\u0415":"\u0427\u0435\u0440\u0433\u0430 3.2","146\u0417":"\u0427\u0435\u0440\u0433\u0430 3.2","152":"\u0427\u0435\u0440\u0433\u0430 3.2","152\u0413":"\u0427\u0435\u0440\u0433\u0430 3.2","154":"\u0427\u0435\u0440\u0433\u0430 3.2","156":"\u0427\u0435\u0440\u0433\u0430 3.2","160":"\u0427\u0435\u0440\u0433\u0430 3.2"," 162":"\u0427\u0435\u0440\u0433\u0430 3.2","164":"\u0427\u0435\u0440\u0433\u0430 3.2","164\u0410":"\u0427\u0435\u0440\u0433\u0430 3.2","166\u0410":"\u0427\u0435\u0440\u0433\u0430 3.2","168":"\u0427\u0435\u0440\u0433\u0430 3.2","170":"\u0427\u0435\u0440\u0433\u0430 3.2","172":"\u0427\u0435\u0440\u0433\u0430 3.2","176":"\u0427\u0435\u0440\u0433\u0430 3.2","178":"\u0427\u0435\u0440\u0433\u0430 3.2","176\u0410":"\u0427\u0435\u0440\u0433\u0430 3.2"},"\u0432\u0443\u043b. \u041d\u0430\u0446\u0456\u043e\u043d\u0430\u043b\u044c\u043d\u043e\u0457 \u0413\u0432\u0430\u0440\u0434\u0456\u0457":{"5":"\u0427\u0435\u0440\u0433\u0430 3.2","17":"\u0427\u0435\u0440\u0433\u0430 3.2","19":"\u0427\u0435\u0440\u0433\u0430 3.2","19\u0413":"\u0427\u0435\u0440\u0433\u0430 3.2","30":"\u0427\u0435\u0440\u0433\u0430 3.2","9":"\u0413\u0440\u0443\u043f\u0430 3.1 (\u0410\u0422 \"\u0414\u0422\u0415\u041a \u0414\u0415\u041c\")","11":"\u0413\u0440\u0443\u043f\u0430 3.1 (\u0410\u0422 \"\u0414\u0422\u0415\u041a \u0414\u0415\u041c\")","13":"\u0413\u0440\u0443\u043f\u0430 3.1 (\u0410\u0422 \"\u0414\u0422\u0415\u041a \u0414\u0415\u041c\")","13\u0410":"\u0413\u0440\u0443\u043f\u0430 3.1 (\u0410\u0422 \"\u0414\u0422\u0415\u041a \u0414\u0415\u041c\")"}},"\u043c. \u0416\u043e\u0432\u0442\u0456 \u0412\u043e\u0434\u0438":{"\u0432\u0443\u043b. \u0421\u043f\u043e\u0440\u0442\u0438\u0432\u043d\u0430":{"24":"\u0427\u0435\u0440\u0433\u0430 2.1","26":"\u0427\u0435\u0440\u0433\u0430 2.1","28":"\u0427\u0435\u0440\u0433\u0430 2.1","30":"\u0427\u0435\u0440\u0433\u0430 2.1","32":"\u0427\u0435\u0440\u0433\u0430 2.1","34":"\u0427\u0435\u0440\u0433\u0430 2.1","36":"\u0427\u0435\u0440\u0433\u0430 2.1","38":"\u0427\u0435\u0440\u0433\u0430 2.1","40":"\u0427\u0435\u0440\u0433\u0430 2.1","42":"\u0427\u0435\u0440\u0433\u0430 2.1","1":"\u0427\u0435\u0440\u0433\u0430 6.1","3":"\u0427\u0435\u0440\u0433\u0430 6.1","5":"\u0427\u0435\u0440\u0433\u0430 6.1","7":"\u0427\u0435\u0440\u0433\u0430 6.1","9":"\u0427\u0435\u0440\u0433\u0430 6.1","10":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","11":"\u0427\u0435\u0440\u0433\u0430 6.1","13":"\u0427\u0435\u0440\u0433\u0430 6.1","15":"\u0427\u0435\u0440\u0433\u0430 6.1","19\r\n":"\u0427\u0435\u0440\u0433\u0430 6.1","2":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","4":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","6":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","8":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","12":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","14":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","16":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","18":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","20":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1","22":"\u0427\u0435\u0440\u0433\u0430 6.1 \u0442\u0430 2.1"}},"\u0441. \u041f\u0435\u0442\u0440\u0438\u043a\u0456\u0432\u043a\u0430":{"\u0432\u0443\u043b. \u041b\u0435\u0432\u0430\u043d\u0435\u0432\u0441\u044c\u043a\u043e\u0433\u043e":{"\u0423\u0441\u0456 \u0434\u043e\u043c\u0430":"4.1"},"\u0432\u0443\u043b. \u0411\u0443\u0434\u0456\u0432\u0435\u043b\u044c\u043d\u0430":{"\u0423\u0441\u0456 \u0434\u043e\u043c\u0430":"4.1"}}}; 
+
+ 
+function filterCity() { 
+        const input = document.getElementById('city').value.toLowerCase(); 
+        const suggestions = document.getElementById('city-suggestions'); 
+        suggestions.innerHTML = ''; 
+        suggestions.style.display = 'none'; // Скрываем подсказки по умолчанию 
+
+ 
+        for (const city in locations) { 
+            if (city.toLowerCase().includes(input) && input) { 
+                const item = document.createElement('div'); 
+                item.className = 'suggestion-item'; 
+                item.textContent = city; 
+                item.onclick = () => { 
+                    document.getElementById('city').value = city; 
+                    suggestions.innerHTML = ''; 
+                    suggestions.style.display = 'none'; // Скрываем подсказки 
+                    document.getElementById('street').disabled = false; 
+                    filterStreet(); 
+                }; 
+                suggestions.appendChild(item); 
+                suggestions.style.display = 'block'; // Показываем подсказки 
+            } 
+        } 
+    } 
+
+ 
+    function filterStreet() { 
+        const city = document.getElementById('city').value; 
+        const input = document.getElementById('street').value.toLowerCase(); 
+        const suggestions = document.getElementById('street-suggestions'); 
+        suggestions.innerHTML = ''; 
+        suggestions.style.display = 'none'; // Скрываем подсказки по умолчанию 
+
+ 
+        if (locations[city]) { 
+            for (const street in locations[city]) { 
+                if (street.toLowerCase().includes(input) && input) { 
+                    const item = document.createElement('div'); 
+                    item.className = 'suggestion-item'; 
+                    item.textContent = street; 
+                    item.onclick = () => { 
+                        document.getElementById('street').value = street; 
+                        suggestions.innerHTML = ''; 
+                        suggestions.style.display = 'none'; // Скрываем подсказки 
+                        document.getElementById('house').disabled = false; 
+                        filterHouse(); 
+                    }; 
+                    suggestions.appendChild(item); 
+                    suggestions.style.display = 'block'; // Показываем подсказки 
+                } 
+            } 
+        } 
+    } 
+
+ 
+    function filterHouse() { 
+        const city = document.getElementById('city').value; 
+        const street = document.getElementById('street').value; 
+        const input = document.getElementById('house').value.toLowerCase(); 
+        const suggestions = document.getElementById('house-suggestions'); 
+        suggestions.innerHTML = ''; 
+        suggestions.style.display = 'none'; // Скрываем подсказки по умолчанию 
+
+ 
+        if (locations[city] && locations[city][street]) { 
+            const houses = locations[city][street]; 
+            let found = false; 
+            for (const house in houses) { 
+                if (house.toLowerCase().includes(input)) { 
+                    const item = document.createElement('div'); 
+                    item.className = 'suggestion-item'; 
+                    item.textContent = house; 
+                    item.onclick = () => { 
+                        document.getElementById('house').value = house; 
+                        suggestions.innerHTML = ''; 
+                        suggestions.style.display = 'none'; // Скрываем подсказки 
+                        document.getElementById('group').textContent = houses[house]; 
+                    }; 
+                    suggestions.appendChild(item); 
+                    suggestions.style.display = 'block'; // Показываем подсказки 
+                    found = true; 
+                } 
+            } 
+            if (!found && input) { 
+                document.getElementById('group').textContent = 'Черга не знайдена'; 
+            } 
+        } else { 
+            if (input) { 
+                document.getElementById('group').textContent = 'Черга не знайдена'; 
+            } 
+        } 
+    } 
+</script> 
+<p><br /></p> 
+	
+						 </div>
+              </div>              
+
+              <div id="right">
+                               
+              </div>      
+              
+
+                           <body class="all-hidden">
+        </div>
+      </div>
+      
+
+      <div class="video">              
+                      
+      </div>
+
+      <div class="text">        
+                  
+      </div>
+
+      
+  
+</div><!--end page-->
+      <div class="map">        
+                  
+      </div>
+
+
+    <div id="footer">
+      <div class="wrap">
+        <div class="footer-logo">
+            		<div class="moduletable">
+						
+
+<div class="custom"  >
+	<p><img src="/images/Logo-footer.png" alt="" /></p>
+<div>&nbsp;</div></div>
+		</div>
+	
+        </div>       
+        <div class="footer-menu1">
+            
+        </div>
+        <div class="footer-menu2">
+            
+        </div>
+        <div class="footer-cont">
+            
+        </div>
+        <div class="footer-brands">
+            
+        </div>
+      </div>        
+    </div>
+
+    <div class="footer-copy">
+      <div class="wrap">        
+         
+      </div>       
+    </div>
+
+
+<link rel="stylesheet" type="text/css" href="/templates/tzec/css/colorbox.css" property="stylesheet" />
+<link rel="stylesheet" type="text/css" href="/templates/tzec/css/tooltip.css" property="stylesheet" />
+<script src='https://www.google.com/recaptcha/api.js'></script>
+<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?sensor=false&amp;language=uk&amp;key=AIzaSyCio9wud5U4kI-Q_da8fgJ1yBSzFVvyFjo"></script>
+
+  
+</body>
+</html>
+
+
+
