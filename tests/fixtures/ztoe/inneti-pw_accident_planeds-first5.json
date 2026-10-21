@@ -1,0 +1,272 @@
+{
+ "@context": "/api/contexts/PwAccidentPlaned",
+ "@id": "/api/pw_accident_planeds",
+ "@type": "hydra:Collection",
+ "hydra:member": [
+  {
+   "@id": "/api/pw_accident_planeds/427",
+   "@type": "PwAccidentPlaned",
+   "id": 427,
+   "code_otg": "11",
+   "city": {
+    "@id": "/api/pw_cities/965",
+    "@type": "PwCity",
+    "id": 965,
+    "name": "Симони",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/64165",
+    "@type": "PwStreet",
+    "id": 64165,
+    "city": {
+     "@id": "/api/pw_cities/965",
+     "@type": "PwCity",
+     "id": 965,
+     "name": "Симони",
+     "codeOtg": ""
+    },
+    "name": "вул. Зарічна"
+   },
+   "dateEvent": "2026-10-20T08:00:00+00:00",
+   "datePlanIn": "2026-10-20T17:00:00+00:00",
+   "koment": "",
+   "otg": {
+    "@id": "/api/pw_otgs/11",
+    "@type": "PwOtg",
+    "id": 11,
+    "code": "11",
+    "name": "Звягельський РЕМ"
+   },
+   "buildingNames": "1, 10, 11, 12, 13, 15, 16, 17, 2, 20, 21, 22, 23, 24, 25, 26, 27, 28, 3, 4, 5, 9",
+   "typeOff": 3
+  },
+  {
+   "@id": "/api/pw_accident_planeds/2814",
+   "@type": "PwAccidentPlaned",
+   "id": 2814,
+   "code_otg": "3",
+   "city": {
+    "@id": "/api/pw_cities/116",
+    "@type": "PwCity",
+    "id": 116,
+    "name": "Семенівка",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/22269",
+    "@type": "PwStreet",
+    "id": 22269,
+    "city": {
+     "@id": "/api/pw_cities/116",
+     "@type": "PwCity",
+     "id": 116,
+     "name": "Семенівка",
+     "codeOtg": ""
+    },
+    "name": "пров. Тихий"
+   },
+   "dateEvent": "2026-10-20T08:00:00+00:00",
+   "datePlanIn": "2026-10-20T17:00:00+00:00",
+   "koment": "",
+   "otg": {
+    "@id": "/api/pw_otgs/3",
+    "@type": "PwOtg",
+    "id": 3,
+    "code": "3",
+    "name": "Бердичівський РЕМ"
+   },
+   "buildingNames": "1, 5",
+   "typeOff": 3
+  },
+  {
+   "@id": "/api/pw_accident_planeds/778",
+   "@type": "PwAccidentPlaned",
+   "id": 778,
+   "code_otg": "11",
+   "city": {
+    "@id": "/api/pw_cities/952",
+    "@type": "PwCity",
+    "id": 952,
+    "name": "Ємільчине",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/11855",
+    "@type": "PwStreet",
+    "id": 11855,
+    "city": {
+     "@id": "/api/pw_cities/952",
+     "@type": "PwCity",
+     "id": 952,
+     "name": "Ємільчине",
+     "codeOtg": ""
+    },
+    "name": "вул. Затишна"
+   },
+   "dateEvent": "2026-10-20T08:00:00+00:00",
+   "datePlanIn": "2026-10-20T17:00:00+00:00",
+   "koment": "",
+   "otg": {
+    "@id": "/api/pw_otgs/11",
+    "@type": "PwOtg",
+    "id": 11,
+    "code": "11",
+    "name": "Звягельський РЕМ"
+   },
+   "buildingNames": "1, 10, 11, 12, 14, 14а, 16, 2, 3, 4, 5, 6, 7, 8, 9",
+   "typeOff": 3
+  },
+  {
+   "@id": "/api/pw_accident_planeds/191",
+   "@type": "PwAccidentPlaned",
+   "id": 191,
+   "code_otg": "3",
+   "city": {
+    "@id": "/api/pw_cities/116",
+    "@type": "PwCity",
+    "id": 116,
+    "name": "Семенівка",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/2075",
+    "@type": "PwStreet",
+    "id": 2075,
+    "city": {
+     "@id": "/api/pw_cities/116",
+     "@type": "PwCity",
+     "id": 116,
+     "name": "Семенівка",
+     "codeOtg": ""
+    },
+    "name": "вул. Героїв Майдану"
+   },
+   "dateEvent": "2026-10-20T08:00:00+00:00",
+   "datePlanIn": "2026-10-20T17:00:00+00:00",
+   "koment": "",
+   "otg": {
+    "@id": "/api/pw_otgs/3",
+    "@type": "PwOtg",
+    "id": 3,
+    "code": "3",
+    "name": "Бердичівський РЕМ"
+   },
+   "buildingNames": "1, 1/3, 11, 15/1, 15/2, 15/3, 15/4, 1\\2, 1П, 2, 2/1, 2/2, 2/3, 3, 4, 5, 6, 9а, КТП-1215",
+   "typeOff": 3
+  },
+  {
+   "@id": "/api/pw_accident_planeds/1270",
+   "@type": "PwAccidentPlaned",
+   "id": 1270,
+   "code_otg": "4",
+   "city": {
+    "@id": "/api/pw_cities/190",
+    "@type": "PwCity",
+    "id": 190,
+    "name": "Соловіївка",
+    "codeOtg": ""
+   },
+   "street": {
+    "@id": "/api/pw_streets/2791",
+    "@type": "PwStreet",
+    "id": 2791,
+    "city": {
+     "@id": "/api/pw_cities/190",
+     "@type": "PwCity",
+     "id": 190,
+     "name": "Соловіївка",
+     "codeOtg": ""
+    },
+    "name": "вул. Косарєва"
+   },
+   "dateEvent": "2026-10-20T08:00:00+00:00",
+   "datePlanIn": "2026-10-20T17:00:00+00:00",
+   "koment": "",
+   "otg": {
+    "@id": "/api/pw_otgs/4",
+    "@type": "PwOtg",
+    "id": 4,
+    "code": "4",
+    "name": "Брусилівський РЕМ"
+   },
+   "buildingNames": "41а",
+   "typeOff": 3
+  }
+ ],
+ "hydra:totalItems": 9085,
+ "hydra:view": {
+  "@id": "/api/pw_accident_planeds?page=1",
+  "@type": "hydra:PartialCollectionView",
+  "hydra:first": "/api/pw_accident_planeds?page=1",
+  "hydra:last": "/api/pw_accident_planeds?page=303",
+  "hydra:next": "/api/pw_accident_planeds?page=2"
+ },
+ "hydra:search": {
+  "@type": "hydra:IriTemplate",
+  "hydra:template": "/api/pw_accident_planeds{?city.id,city.id[],street.id,street.id[],otg.id,otg.id[],datePlanIn[before],datePlanIn[strictly_before],datePlanIn[after],datePlanIn[strictly_after]}",
+  "hydra:variableRepresentation": "BasicRepresentation",
+  "hydra:mapping": [
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "city.id",
+    "property": "city.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "city.id[]",
+    "property": "city.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "street.id",
+    "property": "street.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "street.id[]",
+    "property": "street.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "otg.id",
+    "property": "otg.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "otg.id[]",
+    "property": "otg.id",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "datePlanIn[before]",
+    "property": "datePlanIn",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "datePlanIn[strictly_before]",
+    "property": "datePlanIn",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "datePlanIn[after]",
+    "property": "datePlanIn",
+    "required": false
+   },
+   {
+    "@type": "IriTemplateMapping",
+    "variable": "datePlanIn[strictly_after]",
+    "property": "datePlanIn",
+    "required": false
+   }
+  ]
+ }
+}

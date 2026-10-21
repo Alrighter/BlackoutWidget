@@ -25,6 +25,10 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     name: 'ДТЕК Дніпровські електромережі', shortName: 'ДТЕК', region: 'Дніпропетровська область',
     siteUrl: 'https://www.dtek-dnem.com.ua/ua/shutdowns',
   },
+  'ztoe': {
+    name: 'Житомиробленерго', shortName: 'Житомиробленерго', region: 'Житомирська область',
+    siteUrl: 'https://www.ztoe.com.ua/unhooking-search.php',
+  },
   'dtek-krem': {
     name: 'ДТЕК Київські регіональні електромережі', shortName: 'ДТЕК', region: 'Київська область',
     siteUrl: 'https://www.dtek-krem.com.ua/ua/shutdowns',

@@ -17,7 +17,7 @@ function setup() {
 test('providers come out in the card order of PROVIDERS', () => {
   const ids = setup().providers.map(p => p.id);
   expect(ids).toEqual(Object.keys(PROVIDERS));
-  expect(ids).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'dtek-krem', 'loe', 'mkoe', 'dtek-oem', 'toe']);
+  expect(ids).toEqual(['dtek-kem', 'voe', 'dtek-dnem', 'ztoe', 'dtek-krem', 'loe', 'mkoe', 'dtek-oem', 'toe']);
 });
 test('DTEK and Volyn do not implement houseLines; Ternopil and Mykolaiv do', () => {
   const providers = setup().providers;
@@ -26,8 +26,9 @@ test('DTEK and Volyn do not implement houseLines; Ternopil and Mykolaiv do', () 
   for (const p of old) expect(p.houseLines).toBeUndefined();
   expect(typeof providers.find(p => p.id === 'toe')?.houseLines).toBe('function');
   expect(typeof providers.find(p => p.id === 'mkoe')?.houseLines).toBe('function');
-  // Lviv lists every house's queues with the houses.
+  // Lviv and Zhytomyr list every house's queues with the houses.
   expect(providers.find(p => p.id === 'loe')?.houseLines).toBeUndefined();
+  expect(providers.find(p => p.id === 'ztoe')?.houseLines).toBeUndefined();
 });
 test('each DTEK site gets its own url, partition and host', () => {
   const { made, providers } = setup();
