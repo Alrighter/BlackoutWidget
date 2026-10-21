@@ -100,6 +100,19 @@ describe('parseDistrictPage', () => {
     expect(() => parseDistrictPage(D3, 1)).toThrow(CvoeShapeError);
   });
 
+  it('ends the rows at the live pages\' h_total footer, and still throws on any other div after them', () => {
+    // Every live district page closes its row list with this footer; the trimmed fixtures were cut before it.
+    const footer = '<div class="h_total"><p>ще знайдено рядків <b></b></p></div>';
+    const withTail = (html: string, tail: string): string => {
+      const out = html.replace(/<\/div>(\s*<\/main>)/, `${tail}</div>$1`);
+      if (out === html) throw new Error('no container end');
+      return out;
+    };
+    expect(parseDistrictPage(withTail(D1, footer), 1)).toEqual(parseDistrictPage(D1, 1));
+    expect(parseDistrictPage(withTail(D3, footer), 3)).toEqual(parseDistrictPage(D3, 3));
+    expect(() => parseDistrictPage(withTail(D3, '<div class="other"><p>x</p></div>'), 3)).toThrow(CvoeShapeError);
+  });
+
   it('keeps an odd group raw', () => {
     const rows = parseDistrictPage(D3.replace('<b>буд. 12</b><u>1</u>', '<b>буд. 12</b><u>А</u>'), 3);
     expect(rows[0].group).toBe('А');

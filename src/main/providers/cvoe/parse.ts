@@ -84,7 +84,8 @@ export function parseDistrictPage(html: string, district: number): CvoeRow[] {
       ? { street: htmlText(m[1]), house: htmlText(m[2]), group: htmlText(m[3]) }
       : { settlement: htmlText(m[1]), street: htmlText(m[2]), house: htmlText(m[3]), group: htmlText(m[4]) });
   }
-  if (/^<div\b/.test(rest)) throw new CvoeShapeError('unknown row shape');
+  // The live pages close the row list with the «ще знайдено рядків» footer; any other div here is a row we do not know.
+  if (/^<div\b/.test(rest) && !rest.startsWith('<div class="h_total">')) throw new CvoeShapeError('unknown row shape');
   if (!rows.length) throw new CvoeShapeError('no rows');
   return rows;
 }
