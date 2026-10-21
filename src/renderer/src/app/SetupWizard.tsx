@@ -22,6 +22,8 @@ const RAIL: { step: Step; label: string }[] = [
 const TITLES: Record<Step, string> = {
   provider: 'Регіон і компанія', city: 'Місто', street: 'Вулиця', house: 'Будинок', line: 'Лінія', style: 'Стиль віджета', done: 'Готово',
 };
+/** The rail's heading names what the wizard is doing. */
+const RAIL_TITLES: Record<WizardMode['kind'], string> = { first: 'Перше налаштування', add: 'Нова адреса', edit: 'Зміна адреси' };
 const OUTAGE_NOTE = 'Зараз для цього будинку діє відключення — список ліній може бути неповним. Якщо вашої лінії немає, спробуйте пізніше.';
 /** The thumbnails' scale on the style cards (setup-wizard.html). */
 const THUMB_SCALE: Record<WidgetStyle, number> = { compact: 0.36, ring: 0.28, timeline: 0.26 };
@@ -280,7 +282,7 @@ export function SetupWizard({ api, autostart, mode, onDone, onCancel }: {
   return (
     <div className="wz" data-capture="wizard">
       <nav className="wz-rail" aria-label="Кроки" data-capture="wz-rail">
-        <div className="wz-rail-title">Перше налаштування</div>
+        <div className="wz-rail-title">{RAIL_TITLES[mode.kind]}</div>
         <ol className="wz-steps">
           {RAIL.map(({ step: s, label }, i) => {
             const state = i + 1 < num ? 'done' : i + 1 === num ? 'now' : 'next';

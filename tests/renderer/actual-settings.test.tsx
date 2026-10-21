@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { ActualSettings } from '../../src/renderer/src/app/ActualSettings';
 import { DEFAULT_SETTINGS } from '../../src/main/store';
 import type { RendererApi } from '../../src/shared/ipc';
-import type { ActualStatus, AppState } from '../../src/shared/types';
+import type { ActualStatus, AppState, Location } from '../../src/shared/types';
 
 const CONFIG = { id: 'ecoflow' as const, region: 'eu' as const, deviceSn: 'R331ZEB4ZEA01234', deviceName: 'Delta 2', accessKeyHint: 'AbCd…' };
 const stations = [{ sn: 'R331ZEB4ZEA01234', label: 'Delta 2', online: true }, { sn: 'R33100000000WXYZ', label: 'River', online: false }];
@@ -20,8 +20,17 @@ function mockApi(over: Partial<Record<keyof RendererApi, unknown>> = {}) {
     ...over,
   } as unknown as RendererApi;
 }
-function stateOf(actualSource: AppState['settings']['actualSource'] = null, actual: ActualStatus | null = null): AppState {
-  return { settings: { ...DEFAULT_SETTINGS, actualSource }, snapshot: null, phase: 'ok', lineChanged: false, actual };
+const ADDRESS = { providerId: 'dtek-krem', city: 'м. Біла Церква', street: 'бул. Грушевського Михайла', house: '40', lineIndex: 1, groupId: 'GPV1.2' };
+const place = (id: string, name: string): Location => ({ id, name, address: ADDRESS, widgetStyle: 'compact', widgetPosition: null });
+const HOME = place('home', 'Дім'), PARENTS = place('b', 'Батьки');
+/** One location, «Дім», where the station stands, unless `places` and `at` say otherwise. */
+function stateOf(actualSource: AppState['settings']['actualSource'] = null, actual: ActualStatus | null = null,
+  places: Location[] = [HOME], at: string | null = places[0]?.id ?? null): AppState {
+  return {
+    settings: { ...DEFAULT_SETTINGS, actualSource, locations: places, actualLocationId: at },
+    locations: places.map(location => ({ location, snapshot: null, phase: 'ok', lineChanged: false, ...(location.id === at ? { actual } : {}) })),
+    actual, settingsLoaded: true,
+  };
 }
 const APP_CONFIG = { id: 'ecoflow-app' as const, region: 'eu' as const, deviceSn: 'R331ZEB4ZEA01234', deviceName: 'Delta 2', accountHint: 'r…@dully.io' };
 const keysMode = (user: ReturnType<typeof userEvent.setup>) => user.selectOptions(screen.getByLabelText('Джерело'), 'keys');
@@ -779,6 +788,71 @@ test('«Змінити» on an ecoflow-ble source: a pick by hand while its stat
   expect(station(/Delta 2 · …5678/)).toBeChecked();
   expect(station(/River 2 · …1234/)).not.toBeChecked();
   expect(api.ecoflowPreview).toHaveBeenCalledTimes(1);
+});
+
+describe('where the station stands', () => {
+  const PICKER = 'Станція стоїть у:';
+  const UNASSIGNED = 'Оберіть, де стоїть станція';
+  const actualNow = { sourceLabel: 'EcoFlow', power: 'on', observedAt: '2026-10-17T08:50:00Z', history: [] } as ActualStatus;
+  const picker = () => screen.getByLabelText(PICKER) as HTMLSelectElement;
+  const names = () => [...picker().options].filter(o => !o.disabled).map(o => o.textContent);
+
+  test.each([
+    ['connected', CONFIG, actualNow],
+    ['not connected yet', null, null],
+  ] as const)('two locations, %s: «Станція стоїть у:» picks the location', async (_, source, actual) => {
+    const user = userEvent.setup(); const api = mockApi({ setActualLocation: vi.fn(async () => {}) });
+    render(<ActualSettings state={stateOf(source, actual, [HOME, PARENTS], 'home')} api={api} />);
+    expect(picker()).toHaveValue('home');
+    expect(names()).toEqual(['Дім', 'Батьки']);
+    expect(screen.queryByText(UNASSIGNED)).toBeNull();
+    await user.selectOptions(picker(), 'Батьки');
+    expect(api.setActualLocation).toHaveBeenCalledTimes(1);
+    expect(api.setActualLocation).toHaveBeenCalledWith('b');
+  });
+
+  test('the card\'s device line still reads the station\'s own status', () => {
+    render(<ActualSettings state={stateOf(CONFIG, actualNow, [HOME, PARENTS], 'b')} api={mockApi()} />);
+    expect(picker()).toHaveValue('b');
+    expect(screen.getByText('Зараз: світло є (дані о 11:50)')).toBeInTheDocument();
+  });
+
+  test('one location: no picker', () => {
+    const { unmount } = render(<ActualSettings state={stateOf(CONFIG, actualNow)} api={mockApi()} />);
+    expect(screen.queryByLabelText(PICKER)).toBeNull();
+    expect(screen.queryByText(UNASSIGNED)).toBeNull();
+    unmount();
+    render(<ActualSettings state={stateOf()} api={mockApi()} />);
+    expect(screen.queryByLabelText(PICKER)).toBeNull();
+  });
+
+  test('actualLocationId null: «Оберіть, де стоїть станція» and the picker, even with one location', async () => {
+    const user = userEvent.setup(); const api = mockApi({ setActualLocation: vi.fn(async () => {}) });
+    render(<ActualSettings state={stateOf(CONFIG, actualNow, [HOME], null)} api={api} />);
+    expect(screen.getByText(UNASSIGNED)).toBeInTheDocument();
+    expect(picker()).toHaveAccessibleDescription(UNASSIGNED);
+    // Nothing picked: the one name is not shown as chosen, so picking it is a change.
+    expect(picker()).toHaveValue('');
+    expect(names()).toEqual(['Дім']);
+    await user.selectOptions(picker(), 'Дім');
+    expect(api.setActualLocation).toHaveBeenCalledWith('home');
+  });
+
+  test('no locations at all: no picker', () => {
+    render(<ActualSettings state={stateOf(CONFIG, actualNow, [], null)} api={mockApi()} />);
+    expect(screen.queryByLabelText(PICKER)).toBeNull();
+    expect(screen.queryByText(UNASSIGNED)).toBeNull();
+  });
+
+  test('the form has no picker; a refused pick shows the reason', async () => {
+    const user = userEvent.setup();
+    const api = mockApi({ setActualLocation: vi.fn(async () => { throw new Error("Error invoking remote method 'loc:actual': Error: Цієї адреси вже немає"); }) });
+    render(<ActualSettings state={stateOf(null, null, [HOME, PARENTS], 'home')} api={api} />);
+    await user.selectOptions(picker(), 'Батьки');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Цієї адреси вже немає');
+    await user.click(screen.getByRole('button', { name: 'Підключити EcoFlow' }));
+    expect(screen.queryByLabelText(PICKER)).toBeNull();
+  });
 });
 
 function liveApi(seed: unknown = null) {

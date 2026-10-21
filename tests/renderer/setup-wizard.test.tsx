@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
-import { SetupWizard } from '../../src/renderer/src/app/SetupWizard';
+import { SetupWizard, type WizardMode } from '../../src/renderer/src/app/SetupWizard';
 import type { RendererApi } from '../../src/shared/ipc';
 import { outageRanges } from '../../src/shared/outage-ranges';
 import type { HouseInfo, LineInfo, Location } from '../../src/shared/types';
@@ -495,6 +495,27 @@ describe('modes and the name', () => {
     expect(api.editLocation).toHaveBeenCalledTimes(1);
     expect(api.editLocation).toHaveBeenCalledWith('loc-2', { name: 'Батьки', address: ADDRESS, widgetStyle: 'ring' });
     expect(api.addLocation).not.toHaveBeenCalled(); expect(onDone).toHaveBeenCalled();
+  });
+
+  test.each<[string, WizardMode, string]>([
+    ['first', FIRST, 'Перше налаштування'],
+    ['add', { kind: 'add', taken: ['Дім'], style: 'compact' }, 'Нова адреса'],
+    ['edit', { kind: 'edit', location: { id: 'b', name: 'Батьки', address: ADDRESS, widgetStyle: 'ring', widgetPosition: null }, taken: ['Дім'] }, 'Зміна адреси'],
+  ])('the rail title follows the mode: %s', async (_, mode, title) => {
+    render(<SetupWizard api={mockApi(ONE)} autostart mode={mode} onDone={() => {}} />);
+    const rail = screen.getByRole('navigation', { name: 'Кроки' });
+    expect(rail.querySelector('.wz-rail-title')).toHaveTextContent(new RegExp(`^${title}$`));
+    expect(await screen.findByRole('radio', { name: /Київська область/, checked: true })).toBeInTheDocument();
+  });
+
+  test('the name problem is an alert that describes the field', async () => {
+    const user = userEvent.setup();
+    render(<SetupWizard api={mockApi(ONE)} autostart mode={{ kind: 'add', taken: ['Дім'], style: 'compact' }} onDone={() => {}} />); await toDone(user);
+    const name = screen.getByRole('textbox', { name: 'Назва' });
+    await user.type(name, 'Дім');
+    expect(screen.getByRole('alert')).toHaveTextContent('Така назва вже є');
+    expect(name).toHaveAccessibleDescription('Така назва вже є');
+    expect(name).toHaveAttribute('aria-invalid', 'true');
   });
 
   test('a failed save shows the error and saves nothing else', async () => {
