@@ -17,9 +17,13 @@ export function houseCheckDue(previous: ScheduleSnapshot | null, checkMs: number
   return !within(Date.parse(previous.houseCheckedAt), checkMs);
 }
 
-/** Spec «Settled cases»: a house missing from DTEK's answer is surfaced once no check succeeded within `surfaceMs` (or none is on record). */
+/**
+ * Spec «Settled cases»: a house missing from DTEK's answer is surfaced when the last good check is missing (or unreadable)
+ * or more than `surfaceMs` old. A stamp in the future (a clock set back) is neither, so it stays silent.
+ */
 export function houseMissingSurfaces(previous: ScheduleSnapshot | null, surfaceMs: number): boolean {
-  return !within(Date.parse(previous?.houseCheckedAt ?? ''), surfaceMs);
+  const at = Date.parse(previous?.houseCheckedAt ?? '');
+  return Number.isNaN(at) || Date.now() - at > surfaceMs;
 }
 
 /** Spec step 4: `previous` was fetched less than `gapMs` ago, so the page's next turn comes before it is old. */

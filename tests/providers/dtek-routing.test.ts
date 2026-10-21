@@ -348,9 +348,13 @@ describe('the house check finds the house missing (DTEK renamed or removed it)',
     await expect(p.fetchSnapshot(gone, null)).rejects.toBeInstanceOf(AddressNotFoundError);
     expect(feeds[0].read).not.toHaveBeenCalled();
   });
-  test('houseCheckedAt 25 h ago → the feed\'s answer and a warn', async () => {
+  test.each([
+    ['25 h ago', 25 * HOUR],
+    ['exactly 48 h ago (not older)', 48 * HOUR],
+    ['1 h in the future (a clock set back: neither missing nor older)', -HOUR],
+  ])('houseCheckedAt %s → the feed\'s answer and a warn', async (_name, age) => {
     const { p, feeds, log } = provider();
-    const previous = snap({ address: gone, houseCheckedAt: ago(25 * HOUR) });
+    const previous = snap({ address: gone, houseCheckedAt: ago(age) });
     const snapshot = await p.fetchSnapshot(gone, previous);
     expect(feeds[0].read).toHaveBeenCalledTimes(1);
     expect(snapshot.days).toEqual(FEED_DAYS);
@@ -359,6 +363,11 @@ describe('the house check finds the house missing (DTEK renamed or removed it)',
       'dtek-krem: the page failed (house check), using mirror kyiv-region', expect.any(AddressNotFoundError),
     );
     expect(log.error).not.toHaveBeenCalled();
+  });
+  test('an unreadable houseCheckedAt counts as missing → the house-missing error', async () => {
+    const { p } = provider();
+    await expect(p.fetchSnapshot(gone, snap({ address: gone, houseCheckedAt: 'not a date' })))
+      .rejects.toBeInstanceOf(AddressNotFoundError);
   });
 });
 
