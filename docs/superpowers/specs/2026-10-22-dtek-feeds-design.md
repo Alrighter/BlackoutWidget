@@ -71,13 +71,15 @@ Calls that were mine, not the user's, are marked *(my call)*.
    - `previous.houseCheckedAt` is not between 0 and 24 h ago *(my call: 24 h)*;
    - `previous.outageActive` is true. While the house has an outage, it is re-checked every refresh, which the budget limits to every 30 min.
 
-   If it is due and the page is allowed, run today's page path. On success, the snapshot is exactly today's page snapshot plus `houseCheckedAt = now`. On any failure, including a verification, log it and go on to the feeds, without surfacing it yet.
+   If it is due and the page is allowed, run today's page path. On success, the snapshot is exactly today's page snapshot plus `houseCheckedAt = now`. On any failure, including a verification, log it and go on to the feeds, without surfacing it yet. The one exception is a missing house past 48 h, which fails the refresh at once (see «Settled cases»).
 2. **Feeds, in order.** The first usable answer wins. A feed that fails or is unusable is logged as a warning, and the next one is tried.
 3. **YASNO says `EmergencyShutdowns` for today.** If the page has not been tried in this run and is allowed, use the page (step 1's path). That emergency is exactly when the per-house notice matters. If the page fails or is not allowed, go on to the next feed.
 4. **No feed usable.** Three cases:
    - **The page was already tried in this run** (step 1 or 3) and failed: that page error is the refresh's error, as today. A verification gives the `captcha` phase.
    - **The page was not tried and is allowed:** use the page. Its errors surface the same way.
-   - **The page was not tried and is not allowed:** the refresh fails with **«Не вдалося отримати графік ДТЕК»**. It is a `NetworkError` (outcome `offline`) only when every feed failed for lack of a connection. Anything else is a `ProviderError` (outcome `failed`).
+   - **The page was not tried and is not allowed:**
+     - If `previous` exists and `now − previous.fetchedAt` lies in `[0, 30 min)` (the page budget), the refresh returns `previous` unchanged, with `fetchedAt` not renewed. It logs a warning: `<site>: no usable feed, the page is not due yet; keeping the last schedule`. The page's next turn comes before `previous` is 30 min old, so the schedule still refreshes from the page every 30 min, and no error banner shows in between.
+     - Otherwise the refresh fails with **«Не вдалося отримати графік ДТЕК»**. It is a `NetworkError` (outcome `offline`) only when every feed failed for lack of a connection. Anything else is a `ProviderError` (outcome `failed`).
 
    With no feeds configured, every refresh is therefore exactly today's page refresh. The existing provider tests rely on that.
 
@@ -160,7 +162,10 @@ Calls that were mine, not the user's, are marked *(my call)*.
 - **A page open counts toward the budget whether or not it succeeds**, including a verification or a timeout. Otherwise a site behind a verification would reopen the page on every refresh.
 - **A failed house check does not move `houseCheckedAt`.** The check stays due, and the budget limits it to one page open per 30 minutes per site. That is no more often than today's failing-captcha path, which reloads on every retry.
   - With no `previous`, for example the first refresh after the address was picked or changed, the check is due on every refresh until one succeeds. It is not 24 h away.
-- **A house check that keeps failing while the feeds answer stays silent.** It is logged as a warning on every attempt, but there is no banner. Surfacing it would mean failing the refresh, and the schedule would then stop updating just to force a verification. The queue-change check is degraded until a page load succeeds. This is accepted.
+- **A house check that keeps failing while the feeds answer stays silent**, except for a missing house (next item). It is logged as a warning on every attempt, but there is no banner. Surfacing it would mean failing the refresh, and the schedule would then stop updating just to force a verification. The queue-change check is degraded until a page load succeeds. This is accepted.
+- **A house check that finds the house missing** («Будинок не знайдено у відповіді ДТЕК»: the page answered, but DTEK renamed or removed the house) is an `AddressNotFoundError`. When `previous.houseCheckedAt` is missing, or not between 0 and **48 h** ago (`HOUSE_MISSING_SURFACE_MS`), the refresh fails with that error at once, without asking the feeds: the address needs re-picking. Otherwise it stays silent as above (a warning and the feed's answer), so a DTEK glitch shorter than two days shows no banner.
+- **A feed outage between page opens shows no banner.** When no feed is usable and only the budget refuses the page, a `previous` fetched less than 30 min ago is returned unchanged (step 4). The page's error, once it is tried and fails, still surfaces, a verification included.
+  - The cost: a feed outage hides for up to 30 min, and being offline is not surfaced while `previous` is fresh. The network banner never shows for a fresh snapshot anyway.
 - **Several locations on one site** share the site's budget and its open page, while each location keeps its own `houseCheckedAt`. The boot stagger (30 s) is well inside the linger (5 min), so one page open serves all of them.
 
 ### Data

@@ -3,18 +3,20 @@ import { kyivDateKey } from '../../../shared/time';
 import type { Address, HouseInfo, ScheduleSnapshot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import { loggable } from '../http-source';
+import { AddressNotFoundError } from '../resolve';
 import {
   CaptchaRequiredError, NetworkError, OFFLINE_MESSAGE, ProviderError, type PageSession, type ScheduleProvider,
 } from '../types';
 import {
-  FEEDS_FAILED_TEXT, HOUSE_CHECK_MS, PAGE_GAP_MS, PAGE_LINGER_MS, type FeedResult, type ScheduleFeed,
+  FEEDS_FAILED_TEXT, HOUSE_CHECK_MS, HOUSE_MISSING_SURFACE_MS, PAGE_GAP_MS, PAGE_LINGER_MS, type FeedResult,
+  type ScheduleFeed,
 } from './feeds';
 import {
   deriveLines, factDays, hasActiveOutage, hasOutageFields, parseCurrentOutage, parseHomeNumResponse, parseHouses,
   queueLabelFromId, type DtekFact, type DtekHomeNumResponse,
 } from './parse';
 import { READ_CITIES, READ_FACT, getHomeNumScript, readStreetsScript } from './page-scripts';
-import { feedSnapshot, houseCheckDue, pageAllowed, pageCause } from './route';
+import { feedSnapshot, houseCheckDue, houseMissingSurfaces, keepPrevious, pageAllowed, pageCause } from './route';
 
 export { FEEDS_FAILED_TEXT };
 
@@ -107,8 +109,9 @@ export class DtekProvider implements ScheduleProvider {
   }
 
   /**
-   * Spec §Behaviour. 1: the house check, when due and the page is allowed. 2: the feeds in order; the first usable answer
-   * wins. 3: a YASNO emergency asks the page. 4: no feed usable: the page's error, the page, or FEEDS_FAILED_TEXT.
+   * Spec §Behaviour. 1: the house check, when due and the page is allowed (a house missing past 48 h is thrown at once).
+   * 2: the feeds in order; the first usable answer wins. 3: a YASNO emergency asks the page. 4: no feed usable: the
+   * page's error, the page, `previous` while it is younger than the page budget, or FEEDS_FAILED_TEXT.
    * A page failure is held while a feed may still answer, so guard() logs a refresh's error once, as before the feeds.
    */
   private async route(address: Address, previous: ScheduleSnapshot | null): Promise<ScheduleSnapshot> {
@@ -125,6 +128,10 @@ export class DtekProvider implements ScheduleProvider {
     if (houseCheckDue(previous, this.houseCheckMs) && this.pageAllowed()) {
       const snap = await tryPage('house check');
       if (snap) return snap;
+      // The page answered without the house: after 48 h with no good check the address needs re-picking, so say so.
+      if (failed?.error instanceof AddressNotFoundError && houseMissingSurfaces(previous, HOUSE_MISSING_SURFACE_MS)) {
+        throw failed.error;
+      }
     }
 
     let offline = this.feeds.length > 0; // every feed failed for lack of a connection
@@ -151,6 +158,11 @@ export class DtekProvider implements ScheduleProvider {
 
     if (failed) throw failed.error;
     if (this.pageAllowed()) return this.pageFor(address, 'fallback');
+    // Only the budget refused the page, and its next turn comes before `previous` is old: no banner meanwhile.
+    if (keepPrevious(previous, this.pageGapMs)) {
+      this.log.warn(`${this.id}: no usable feed, the page is not due yet; keeping the last schedule`);
+      return previous;
+    }
     throw offline ? new NetworkError(FEEDS_FAILED_TEXT) : new ProviderError(FEEDS_FAILED_TEXT);
   }
 
@@ -170,7 +182,7 @@ export class DtekProvider implements ScheduleProvider {
     const resp = await this.homeNum(address.city, address.street);
     const { fact, schNames } = this.state!;
     const entry = resp.data[address.house];
-    if (!entry) throw new ProviderError('Будинок не знайдено у відповіді ДТЕК');
+    if (!entry) throw new AddressNotFoundError('Будинок не знайдено у відповіді ДТЕК');
     // These fields have never been seen filled (spec §4.3): keep the raw values for later parsing work.
     if (hasOutageFields(entry)) this.log.info(`${this.id}: outage fields for house`, { house: address.house, entry });
     const lines = deriveLines(entry.sub_type_reason ?? [], fact, schNames);

@@ -19,6 +19,8 @@ export const PAGE_GAP_MS = 30 * 60_000;
 export const PAGE_LINGER_MS = 5 * 60_000;
 /** How often the house is checked on the DTEK page. */
 export const HOUSE_CHECK_MS = 24 * 60 * 60_000;
+/** A house check that finds the house missing is surfaced once the last good check is older than this. */
+export const HOUSE_MISSING_SURFACE_MS = 48 * 60 * 60_000;
 /** The refresh error when no feed answered and the page was not allowed. */
 export const FEEDS_FAILED_TEXT = 'Не вдалося отримати графік ДТЕК';
 

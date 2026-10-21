@@ -17,6 +17,16 @@ export function houseCheckDue(previous: ScheduleSnapshot | null, checkMs: number
   return !within(Date.parse(previous.houseCheckedAt), checkMs);
 }
 
+/** Spec «Settled cases»: a house missing from DTEK's answer is surfaced once no check succeeded within `surfaceMs` (or none is on record). */
+export function houseMissingSurfaces(previous: ScheduleSnapshot | null, surfaceMs: number): boolean {
+  return !within(Date.parse(previous?.houseCheckedAt ?? ''), surfaceMs);
+}
+
+/** Spec step 4: `previous` was fetched less than `gapMs` ago, so the page's next turn comes before it is old. */
+export function keepPrevious(previous: ScheduleSnapshot | null, gapMs: number): previous is ScheduleSnapshot {
+  return !!previous && within(Date.parse(previous.fetchedAt), gapMs);
+}
+
 /** The page budget: a page already open costs nothing; otherwise one open per `gapMs` (a clock set back waits it out). */
 export function pageAllowed(open: boolean, lastOpenAt: number | null, gapMs: number): boolean {
   return open || lastOpenAt === null || Date.now() - lastOpenAt >= gapMs;

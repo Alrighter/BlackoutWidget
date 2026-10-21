@@ -6,6 +6,7 @@ import { DtekProvider, FEEDS_FAILED_TEXT } from '../../src/main/providers/dtek';
 import { PAGE_LINGER_MS, type FeedAnswer, type FeedResult } from '../../src/main/providers/dtek/feeds';
 import { READ_FACT, getHomeNumScript, readStreetsScript } from '../../src/main/providers/dtek/page-scripts';
 import { factToDays } from '../../src/main/providers/dtek/parse';
+import { AddressNotFoundError } from '../../src/main/providers/resolve';
 import { CaptchaRequiredError, NetworkError, ProviderError } from '../../src/main/providers/types';
 import { RefreshService } from '../../src/main/refresh';
 import { AppStore } from '../../src/main/store';
@@ -252,27 +253,96 @@ test('the house check failed with a verification and no feed is usable → Captc
   expect(log.error).not.toHaveBeenCalled();
 });
 
-test('no usable feed, the page closed and opened 10 min ago → FEEDS_FAILED_TEXT', async () => {
+/** A previous older than the page budget, with a fresh house check: only the feeds could have renewed it. */
+const oldPrevious = (age = 31 * MIN) => snap({ fetchedAt: ago(age), houseCheckedAt: ago(HOUR) });
+const KEEPING = 'dtek-krem: no usable feed, the page is not due yet; keeping the last schedule';
+
+test('no usable feed, the page closed and opened 10 min ago, previous 31 min old → FEEDS_FAILED_TEXT', async () => {
   {
     const { p, s, log } = provider(fakeSession(), [feed('yasno', unusable('stale')), feed('mirror kyiv', new ProviderError('x'))]);
     await pageClosedRecently(p);
     expect(s.release).toHaveBeenCalledTimes(1);
-    const err = await p.fetchSnapshot(addr, fresh()).catch(e => e);
+    const err = await p.fetchSnapshot(addr, oldPrevious()).catch(e => e);
     expect(err).toBeInstanceOf(ProviderError);
     expect(err).not.toBeInstanceOf(NetworkError);
     expect(err.message).toBe(FEEDS_FAILED_TEXT);
     expect(s.opens).toBe(1);
     expect(log.error).toHaveBeenCalledTimes(1);
+    expect(log.warn).not.toHaveBeenCalledWith(KEEPING);
+    // Exactly the budget's age is not younger than it.
+    expect((await p.fetchSnapshot(addr, oldPrevious(30 * MIN)).catch(e => e)).message).toBe(FEEDS_FAILED_TEXT);
   }
   { // every feed rejected for lack of a connection
     const offline = () => new NetworkError('Немає з’єднання');
     const { p, s } = provider(fakeSession(), [feed('yasno', offline()), feed('mirror kyiv', offline())]);
     await pageClosedRecently(p);
-    const err = await p.fetchSnapshot(addr, fresh()).catch(e => e);
+    const err = await p.fetchSnapshot(addr, oldPrevious()).catch(e => e);
     expect(err).toBeInstanceOf(NetworkError);
     expect(err.message).toBe(FEEDS_FAILED_TEXT);
     expect(s.opens).toBe(1);
   }
+});
+test('no usable feed, only the budget refuses the page, previous fetched by the page 10 min ago → previous, kept as it is', async () => {
+  const { p, s, log } = provider(fakeSession(), [feed('yasno', unusable('stale')), feed('mirror kyiv', new ProviderError('x'))]);
+  await pageClosedRecently(p);
+  const previous = snap({ fetchedAt: ago(10 * MIN), houseCheckedAt: ago(10 * MIN) });
+  const before = structuredClone(previous);
+  const result = await p.fetchSnapshot(addr, previous);
+  expect(result).toStrictEqual(before);
+  expect(result.fetchedAt).toBe(before.fetchedAt);
+  expect(s.opens).toBe(1);
+  expect(homeNums(s)).toBe(0);
+  expect(log.warn).toHaveBeenCalledWith(KEEPING);
+  expect(log.error).not.toHaveBeenCalled();
+});
+test('every feed offline, previous fresh, the page not allowed → previous (a fresh snapshot shows no network banner)', async () => {
+  const offline = () => new NetworkError('Немає з’єднання');
+  const { p, s, log } = provider(fakeSession(), [feed('yasno', offline()), feed('mirror kyiv', offline())]);
+  await pageClosedRecently(p);
+  const previous = fresh(); // fetched 15 min ago
+  const before = structuredClone(previous);
+  expect(await p.fetchSnapshot(addr, previous)).toStrictEqual(before);
+  expect(s.opens).toBe(1);
+  expect(log.warn).toHaveBeenCalledWith(KEEPING);
+  expect(log.error).not.toHaveBeenCalled();
+});
+test('the page tried and failed is still the error, even with a fresh previous', async () => {
+  const s = fakeSession();
+  s.ensureReady.mockRejectedValue(new CaptchaRequiredError('x'));
+  const { p, log } = provider(s, [feed('mirror kyiv-region', unusable('stale'))]);
+  await expect(p.fetchSnapshot(addr, snap({ fetchedAt: ago(5 * MIN), houseCheckedAt: ago(25 * HOUR) })))
+    .rejects.toBeInstanceOf(CaptchaRequiredError);
+  expect(log.warn).not.toHaveBeenCalledWith(KEEPING);
+});
+
+describe('the house check finds the house missing (DTEK renamed or removed it)', () => {
+  const gone: Address = { ...addr, house: '999' };
+  const HOUSE_MISSING = 'Будинок не знайдено у відповіді ДТЕК';
+  test('houseCheckedAt 49 h ago, a feed answers → the house-missing error', async () => {
+    const { p, feeds, log } = provider();
+    const err = await p.fetchSnapshot(gone, snap({ address: gone, houseCheckedAt: ago(49 * HOUR) })).catch(e => e);
+    expect(err).toBeInstanceOf(AddressNotFoundError);
+    expect(err.message).toBe(HOUSE_MISSING);
+    expect(feeds[0].read).not.toHaveBeenCalled();
+    expect(log.error).toHaveBeenCalledWith('dtek-krem fetchSnapshot failed', err);
+  });
+  test('no houseCheckedAt on record (no previous) → the house-missing error', async () => {
+    const { p, feeds } = provider();
+    await expect(p.fetchSnapshot(gone, null)).rejects.toBeInstanceOf(AddressNotFoundError);
+    expect(feeds[0].read).not.toHaveBeenCalled();
+  });
+  test('houseCheckedAt 25 h ago → the feed\'s answer and a warn', async () => {
+    const { p, feeds, log } = provider();
+    const previous = snap({ address: gone, houseCheckedAt: ago(25 * HOUR) });
+    const snapshot = await p.fetchSnapshot(gone, previous);
+    expect(feeds[0].read).toHaveBeenCalledTimes(1);
+    expect(snapshot.days).toEqual(FEED_DAYS);
+    expect(snapshot.houseCheckedAt).toBe(previous.houseCheckedAt);
+    expect(log.warn).toHaveBeenCalledWith(
+      'dtek-krem: the page failed (house check), using mirror kyiv-region', expect.any(AddressNotFoundError),
+    );
+    expect(log.error).not.toHaveBeenCalled();
+  });
 });
 
 test('no previous and the page not allowed → the feed\'s answer with the synthesized line, no houseCheckedAt', async () => {
