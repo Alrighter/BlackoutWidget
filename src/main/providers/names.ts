@@ -23,3 +23,18 @@ export function sameName(a: string, b: string): boolean {
 export function normHouse(s: string): string {
   return cyrillic(s).toUpperCase().replace(/(\d)-(?=\p{L})/gu, '$1');
 }
+
+const QUOTES = /["'«»“”„’ʼ]/g;
+
+/**
+ * The key two spellings of one house share: «буд.»/«сад.» dropped, Cyrillic upper case, no quotes, no separator between a
+ * digit and a letter («16-А», «16 а», «16.А» are «16А»), no spaces. «/» and the other hyphens stay: «9/9», «9-9», «ТП-334».
+ * Never shown.
+ */
+export function houseKey(s: string): string {
+  const bare = s.replace(/^\s*(?:буд|сад)(?:\.|\s+|(?=\d)|$)/iu, '');
+  return cyrillic(bare).toUpperCase()
+    .replace(QUOTES, '')
+    .replace(/(\d)[\s\-._,]+(?=\p{L})/gu, '$1')
+    .replace(/\s+/g, '');
+}
