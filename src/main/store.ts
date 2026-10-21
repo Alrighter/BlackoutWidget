@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { HOME_ID, LAST_LOCATION, LIMIT_TEXT, MAX_LOCATIONS, UNKNOWN_LOCATION, nameProblem, normalizeName, sameAddress } from '../shared/locations';
+import { HOME_ID, LAST_LOCATION, LIMIT_TEXT, MAX_LOCATIONS, UNKNOWN_LOCATION, isAddress, nameProblem, normalizeName, sameAddress } from '../shared/locations';
 import type { Location, ScheduleSnapshot, Settings } from '../shared/types';
 import { migrateSettings } from './settings-migration';
 
@@ -180,7 +180,8 @@ export class AppStore {
       const home = settings.locations.find(l => l.id === HOME_ID);
       const cache = asRecord<Snapshots>(this.snapshots.read());
       const old = this.legacySnapshot.read();
-      if (home && !cache[HOME_ID] && old && sameAddress(home.address, old.address)) {
+      // A malformed snapshot.json (valid JSON, no address) is not carried; it must not stop the migration either.
+      if (home && !cache[HOME_ID] && old && isAddress(old.address) && sameAddress(home.address, old.address)) {
         this.snapshots.write({ ...cache, [HOME_ID]: old });
       }
       this.settings.write(settings as unknown as Record<string, unknown>);

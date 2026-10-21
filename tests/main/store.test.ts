@@ -133,9 +133,11 @@ test('a real old settings file migrates whole', () => {
     locations: [{ id: 'home', name: 'Дім', address, widgetStyle: 'timeline', widgetPosition: { x: 10, y: 20, displayId: 1 } }],
     actualLocationId: 'home', autostart: false, actualSource: CONFIG, ecoflowClientId: 'c1',
   });
-  const onDisk = readJson(dir, 'settings.json');
-  expect(onDisk.locations).toHaveLength(1);
-  for (const k of ['address', 'widgetStyle', 'widgetPosition']) expect(k in onDisk).toBe(false);
+  // The whole file: the one location, every other key carried as it was, and no old key left.
+  expect(readJson(dir, 'settings.json')).toEqual({
+    locations: [{ id: 'home', name: 'Дім', address, widgetStyle: 'timeline', widgetPosition: { x: 10, y: 20, displayId: 1 } }],
+    actualLocationId: 'home', autostart: false, actualSource: CONFIG, ecoflowClientId: 'c1',
+  });
   expect(s.getSnapshot('home')).toEqual(fixtureSnapshot());
   expect(existsSync(join(dir, 'snapshot.json'))).toBe(false);
 });
@@ -145,6 +147,19 @@ test('a legacy snapshot for another address is not carried', () => {
   writeFileSync(join(dir, 'settings.json'), JSON.stringify(legacyFile));
   writeFileSync(join(dir, 'snapshot.json'), JSON.stringify(fixtureSnapshot({ lineIndex: 2 })));
   expect(new AppStore(dir).getSnapshot('home')).toBeNull();
+});
+
+test('a legacy snapshot.json without an address is not carried, and the migration still lands on disk', () => {
+  const dir = tmp();
+  writeFileSync(join(dir, 'settings.json'), JSON.stringify(legacyFile));
+  writeFileSync(join(dir, 'snapshot.json'), JSON.stringify({ groupId: 'GPV1.2' })); // valid JSON, not a snapshot
+  const s = new AppStore(dir);
+  expect(s.getSettings().locations.map(l => l.id)).toEqual(['home']);
+  const onDisk = readJson(dir, 'settings.json');
+  expect(onDisk.locations.map((l: Location) => l.id)).toEqual(['home']);
+  for (const k of ['address', 'widgetStyle', 'widgetPosition']) expect(k in onDisk).toBe(false);
+  expect(existsSync(join(dir, 'snapshot.json'))).toBe(false);
+  expect(s.getSnapshot('home')).toBeNull();
 });
 
 test('a migration that cannot be written keeps the same id', () => {

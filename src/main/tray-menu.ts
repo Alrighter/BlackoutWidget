@@ -102,12 +102,23 @@ export function buildWidgetMenu(
   ];
 }
 
+/**
+ * Cut to TOOLTIP_MAX UTF-16 units (what Windows counts), the `…` included. The cut goes between code points, so an
+ * emoji in a name is never split in half.
+ */
+function cutTooltip(text: string): string {
+  if (text.length <= TOOLTIP_MAX) return text;
+  let out = '';
+  for (const ch of text) {
+    if (out.length + ch.length > TOOLTIP_MAX - 1) break;
+    out += ch;
+  }
+  return `${out}…`;
+}
+
 /** With one location the line as today (no name); with several a line per location, cut to TOOLTIP_MAX. */
 export function trayTooltip(state: AppState, now: Date): string {
-  if (state.locations.length > 1) {
-    const text = state.locations.map(l => locationLine(l, now)).join('\n');
-    return text.length > TOOLTIP_MAX ? `${text.slice(0, TOOLTIP_MAX - 1)}…` : text;
-  }
+  if (state.locations.length > 1) return cutTooltip(state.locations.map(l => locationLine(l, now)).join('\n'));
   const view = trayView(state, now);
   return view ? `${view.title} · ${view.nextText}` : 'Графік відключень — налаштуйте адресу';
 }

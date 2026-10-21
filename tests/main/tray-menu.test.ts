@@ -137,6 +137,27 @@ test('tooltip cut to 127', () => {
   expect(t.startsWith('Перша адреса довга: Світло є')).toBe(true);
 });
 
+/** Every location without a schedule: each line is exactly «<name>: Немає даних». */
+const noData = (names: string[]) => stateOf(names.map(n => locState(n, { snapshot: false })));
+const fullText = (names: string[]) => names.map(n => `${n}: Немає даних`).join('\n');
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+test('tooltip of exactly 127 is not cut', () => {
+  const names = ['Квартира мами', 'Дача під Києвом', 'Дім', 'Офіс на Подолі', 'Гараж у дворі'];
+  expect(fullText(names)).toHaveLength(127);
+  expect(trayTooltip(noData(names), T0)).toBe(fullText(names));
+});
+
+test('tooltip cut never splits an emoji in a name', () => {
+  const names = ['Квартира мами', 'Дача під Києвом', 'Офіс на Подолі', 'Батьки в Білій Церкві', 'Гараж 🏠'];
+  const full = fullText(names);
+  expect(full.codePointAt(125)).toBe(0x1F3E0); // the emoji's two UTF-16 units are 125 and 126: a cut at 126 splits it
+  const t = trayTooltip(noData(names), T0);
+  expect(t).toBe(`${full.slice(0, 125)}…`);
+  expect(t.length).toBeLessThanOrEqual(TOOLTIP_MAX);
+  expect(t).not.toMatch(LONE_SURROGATE);
+});
+
 test('tooltip and icon', () => {
   const v = computeWidgetView(fixtureSnapshot(), T0);
   expect(trayIconName(v)).toBe('on'); expect(trayIconName(null)).toBe('unknown');
