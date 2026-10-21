@@ -49,13 +49,23 @@ const cp1251 = (s: string): Buffer => Buffer.from([...s].map((ch) => {
 }));
 const arrayBuffer = (b: Buffer): ArrayBuffer => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
 
+/** Житомир's streets made up for the inneti join (ids from 900001); «вул. Шкільна» twice, so the second is labelled « (2)». */
+const JOIN_STREETS: [number, string][] = [
+  [176294, '1 пров. Андріївський'], [900001, 'вул. Івана Франка'], [900002, 'вул. Франка'],
+  [900003, 'вул. Шкільна'], [900004, 'вул. Шкільна'],
+];
 /** Житомир's street select (rem 7, naspunkt 16657), made in the page's markup. */
 const ZHYTOMYR_STREETS = cp1251('<form><select name="vulica_id" onchange="this.form.submit()">'
   + '<option value="0">Оберіть вулицю або провулок</option><option value="173934">вул. Київська</option>'
-  + '<option value="174376">шосе Київське</option></select></form>');
+  + '<option value="174376">шосе Київське</option>'
+  + JOIN_STREETS.map(([id, name]) => `<option value="${id}">${name}</option>`).join('') + '</select></form>');
+/** A result page of one household row: these houses on this queue cell and sub-queue cell. */
+const rowsPage = (houses: string, queue: string, sub: string): Buffer => cp1251(
+  `<b>За Вашим запитом знайдено записів: 1</b><table><tr><td>Житомирський</td><td>місто Житомир</td><td>вул.</td>`
+  + `<td>${houses}</td><td>${queue}</td><td>${sub}</td><td>побутові споживачі</td></tr></table>`,
+);
 /** A result page of one row on a queue cell we do not know. */
-const ODD_QUEUE_ROWS = cp1251('<b>За Вашим запитом знайдено записів: 1</b><table><tr><td>Хорошівський</td><td>с. Березівка</td>'
-  + '<td>вул. Вишнева</td><td>1, 2</td><td>5а</td><td>1</td><td>побутові споживачі</td></tr></table>');
+const ODD_QUEUE_ROWS = rowsPage('1, 2', '5а', '1');
 
 type Init = Parameters<HttpFetch>[1];
 type Route = (q: URLSearchParams) => HttpResponse | Error;
@@ -93,6 +103,7 @@ function fakeHttp(over: Record<string, Route> = {}) {
     [`POST ${VYSHNEVA_FORM}`]: () => page(VYSHNEVA_ROWS),
     [`POST ${ZHYTOMYR_FORM}`]: () => page(ZHYTOMYR_STREETS),
     [`POST ${KYIVSKA_FORM}`]: () => page(KYIVSKA_ROWS),
+    ...Object.fromEntries(JOIN_STREETS.map(([id]) => [`POST ${ZHYTOMYR_FORM}&vulica_id=${id}&all=1`, () => page(rowsPage('1, 2', '3', '1'))])),
     'GET /api/pw_otgs': () => ok(OTGS),
     'GET /api/pw_cities': (q) => ok(q.get('otg.id') === '5' && q.get('name') === 'Березівка' ? CITIES_BEREZIVKA : EMPTY),
     'GET /api/pw_streets': (q) => ok(q.get('city.id') === '2622' ? STREETS_2622 : EMPTY),
@@ -167,6 +178,26 @@ const accidentsWith = (subReason: unknown) => {
   return JSON.stringify(body);
 };
 const EMERGENCY_11_17 = { kind: 'emergency', text: 'Аварійне відключення', start: '11:15 20.10.2026', end: '17:00 20.10.2026' };
+const EMERGENCY_10_16 = { kind: 'emergency', text: 'Аварійне відключення', start: '10:00 20.10.2026', end: '16:00 20.10.2026' };
+
+/**
+ * Житомир in inneti (otg 6) as hand-built Hydra lists: city 333 with these streets, and on each street of `outage` an
+ * emergency 10:00-16:00 on 20.10 for houses 1 and 72.
+ */
+function zhytomyrInneti(streets: [number, string][], outage: number[], over: Record<string, Route> = {}) {
+  return fakeHttp({
+    'GET /api/pw_cities': (q) => ok(q.get('otg.id') === '6' && q.get('name') === 'Житомир' ? hydra([{ id: 333, name: 'Житомир' }]) : EMPTY),
+    'GET /api/pw_streets': (q) => ok(q.get('city.id') === '333' ? hydra(streets.map(([id, name]) => ({ id, name }))) : EMPTY),
+    'GET /api/pw_accidents': (q) => {
+      const street = Number(q.get('street.id'));
+      return ok(q.get('city.id') === '333' && outage.includes(street) ? hydra([{
+        city: { id: 333 }, street: { id: street }, switchSubReason: 0, buildingNames: '1, 72',
+        dateEvent: '2026-10-20T10:00:00+00:00', datePlanIn: '2026-10-20T16:00:00+00:00',
+      }]) : EMPTY);
+    },
+    ...over,
+  });
+}
 
 describe('ZtoeProvider address lookup', () => {
   it('listCities is the bundled list and makes no request', async () => {
@@ -513,17 +544,59 @@ describe('ZtoeProvider current outage', () => {
   });
 
   it('applies to a house out of the schedule too', async () => {
-    const http = fakeHttp({
-      'GET /api/pw_cities': (q) => ok(q.get('otg.id') === '6' ? hydra([{ id: 1, name: 'Житомир' }]) : EMPTY),
-      'GET /api/pw_streets': (q) => ok(q.get('city.id') === '1' ? hydra([{ id: 2, name: 'вул. Київська' }]) : EMPTY),
-      'GET /api/pw_accidents': (q) => ok(q.get('street.id') === '2' ? hydra([{
-        city: { id: 1 }, street: { id: 2 }, switchSubReason: 0, buildingNames: '70, 72',
-        dateEvent: '2026-10-20T10:00:00+00:00', datePlanIn: '2026-10-20T16:00:00+00:00',
-      }]) : EMPTY),
-    });
+    const http = zhytomyrInneti([[2, 'вул. Київська']], [2]);
     const snap = await setup({ http }).p.fetchSnapshot(kyivska('72'));
     expect(snap.days).toEqual([{ date: '2026-10-20', slots: fill('on') }]);
-    expect(snap.currentOutage).toEqual({ kind: 'emergency', text: 'Аварійне відключення', start: '10:00 20.10.2026', end: '16:00 20.10.2026' });
+    expect(snap.currentOutage).toEqual(EMERGENCY_10_16);
+  });
+});
+
+describe('ZtoeProvider current outage: the street joined by its words (R2)', () => {
+  const onStreet = (street: string): Address => ({ providerId: 'ztoe', city: ZHYTOMYR, street, house: '1', lineIndex: 1, groupId: '3.1' });
+  const accidentStreets = (http: ReturnType<typeof fakeHttp>) => http.to('pw_accidents').map((c) => new URL(c.url).searchParams.get('street.id'));
+
+  it('a saved «1 пров. Андріївський» joins inneti\'s «1-й пров. Андріївський», not «2-й пров. Андріївський»', async () => {
+    const http = zhytomyrInneti([[1, '1-й пров. Андріївський'], [2, '2-й пров. Андріївський']], [1, 2]);
+    const { p, log } = setup({ http });
+    expect((await p.fetchSnapshot(onStreet('1 пров. Андріївський'))).currentOutage).toEqual(EMERGENCY_10_16);
+    expect(accidentStreets(http)).toEqual(['1']);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it('«вул. Івана Франка» joins «вул. Франка Івана»', async () => {
+    const http = zhytomyrInneti([[3, 'вул. Франка Івана'], [4, 'пров. Франка']], [3]);
+    expect((await setup({ http }).p.fetchSnapshot(onStreet('вул. Івана Франка'))).currentOutage).toEqual(EMERGENCY_10_16);
+    expect(accidentStreets(http)).toEqual(['3']);
+  });
+
+  it('«вул. Франка» does not join «пров. Франка»', async () => {
+    const http = zhytomyrInneti([[3, 'вул. Франка Івана'], [4, 'пров. Франка']], [3, 4]);
+    expect('currentOutage' in await setup({ http }).p.fetchSnapshot(onStreet('вул. Франка'))).toBe(false);
+    expect(http.to('pw_accidents')).toHaveLength(0);
+  });
+
+  it('two inneti spellings of one street in one city are both read, and the outage on the second is found', async () => {
+    const http = zhytomyrInneti([[1, '1-й пров. Андріївський'], [5, 'пров. 1-й Андріївський']], [5]);
+    expect((await setup({ http }).p.fetchSnapshot(onStreet('1 пров. Андріївський'))).currentOutage).toEqual(EMERGENCY_10_16);
+    expect(accidentStreets(http)).toEqual(['1', '5']);
+    expect(http.to('pw_accident_planeds').map((c) => new URL(c.url).searchParams.get('street.id'))).toEqual(['1', '5']);
+  });
+
+  it('a street labelled «вул. Шкільна (2)» joins by its record\'s name «вул. Шкільна»', async () => {
+    const http = zhytomyrInneti([[6, 'вул. Шкільна']], [6]);
+    const { p } = setup({ http });
+    expect(await p.listStreets(ZHYTOMYR)).toContain('вул. Шкільна (2)');
+    const snap = await p.fetchSnapshot(onStreet('вул. Шкільна (2)'));
+    expect(snap.lines).toEqual([{ index: 1, groupId: '3.1', label: 'Черга 3.1' }]);
+    expect(snap.currentOutage).toEqual(EMERGENCY_10_16);
+    expect(http.posts()).toEqual([ZHYTOMYR_FORM, `${ZHYTOMYR_FORM}&vulica_id=900004&all=1`]);
+  });
+
+  it('without the street list the saved label is joined', async () => {
+    const http = zhytomyrInneti([[1, '1-й пров. Андріївський']], [1], { [`POST ${ZHYTOMYR_FORM}`]: () => new Error('ECONNRESET') });
+    const { p, log } = setup({ http });
+    expect((await p.fetchSnapshot(onStreet('1 пров. Андріївський'))).currentOutage).toEqual(EMERGENCY_10_16);
+    expect(log.warn).toHaveBeenCalledTimes(1);
   });
 });
 

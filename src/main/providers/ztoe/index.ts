@@ -3,7 +3,7 @@ import { addDays, kyivDateKey } from '../../../shared/time';
 import type { Address, CurrentOutage, DaySchedule, HouseInfo, LineInfo, ScheduleSnapshot, Slot } from '../../../shared/types';
 import { silentLogger, type Logger } from '../../log';
 import { HttpSource, sourceTexts, type PlainHttpDeps, type SourceInit } from '../http-source';
-import { accidentRows, currentOutageOf, plannedRows, type Place, type SubReason } from '../inneti';
+import { accidentRows, currentOutageOf, plannedRows, type OutageRow, type Place, type SubReason } from '../inneti';
 import { queueLabel } from '../lines';
 import { houseKey, nameKey } from '../names';
 import { addressNotFound, labeled, noGroup, resolveByLabel, sortedLabels, type Labeled } from '../resolve';
@@ -59,6 +59,19 @@ function bareName(name: string): string | undefined {
 /** An inneti РЕМ («Хорошівський РЕМ») is the bundle's РЕМ («Хорошівський») by name. */
 const sameRem = (otg: string, rem: string): boolean => nameKey(otg).replace(/\s*рем$/u, '') === nameKey(rem);
 
+/** An ending inneti writes after a number («1-й пров.») and the site does not («1 пров.»). */
+const NUMBER_ENDINGS = new Set(['й', 'ий', 'а', 'я']);
+
+/**
+ * A street's words, sorted and joined: inneti writes many streets in another order or with a number ending («вул.
+ * Франка Івана», «1-й пров. Андріївський»). The words are the nameKey split on anything but letters, digits and ’,
+ * without a «й», «ий», «а» or «я» right after a number.
+ */
+function streetWords(name: string): string {
+  const tokens = nameKey(name).split(/[^\p{L}\p{N}’]+/u).filter((t) => t !== '');
+  return tokens.filter((t, i) => !(i > 0 && /^\d+$/.test(tokens[i - 1]) && NUMBER_ENDINGS.has(t))).sort().join(' ');
+}
+
 export type ZtoeDeps = PlainHttpDeps;
 
 /**
@@ -77,9 +90,12 @@ export class ZtoeProvider implements ScheduleProvider {
   private readonly streets = new Map<number, Labeled<Rec>>();
   /** A street's houses with their lines, by street id, kept for the run (the wizard's previews ask again). A refresh's house check never reads it. */
   private readonly houses = new Map<number, HouseInfo[]>();
-  /** inneti's РЕМ list, and each address's inneti place (null: none), kept for the run. A failed read is not kept. */
+  /**
+   * inneti's РЕМ list, and each street's inneti places (one city, one or more spellings of the street; null: none) by
+   * settlement id and the street's words, kept for the run. A failed read is not kept.
+   */
   private otgs: Rec[] | undefined;
-  private readonly places = new Map<string, Place | null>();
+  private readonly places = new Map<string, Place[] | null>();
 
   constructor(deps: ZtoeDeps) {
     this.log = deps.log ?? silentLogger;
@@ -165,33 +181,45 @@ export class ZtoeProvider implements ScheduleProvider {
     return table[groupId];
   }
 
-  /** Emergency, operational-security and planned outages running now for this house. */
+  /** Emergency, operational-security and planned outages running now for this house, over every spelling of its street. */
   private async currentOutage(settlement: ZtoeSettlement, address: Address, now: Date): Promise<CurrentOutage | undefined> {
-    const place = await this.place(settlement, address.street);
-    if (!place) return undefined;
-    const query = `page=1&city.id=${place.cityId}&street.id=${place.streetId}`;
-    const accidentsBody = await this.http.json(`${INNETI}/pw_accidents?${query}`, INNETI_GET);
-    const accidents = this.http.read('pw_accidents', () => accidentRows(accidentsBody, place, ZTOE_SUB_REASON));
-    const plannedBody = await this.http.json(`${INNETI}/pw_accident_planeds?${query}`, INNETI_GET);
-    const planned = this.http.read('pw_accident_planeds', () => plannedRows(plannedBody, place));
-    return currentOutageOf([...accidents, ...planned], address.house, now, (a, b) => houseKey(a) === houseKey(b));
+    const places = await this.streetPlaces(settlement, streetWords(this.streetName(settlement, address.street)));
+    if (!places) return undefined;
+    const rows: OutageRow[] = [];
+    for (const place of places) {
+      const query = `page=1&city.id=${place.cityId}&street.id=${place.streetId}`;
+      const accidentsBody = await this.http.json(`${INNETI}/pw_accidents?${query}`, INNETI_GET);
+      rows.push(...this.http.read('pw_accidents', () => accidentRows(accidentsBody, place, ZTOE_SUB_REASON)));
+      const plannedBody = await this.http.json(`${INNETI}/pw_accident_planeds?${query}`, INNETI_GET);
+      rows.push(...this.http.read('pw_accident_planeds', () => plannedRows(plannedBody, place)));
+    }
+    return currentOutageOf(rows, address.house, now, (a, b) => houseKey(a) === houseKey(b));
   }
 
-  /** The address's inneti place (or its absence), kept for the run once read. */
-  private async place(settlement: ZtoeSettlement, street: string): Promise<Place | undefined> {
-    const key = `${settlement.id}/${street}`;
+  /**
+   * The street's name on the site, from the run's street list: a label such as «вул. X (2)» would add a word. The
+   * saved label itself when the list could not be read.
+   */
+  private streetName(settlement: ZtoeSettlement, label: string): string {
+    const list = this.streets.get(settlement.id);
+    return list ? resolveByLabel(list.items, list.labels, label, recName, noGroup, NAME).name : label;
+  }
+
+  /** The street's inneti places (or their absence), kept for the run once read. */
+  private async streetPlaces(settlement: ZtoeSettlement, words: string): Promise<Place[] | undefined> {
+    const key = `${settlement.id}/${words}`;
     if (this.places.has(key)) return this.places.get(key) ?? undefined;
-    const found = await this.findPlace(settlement, street);
+    const found = await this.findPlaces(settlement, words);
     this.places.set(key, found ?? null);
     return found;
   }
 
   /**
    * The join by name: the РЕМ's otg; its cities of the settlement's bare name (the API's `name` filter also matches a
-   * part of a name, so only an equal name counts); their streets named as the saved street. Exactly one (city, street)
-   * pair is the place; none or several is none.
+   * part of a name, so only an equal name counts); their streets with the street's words. Every such street of one
+   * city counts (inneti holds some streets in two spellings); streets in two or more cities, or none, are no place.
    */
-  private async findPlace(settlement: ZtoeSettlement, street: string): Promise<Place | undefined> {
+  private async findPlaces(settlement: ZtoeSettlement, words: string): Promise<Place[] | undefined> {
     const bare = bareName(settlement.name);
     if (!bare) return undefined;
     const otg = (await this.otgList()).find((o) => sameRem(o.name, settlement.rem));
@@ -204,10 +232,10 @@ export class ZtoeProvider implements ScheduleProvider {
     for (const city of cities) {
       const body = await this.http.json(`${INNETI}/pw_streets?pagination=false&city.id=${city.id}`, INNETI_GET);
       for (const s of this.http.read('pw_streets', () => records(body, 'pw_streets'))) {
-        if (nameKey(s.name) === nameKey(street)) places.push({ cityId: city.id, streetId: s.id });
+        if (streetWords(s.name) === words) places.push({ cityId: city.id, streetId: s.id });
       }
     }
-    return places.length === 1 ? places[0] : undefined;
+    return places.length > 0 && places.every((p) => p.cityId === places[0].cityId) ? places : undefined;
   }
 
   private async otgList(): Promise<Rec[]> {
