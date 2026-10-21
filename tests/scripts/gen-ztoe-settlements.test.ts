@@ -29,6 +29,8 @@ const page = (b: Buffer): Answer => ({
   ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer,
 });
 const failStatus = (status: number): Answer => ({ ok: false, status, arrayBuffer: async () => new ArrayBuffer(0) });
+/** A 200 whose body never arrives: the connection drops while it is read. */
+const droppedBody = (): Answer => ({ ok: true, status: 200, arrayBuffer: async () => { throw new TypeError('terminated'); } });
 const SAVED: Row = { id: 1, name: 'с. Збережене', remId: 1, rem: 'Збережений' };
 
 /** The generator over a fake site: `get` answers the GET, `post` each РЕМ's POST. */
@@ -63,6 +65,8 @@ describe('gen-ztoe-settlements: live, or the saved capture only when the site is
       [() => failStatus(503), undefined, '503'],
       [() => page(REM_PAGE), (rem: string) => (rem === '7' ? new TypeError('fetch failed') : page(SETTLEMENT_PAGE)), 'fetch failed'],
       [() => page(REM_PAGE), (rem: string) => (rem === '7' ? failStatus(502) : page(SETTLEMENT_PAGE)), '502'],
+      [() => droppedBody(), undefined, 'terminated'],
+      [() => page(REM_PAGE), (rem: string) => (rem === '7' ? droppedBody() : page(SETTLEMENT_PAGE)), 'terminated'],
     ] as const) {
       const { result, fallback } = await run(get, post);
       const { rows, source } = await result;

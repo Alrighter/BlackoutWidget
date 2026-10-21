@@ -40,15 +40,18 @@ class Unreachable extends Error {}
 async function request(fetchFn, body) {
   const method = body === undefined ? 'GET' : 'POST';
   let res;
+  let bytes;
   try {
     res = await fetchFn(PAGE, body === undefined ? {} : {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body,
     });
+    // The body too: a connection dropped while it is read is the site unreachable.
+    if (res.ok) bytes = await res.arrayBuffer();
   } catch (e) {
     throw new Unreachable(`${method}: ${e.message}`);
   }
   if (!res.ok) throw new Unreachable(`${method} -> ${res.status}`);
-  return cp1251.decode(await res.arrayBuffer());
+  return cp1251.decode(bytes);
 }
 
 async function live(fetchFn, pause) {
