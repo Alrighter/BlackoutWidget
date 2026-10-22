@@ -1,0 +1,29 @@
+{
+ "1.1": {
+  "today": {
+   "slots": [],
+   "date": "2026-10-22T00:00:00+03:00",
+   "status": "NoOutages"
+  },
+  "tomorrow": {
+   "slots": [],
+   "date": "2026-10-23T00:00:00+03:00",
+   "status": "WaitingForSchedule"
+  },
+  "updatedOn": "2026-10-22T00:00:00+00:00"
+ },
+ "6.2": {
+  "today": {
+   "slots": [],
+   "date": "2026-10-22T00:00:00+03:00",
+   "status": "NoOutages"
+  },
+  "tomorrow": {
+   "slots": [],
+   "date": "2026-10-23T00:00:00+03:00",
+   "status": "WaitingForSchedule"
+  },
+  "updatedOn": "2026-10-22T00:00:00+00:00"
+ },
+ "_note": "trimmed: 2 of 12 groups"
+}

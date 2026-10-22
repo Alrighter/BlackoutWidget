@@ -223,3 +223,16 @@ test('a queue missing from lines is not a line change while the source reports a
   const moved = { ...fixtureSnapshot(), lines: [{ index: 1, groupId: 'GPV4.2', label: 'Черга 4.2' }, { index: 2, groupId: 'GPV1.2', label: 'Черга 1.2' }] };
   expect(setup(async () => moved, { cached: moved }).state().lineChanged).toBe(false); // still listed, other position
 });
+
+test('passes the stored snapshot of the same address as previous', async () => {
+  const cached = fixtureSnapshot();
+  const { svc, provider, id } = setup(async () => fixtureSnapshot(), { cached });
+  await svc.refresh(id);
+  expect(provider.fetchSnapshot).toHaveBeenCalledWith(addr, cached);
+});
+test("passes null when the stored snapshot is another address's", async () => {
+  const other = { ...fixtureSnapshot(), address: { ...addr, house: addr.house + '9' } };
+  const { svc, provider, id } = setup(async () => fixtureSnapshot(), { cached: other });
+  await svc.refresh(id);
+  expect(provider.fetchSnapshot).toHaveBeenCalledWith(addr, null);
+});

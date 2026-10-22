@@ -152,7 +152,9 @@
     --bw-thumb-wp: radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%);
     /* The wizard mockup is light only: derived. */
     --bw-rail: rgba(255, 255, 255, 0.03);
-    --bw-pop-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+    /* None in dark: the open list is opaque and edged. A wide soft dark shadow over the translucent (Mica) window
+       showed as a grey halo on one of the user's displays with software compositing (2026-10-22). */
+    --bw-pop-shadow: none;
     --bw-disabled-ink: #757b8b;
     --bw-done-ink: #5dffa8;
     --bw-menu: #2b2d35;

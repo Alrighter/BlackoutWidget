@@ -98,6 +98,22 @@ export class BrowserSession implements PageSession {
     }
   }
 
+  isOpen(): boolean {
+    return !!this.win && !this.win.isDestroyed();
+  }
+
+  /** Closes the window but keeps the session: the next ensureReady() builds a new one on the same partition. */
+  release(): void {
+    // Never pull the window from under a verification or a load in flight; after dispose() there is nothing to do.
+    if (this.disposed || this.showing || this.pending) return;
+    const win = this.win;
+    this.win = null;
+    this.loaded = false;
+    this.netError = false;
+    this.netFailure = undefined;
+    if (win && !win.isDestroyed()) { win.removeAllListeners('close'); win.destroy(); }
+  }
+
   dispose(): void {
     this.disposed = true;
     const win = this.win;
@@ -206,6 +222,9 @@ export class BrowserSession implements PageSession {
     }
     const win = new BrowserWindow({
       show: false, width: 1280, height: 900, title: 'ДТЕК — перевірка',
+      // A never-shown window otherwise renders the whole site as if on screen: about 100 MB of GPU memory and some
+      // renderer memory for a page nobody sees (smoke-memory). Shown for a verification, it paints as usual.
+      paintWhenInitiallyHidden: false,
       webPreferences: { partition: this.opts.partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

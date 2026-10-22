@@ -14,8 +14,9 @@ p { margin: 6px 0; }
 /* Window (main-schedule.html, D9): the tab row with ⟳, then the scrolling body. The title bar is the system's. */
 .app { height: 100%; display: flex; flex-direction: column; }
 .app-bar { flex: none; height: 48px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.app-nav { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 16px; }
 .app-tabs { flex: none; display: flex; gap: 4px; }
+/* The right side: where (the location picker) and ⟳. */
+.app-tools { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
 .app-tab {
   height: 34px; padding: 0 14px; border: 0; border-radius: var(--bw-r-btn); font-size: 14px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -24,16 +25,36 @@ p { margin: 6px 0; }
 .app-tab:hover { background: var(--bw-ctl); }
 .app-tab[aria-selected='true'] { font-weight: 600; background: var(--bw-ctl-on); box-shadow: var(--bw-ctl-on-shadow); color: var(--bw-app-ink); }
 .app-tab[aria-selected='true']::after { content: ''; width: 16px; height: 3px; border-radius: 2px; background: var(--bw-accent); }
-/* The location switcher (2+ locations): one pill per name beside the tabs. The pills shrink to fit the 760-px
-   window, five 24-character names included; a cut name ends in «…» and keeps its full text in the tooltip. */
-.app-locs { flex: 0 1 auto; min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: var(--bw-r-pill); background: var(--bw-ctl); }
-.app-loc {
-  flex: 0 1 auto; min-width: 44px; max-width: 160px; height: 28px; padding: 0 12px; border: 0; border-radius: var(--bw-r-pill);
-  font-size: 13px; background: transparent; color: var(--bw-app-ink-2);
+/* The location picker (2+ locations): a customizable select, like the EcoFlow station's, dressed as a bar button
+   (⟳'s look) with a pin before the name. Its list is drawn by the page with a ✓ on the shown location. A name is at
+   most 24 characters, so the button stays within the 760-px window. */
+.app-pick { position: relative; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; }
+.app-pick select, .app-pick select::picker(select) { appearance: base-select; }
+.app-pick select {
+  min-width: 0; max-width: 220px; height: 34px; padding: 0 30px 0 32px; border-radius: var(--bw-r-btn); outline: none;
+  display: flex; align-items: center; font: inherit; font-size: 13px; font-weight: 600; color: var(--bw-app-ink); cursor: pointer;
+  background: var(--bw-btn); border: 1px solid var(--bw-btn-edge);
 }
-.app-loc > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.app-loc:hover { color: var(--bw-app-ink); }
-.app-loc[aria-selected='true'] { font-weight: 600; background: var(--bw-ctl-on); box-shadow: var(--bw-ctl-on-shadow); color: var(--bw-app-ink); }
+.app-pick select:hover { background: var(--bw-ctl-on); }
+.app-pick select:focus-visible { border-color: var(--bw-accent); box-shadow: 0 0 0 3px rgb(from var(--bw-accent) r g b / 0.18); }
+.app-pick select::picker-icon { display: none; }
+.app-pick select::picker(select) {
+  margin-top: 4px; min-width: 180px; padding: 4px; border-radius: 10px; color: var(--bw-app-ink);
+  background: var(--bw-menu); border: 1px solid rgb(from var(--bw-app-ink) r g b / 0.10); box-shadow: var(--bw-pop-shadow);
+}
+.app-pick option {
+  display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 10px; border-radius: 7px;
+  font-size: 13.5px; font-weight: 400; color: var(--bw-app-ink); cursor: default;
+}
+.app-pick option::checkmark { content: '✓'; width: 14px; color: var(--bw-accent); font-weight: 700; }
+.app-pick option:hover, .app-pick option:focus-visible { background: rgb(from var(--bw-accent) r g b / 0.08); outline: none; }
+.app-pick option:checked { font-weight: 600; }
+.app-pick svg {
+  position: absolute; top: 50%; translate: 0 -50%; pointer-events: none;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; color: var(--bw-app-ink-2);
+}
+.app-pick .app-pick-pin { left: 11px; }
+.app-pick .app-pick-chev { right: 11px; stroke-width: 2; }
 .app-refresh {
   flex: none; width: 34px; height: 34px; padding: 0; border-radius: var(--bw-r-btn); display: flex; align-items: center; justify-content: center;
   background: var(--bw-btn); border: 1px solid var(--bw-btn-edge); color: var(--bw-app-ink-2);
@@ -182,7 +203,7 @@ p { margin: 6px 0; }
 .sv-card.st-card { padding: 16px 18px; gap: 12px; }
 .st-title { margin: 0; font-size: 14px; line-height: 18px; font-weight: 650; letter-spacing: normal; }
 .st-title:focus { outline: none; }
-.st-actions { display: flex; gap: 8px; }
+.st-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .st-icon {
   flex: none; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
   background: var(--bw-ctl); color: var(--bw-app-ink-2);
@@ -193,7 +214,6 @@ p { margin: 6px 0; }
 /* The location's name, its inline rename and the delete question. */
 .st-loc-name { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .st-loc-name-text { min-width: 0; font-size: 16px; line-height: 21px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-loc-name .st-link { flex: none; font-size: 12.5px; }
 .st-rename { display: flex; flex-direction: column; gap: 8px; }
 .st-confirm {
   display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px;

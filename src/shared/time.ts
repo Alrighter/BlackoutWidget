@@ -90,3 +90,9 @@ export function kyivStamp(d: Date): string {
   const [y, m, day] = kyivDateKey(d).split('-');
   return `${formatHM(d)} ${day}.${m}.${y}`;
 }
+
+/** 'DD.MM.YYYY HH:MM' of an instant, in Kyiv time: DTEK's own order (its `fact.update`). */
+export function dtekStamp(d: Date): string {
+  const [y, m, day] = kyivDateKey(d).split('-');
+  return `${day}.${m}.${y} ${formatHM(d)}`;
+}

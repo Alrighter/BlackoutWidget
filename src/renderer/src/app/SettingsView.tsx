@@ -89,7 +89,6 @@ function AddressCard({ state, loc, api, onChangeAddress }: { state: AppState; lo
       ) : (
         <div className="st-loc-name">
           <span className="st-loc-name-text" title={name} data-capture="location-name">{name}</span>
-          {edit === 'none' && <button className="st-link" ref={renameBtn} onClick={() => open('rename')}>Перейменувати</button>}
         </div>
       )}
       <div className="st-addr">
@@ -113,6 +112,7 @@ function AddressCard({ state, loc, api, onChangeAddress }: { state: AppState; lo
       ) : edit === 'none' && (
         <div className="st-actions">
           <button className="sv-btn" onClick={onChangeAddress}>Змінити адресу</button>
+          <button className="sv-btn" ref={renameBtn} onClick={() => open('rename')}>Перейменувати</button>
           {state.locations.length > 1 && <button className="sv-btn st-ghost" ref={deleteBtn} onClick={() => open('delete')}>Видалити</button>}
         </div>
       )}

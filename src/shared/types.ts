@@ -20,6 +20,8 @@ export interface ScheduleSnapshot {
   outageActive?: boolean;
   /** Shown under today's schedule only (a «quiet day»: the company published no schedule for today). */
   note?: string;
+  /** When the house's own data (lines, outage) was last read from the source (ISO); absent = read together with `fetchedAt`. */
+  houseCheckedAt?: string;
 }
 export type WidgetStyle = 'compact' | 'ring' | 'timeline';
 export interface WidgetPosition { x: number; y: number; displayId: number }

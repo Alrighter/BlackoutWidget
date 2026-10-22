@@ -20,6 +20,7 @@ const oldFact = { ...stale.fact, update: '17.10.2026 09:40' };
 function fakeSession(replies: Record<string, unknown[]>) {
   return {
     ensureReady: vi.fn(async () => {}), showForUser: vi.fn(async () => {}), dispose: vi.fn(), reload: vi.fn(async () => {}), isOnline: vi.fn(() => true),
+    isOpen: vi.fn(() => true), release: vi.fn(),
     evaluate: vi.fn(async (js: string) => { const q = replies[js]; if (!q?.length) throw new Error('unexpected ' + js.slice(0, 60)); return q.shift(); }) };
 }
 test('first fetch sends cached updateFact and adopts fresh fact', async () => {

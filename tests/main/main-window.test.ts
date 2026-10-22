@@ -6,13 +6,17 @@ const windows = vi.hoisted(() => [] as FakeWindow[]);
 interface FakeWindow {
   loadFile: ReturnType<typeof vi.fn>;
   loadURL: ReturnType<typeof vi.fn>;
+  hide: ReturnType<typeof vi.fn>;
   webContents: { send: ReturnType<typeof vi.fn>; finishLoad(): void };
+  /** Fires a window event the way Electron does; 'closed' also destroys the window. */
+  emit(event: string, ...args: unknown[]): void;
 }
 
 vi.mock('electron', () => {
   class BrowserWindow {
     private destroyed = false;
     private readonly contentsHandlers = new Map<string, () => void>();
+    private readonly handlers = new Map<string, ((...args: unknown[]) => void)[]>();
     loadFile = vi.fn(async () => {});
     loadURL = vi.fn(async () => {});
     webContents = {
@@ -26,8 +30,12 @@ vi.mock('electron', () => {
     restore() {}
     show() {}
     focus() {}
-    hide() {}
-    on() {}
+    hide = vi.fn();
+    on(event: string, cb: (...args: unknown[]) => void) { this.handlers.set(event, [...(this.handlers.get(event) ?? []), cb]); }
+    emit(event: string, ...args: unknown[]) {
+      if (event === 'closed') this.destroyed = true;
+      for (const cb of this.handlers.get(event) ?? []) cb(...args);
+    }
     setMenuBarVisibility() {}
     setBackgroundColor() {}
   }
@@ -73,4 +81,27 @@ test('later opens send a MainNav, once the page has loaded', () => {
   main.open();
   expect(win.webContents.send).not.toHaveBeenCalled();
   expect(windows).toHaveLength(1);
+});
+
+test('closing frees the window; the next open loads a fresh one on its own view', () => {
+  const main = new MainWindow('preload.js');
+  main.open('schedule', 'b');
+  const first = windows[0];
+  first.webContents.finishLoad();
+  const close = { preventDefault: vi.fn() };
+  first.emit('close', close);
+  // Not kept hidden: the window really closes, and its renderer with it.
+  expect(close.preventDefault).not.toHaveBeenCalled();
+  expect(first.hide).not.toHaveBeenCalled();
+  first.emit('closed');
+  main.send(IPC.state, {});
+  expect(first.webContents.send).not.toHaveBeenCalled();
+  main.open('settings');
+  expect(windows).toHaveLength(2);
+  expect(windows[1].loadFile).toHaveBeenCalledWith(expect.stringContaining('app.html'), { query: { view: 'settings' } });
+  // The new page is still loading: a navigation waits for it instead of reaching the old window.
+  main.open('schedule', 'b');
+  expect(windows[1].webContents.send).not.toHaveBeenCalled();
+  windows[1].webContents.finishLoad();
+  expect(windows[1].webContents.send).toHaveBeenCalledWith(IPC.navigate, { view: 'schedule', locationId: 'b' });
 });

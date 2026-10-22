@@ -25,6 +25,7 @@ export default defineConfig({
           'smoke-cek': resolve(__dirname, 'src/main/smoke-cek.ts'),
           'smoke-ecoflow': resolve(__dirname, 'src/main/smoke-ecoflow.ts'),
           'smoke-ble': resolve(__dirname, 'src/main/smoke-ble.ts'),
+          'smoke-memory': resolve(__dirname, 'src/main/smoke-memory.ts'),
         },
         // Shared chunks sit next to the entries, so __dirname is out/main in every module
         // (spawnBleHost's ble-host.js, the ../renderer and ../preload paths).

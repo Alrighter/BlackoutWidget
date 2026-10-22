@@ -80,8 +80,10 @@ export class RefreshService {
     this.emit();
     let snapshot;
     let error: unknown;
+    const stored = this.deps.store.getSnapshot(id);
+    const previous = stored && sameAddress(stored.address, address) ? stored : null;
     try {
-      snapshot = await this.deps.getProvider(address.providerId).fetchSnapshot(address);
+      snapshot = await this.deps.getProvider(address.providerId).fetchSnapshot(address, previous);
     } catch (err) {
       error = err;
     }

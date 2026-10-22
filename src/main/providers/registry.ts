@@ -1,4 +1,6 @@
 import { DTEK_SITES, DtekProvider } from './dtek';
+import { mirrorFeed, yasnoFeed } from './dtek/feeds';
+import type { ScheduleFeed } from './dtek/feeds';
 import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek/page-scripts';
 import type { SessionOptions } from './browser-session';
 import { CekProvider } from './cek';
@@ -18,8 +20,19 @@ export interface ProviderHttp { fetch: HttpFetch; isOnline: () => boolean }
 
 /** The providers in the order of `PROVIDERS` (the wizard's card order). A new source is one `PROVIDERS` entry and one line in `make`. */
 export function createProviders(
-  makeSession: (o: SessionOptions) => PageSession, log: Logger, http: ProviderHttp,
+  makeSession: (o: SessionOptions) => PageSession, log: Logger, http: ProviderHttp, dtekOpts: { lingerMs?: number } = {},
 ): ScheduleProvider[] {
+  const deps = { fetch: http.fetch, isOnline: http.isOnline, log };
+  // Per site, in order: the first usable feed wins (spec §Goals).
+  const feedsFor = (id: string): ScheduleFeed[] => {
+    switch (id) {
+      case 'dtek-kem': return [yasnoFeed(deps), mirrorFeed('kyiv', deps)];
+      case 'dtek-krem': return [mirrorFeed('kyiv-region', deps)];
+      case 'dtek-dnem': return [mirrorFeed('dnipro', deps)];
+      case 'dtek-oem': return [mirrorFeed('odesa', deps)];
+      default: return [];
+    }
+  };
   const dtek = (id: string): ScheduleProvider => {
     const site = DTEK_SITES.find(s => s.id === id)!;
     const url = providerSiteUrl(id)!;
@@ -30,7 +43,7 @@ export function createProviders(
       allowedHosts: [new URL(url).hostname.replace(/^www\./, '')],
       afterReady: NEUTRALIZE_TIMERS,
       blockRequest: isPagePollRequest,
-    }), log);
+    }), log, { feeds: feedsFor(id), lingerMs: dtekOpts.lingerMs });
   };
   const make: Record<string, () => ScheduleProvider> = {
     'voe': () => new VoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),

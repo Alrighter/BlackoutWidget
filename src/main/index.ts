@@ -36,6 +36,18 @@ import { WidgetWindow } from './widget/widget-window';
 
 const ECOFLOW_HELP_URL = 'https://developer-eu.ecoflow.com/';
 
+// Windows: software compositing. The widgets repaint once a minute and the main window rarely, so the GPU buys
+// nothing here, while its process held about 40 MB more than the software one (smoke-memory, --no-gpu).
+// Must run before the app is ready.
+if (process.platform === 'win32') {
+  app.disableHardwareAcceleration();
+  // The (software) GPU and the network service run inside this process instead of two more: about 20 MB less, 4
+  // processes to 2 for one widget (measured 2026-10-22). A crash of either now ends the app, where Chromium would have
+  // restarted the process.
+  app.commandLine.appendSwitch('in-process-gpu');
+  app.commandLine.appendSwitch('enable-features', 'NetworkServiceInProcess2');
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

@@ -160,6 +160,15 @@ describe('Видалити asks first', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Останню адресу видалити не можна');
   });
 
+  test('«Перейменувати» is one of the card\'s buttons, beside «Змінити адресу» and styled like it', () => {
+    view(TWO());
+    const rename = screen.getByRole('button', { name: 'Перейменувати' });
+    const change = screen.getByRole('button', { name: 'Змінити адресу' });
+    expect(rename.parentElement).toBe(change.parentElement);
+    expect(rename.className).toBe(change.className);
+    expect(card().getByText('Дім').parentElement).not.toContainElement(rename);
+  });
+
   test('there is no «Видалити» with one location', () => {
     view(stateOf());
     expect(screen.queryByRole('button', { name: 'Видалити' })).toBeNull();
