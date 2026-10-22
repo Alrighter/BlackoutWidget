@@ -11,6 +11,7 @@
     "test": "vitest run",
     "ui:capture": "electron scripts/ui-capture/capture.cjs",
     "tray:icons": "electron scripts/gen-tray-icons.cjs",
+    "app:icon": "electron scripts/gen-app-icon.cjs",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64 --publish never"
   },
   "keywords": [],

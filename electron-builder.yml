@@ -20,6 +20,8 @@ extraResources:
   - from: resources/tray
     to: tray
 win:
+  # npm run app:icon: 16-48 px the design's small detail, 64-256 the full one; also the installer's icon.
+  icon: build/icon.ico
   target:
     - target: nsis
       arch:
@@ -28,6 +30,8 @@ nsis:
   oneClick: true
   perMachine: false
 mac:
+  # npm run app:icon; electron-builder makes the .icns from it.
+  icon: build/icon.png
   target:
     - target: dmg
       arch:

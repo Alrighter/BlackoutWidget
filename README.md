@@ -274,6 +274,8 @@ Other commands:
   windows, without showing the app on screen. See
   [scripts/ui-capture/README.md](scripts/ui-capture/README.md).
 - `npm run tray:icons`: regenerates the tray icons in `resources/tray/`.
+- `npm run app:icon`: regenerates the app icon (`build/icon.png` for macOS,
+  `build/icon.ico` for Windows) from the design, in `scripts/gen-app-icon.cjs`.
 - `node scripts/gen-mkoe-settlements.mjs`, `gen-ztoe-settlements.mjs`,
   `gen-cvoe-settlements.mjs`: update the built-in town lists (live requests to
   the company's site).
