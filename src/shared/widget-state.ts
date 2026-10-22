@@ -3,6 +3,11 @@ import { ACTUAL_STALE_MS, dayStrip, sinceText, type StripPart } from './actual-v
 import { addDays, formatHM, kyivDateKey, kyivMinutesOfDay, kyivWallTimeToInstant, parseDtekDateTime } from './time';
 
 export const STALE_AFTER_MIN = 45;
+/**
+ * How long an emergency without an end counts when judged from `houseCheckedAt`: during an outage the house is
+ * re-checked every refresh the 30-min page budget allows, so good checks land up to ~48 min apart.
+ */
+export const EMERGENCY_HOUSE_STALE_MIN = 60;
 export type PowerState = 'on' | 'off' | 'maybe-off' | 'unknown' | 'emergency';
 export interface WidgetView {
   state: PowerState; title: string; nextText: string;
@@ -68,7 +73,8 @@ function badgeFor(o: CurrentOutage): OutageBadgeText {
  * is just logged), and only for the saved queue when the outage names its queues. It must have started (or have no readable
  * start); a readable end must be in the future; without a readable end it only counts while the report is fresh —
  * an old report must not keep the widget at «Світла немає». `stale` is the report's age: the snapshot's
- * `houseCheckedAt` when it has one (a DTEK feed snapshot carries the outage of the last house check), else `fetchedAt`.
+ * `houseCheckedAt` past EMERGENCY_HOUSE_STALE_MIN when it has one (a DTEK feed snapshot carries the outage of the last
+ * house check), else `fetchedAt` past STALE_AFTER_MIN.
  */
 function activeEmergency(
   o: CurrentOutage | undefined, groupId: string, now: Date, stale: boolean,
@@ -109,10 +115,12 @@ function scheduleView(snapshot: ScheduleSnapshot, now: Date): WidgetView {
   const fetchedAt = new Date(snapshot.fetchedAt);
   const fetchedValid = !Number.isNaN(fetchedAt.getTime());
   // Written as "not fresh" so that an unreadable stamp counts as stale.
-  const notFresh = (iso: string): boolean => !(now.getTime() - Date.parse(iso) <= STALE_AFTER_MIN * 60000);
-  const stale = notFresh(snapshot.fetchedAt);
+  const notFresh = (iso: string, min: number): boolean => !(now.getTime() - Date.parse(iso) <= min * 60000);
+  const stale = notFresh(snapshot.fetchedAt, STALE_AFTER_MIN);
   // The outage is house data: a DTEK feed snapshot renews fetchedAt but carries the outage from the last house check.
-  const outageStale = notFresh(snapshot.houseCheckedAt ?? snapshot.fetchedAt);
+  const outageStale = snapshot.houseCheckedAt !== undefined
+    ? notFresh(snapshot.houseCheckedAt, EMERGENCY_HOUSE_STALE_MIN)
+    : stale;
 
   const base = {
     todayKey, today, tomorrow,

@@ -89,7 +89,11 @@ Calls that were mine, not the user's, are marked *(my call)*.
 - Carried unchanged from `previous`, when there is one: `lines`, `outageActive`, `currentOutage`, `houseCheckedAt`.
   - This keeps `lineChanged` true when the last house check found the saved queue gone.
   - It never invents a line change: with no `previous`, `lines` is `[{ index: address.lineIndex, groupId: address.groupId, label: groupLabel }]`.
-  - A carried `currentOutage` must not outlive the house data behind it. The emergency banner ends at the outage's own `end` time. An outage without a readable `end` counts only while it is fresh, and `activeEmergency` measures that from `houseCheckedAt` when the snapshot has one, else from `fetchedAt`. A feed snapshot renews `fetchedAt` but not `houseCheckedAt`, so a house check that keeps failing cannot hold the widget at «Світла немає · час відновлення невідомий». Only the emergency uses `houseCheckedAt`; the widget's «stale» display stays keyed on `fetchedAt`.
+  - A carried `currentOutage` must not outlive the house data behind it. The emergency banner ends at the outage's own `end` time. An outage without a readable `end` counts only while it is fresh. `activeEmergency` measures that in one of two ways:
+    - from `houseCheckedAt` when the snapshot has one: stale after **60 minutes** (`EMERGENCY_HOUSE_STALE_MIN`). During an outage the house is re-checked on every refresh the 30-minute page budget allows. With the 15 ± 1 min refresh interval, two good checks can land up to about 48 min apart, so 45 min would make the emergency flicker off between checks;
+    - otherwise from `fetchedAt`: stale after 45 min (`STALE_AFTER_MIN`), as before.
+
+    A feed snapshot renews `fetchedAt` but not `houseCheckedAt`, so a house check that keeps failing cannot hold the widget at «Світла немає · час відновлення невідомий». Only the emergency uses `houseCheckedAt`; the widget's «stale» display stays keyed on `fetchedAt` and 45 min.
 - `fetchedAt` is now.
 - `groupLabel` is the feed's own name for the queue (the mirror's `sch_names`), else `previous.groupLabel`, else `queueLabelFromId(groupId)`.
 

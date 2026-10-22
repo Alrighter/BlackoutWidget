@@ -1,4 +1,6 @@
-import { computeWidgetView, slotRuns, formatDurationLong, formatDurationShort, STALE_AFTER_MIN } from '../../src/shared/widget-state';
+import {
+  computeWidgetView, slotRuns, formatDurationLong, formatDurationShort, STALE_AFTER_MIN, EMERGENCY_HOUSE_STALE_MIN,
+} from '../../src/shared/widget-state';
 import { fixtureSnapshot } from '../helpers/snapshot';
 import type { ActualStatus, CurrentOutage, DaySchedule, Slot } from '../../src/shared/types';
 const at = (iso: string) => new Date(iso);
@@ -141,14 +143,17 @@ describe('emergency without an end: its staleness is judged from houseCheckedAt 
   const minAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
   const feedSnap = (houseCheckedAt: string) =>
     ({ ...fixtureSnapshot({ currentOutage: noEnd, fetchedAt: NOW.toISOString() }), houseCheckedAt });
-  test('a house check older than STALE_AFTER_MIN drops it, while the display stays fresh by fetchedAt', () => {
-    const v = computeWidgetView(feedSnap(minAgo(STALE_AFTER_MIN + 1)), NOW);
+  test('a house check older than EMERGENCY_HOUSE_STALE_MIN (61 min) drops it, while the display stays fresh by fetchedAt', () => {
+    expect(EMERGENCY_HOUSE_STALE_MIN).toBe(60);
+    const v = computeWidgetView(feedSnap(minAgo(EMERGENCY_HOUSE_STALE_MIN + 1)), NOW);
     expect(v.state).toBe('on'); expect(v.outageBadge).toBeUndefined(); expect(v.emergency).toBeUndefined();
     expect(v.stale).toBe(false);
   });
-  test('a house check 5 min old keeps it', () => {
-    const v = computeWidgetView(feedSnap(minAgo(5)), NOW);
-    expect(v.state).toBe('emergency'); expect(v.outageBadge).toBe('Екстрене');
+  test('a house check 5 min or 50 min old keeps it (checks during an outage land up to ~48 min apart)', () => {
+    for (const age of [5, 50]) {
+      const v = computeWidgetView(feedSnap(minAgo(age)), NOW);
+      expect(v.state).toBe('emergency'); expect(v.outageBadge).toBe('Екстрене');
+    }
   });
   test('no houseCheckedAt: keyed on fetchedAt, as before', () => {
     expect(withOutage(noEnd, minAgo(5)).state).toBe('emergency');
