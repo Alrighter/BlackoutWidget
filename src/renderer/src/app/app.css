@@ -182,7 +182,7 @@ p { margin: 6px 0; }
 .sv-card.st-card { padding: 16px 18px; gap: 12px; }
 .st-title { margin: 0; font-size: 14px; line-height: 18px; font-weight: 650; letter-spacing: normal; }
 .st-title:focus { outline: none; }
-.st-actions { display: flex; gap: 8px; }
+.st-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .st-icon {
   flex: none; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
   background: var(--bw-ctl); color: var(--bw-app-ink-2);
@@ -193,7 +193,6 @@ p { margin: 6px 0; }
 /* The location's name, its inline rename and the delete question. */
 .st-loc-name { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .st-loc-name-text { min-width: 0; font-size: 16px; line-height: 21px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-loc-name .st-link { flex: none; font-size: 12.5px; }
 .st-rename { display: flex; flex-direction: column; gap: 8px; }
 .st-confirm {
   display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px;
