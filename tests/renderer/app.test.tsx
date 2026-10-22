@@ -44,8 +44,9 @@ function fake(state: AppState = appState(), extra: Partial<Record<keyof Renderer
   } as unknown as RendererApi;
   return { api, nav: n => act(() => nav(n)), push: s => act(() => push(s)) };
 }
-const pills = () => screen.getByRole('tablist', { name: 'Адреси' });
-const pill = (name: string) => within(pills()).getByRole('tab', { name });
+/** The location picker in the app bar: a select named «Адреса», shown with 2+ locations. */
+const picker = () => screen.getByRole('combobox', { name: 'Адреса' });
+const pick = (name: string) => userEvent.selectOptions(picker(), name);
 const status = (name: string) => screen.getByRole('heading', { level: 2, name });
 const UNREADABLE = 'Не вдалося прочитати налаштування. Спробую ще раз за хвилину.';
 
@@ -130,34 +131,34 @@ test('one location: no switcher', async () => {
   pinDate();
   render(<App api={fake().api} view="schedule" />);
   expect(await screen.findByRole('tab', { name: 'Графік' })).toBeInTheDocument();
-  expect(screen.queryByRole('tablist', { name: 'Адреси' })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: 'Адреса' })).toBeNull();
 });
 
-test('two locations: the switcher picks the schedule', async () => {
+test('two locations: the picker picks the schedule', async () => {
   pinDate();
   const f = fake(twoState());
   render(<App api={f.api} view="schedule" />);
-  expect(await screen.findByRole('tablist', { name: 'Адреси' })).toBeInTheDocument();
-  expect(within(pills()).getAllByRole('tab').map(t => t.textContent)).toEqual(['Дім', 'Батьки']);
-  expect(pill('Дім')).toHaveAttribute('aria-selected', 'true');
-  expect(pill('Батьки')).toHaveAttribute('aria-selected', 'false');
+  expect(await screen.findByRole('combobox', { name: 'Адреса' })).toBeInTheDocument();
+  expect(within(picker()).getAllByRole('option').map(o => o.textContent)).toEqual(['Дім', 'Батьки']);
+  expect(picker()).toHaveDisplayValue('Дім');
+  // Where: on the right, beside the refresh button, away from the section tabs (what).
+  expect(screen.getByRole('button', { name: 'Оновити зараз' }).parentElement).toContainElement(picker());
   expect(status('Світло є')).toBeInTheDocument();
   // The section tabs are their own tablist, unchanged.
   expect(within(screen.getByRole('tablist', { name: 'Розділи' })).getAllByRole('tab').map(t => t.textContent)).toEqual(['Графік', 'Налаштування']);
 
-  await userEvent.click(pill('Батьки'));
-  expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
-  expect(pill('Дім')).toHaveAttribute('aria-selected', 'false');
+  await pick('Батьки');
+  expect(picker()).toHaveDisplayValue('Батьки');
   expect(status('Світла немає')).toBeInTheDocument();
   expect(screen.queryByRole('heading', { level: 2, name: 'Світло є' })).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Оновити зараз' }));
   expect(f.api.refreshNow).toHaveBeenCalledTimes(1);
   expect(f.api.refreshNow).toHaveBeenCalledWith('b');
 
-  // The settings follow the selection too, and the switcher stays.
+  // The settings follow the selection too, and the picker stays.
   await userEvent.click(screen.getByRole('tab', { name: 'Налаштування' }));
   expect(within(screen.getByRole('heading', { name: 'Адреса' }).closest('section')!).getByText('Батьки')).toBeInTheDocument();
-  expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
+  expect(picker()).toHaveDisplayValue('Батьки');
 });
 
 describe('a navigate with a locationId selects it', () => {
@@ -165,24 +166,24 @@ describe('a navigate with a locationId selects it', () => {
     pinDate();
     const f = fake(twoState());
     render(<App api={f.api} view="schedule" />);
-    expect(await screen.findByRole('tablist', { name: 'Адреси' })).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Адреса' })).toBeInTheDocument();
     f.nav({ view: 'settings', locationId: 'b' });
-    expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
+    expect(picker()).toHaveDisplayValue('Батьки');
     expect(screen.getByRole('tab', { name: 'Налаштування' })).toHaveAttribute('aria-selected', 'true');
     // A navigate without an id keeps the selection.
     f.nav({ view: 'schedule' });
-    expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
+    expect(picker()).toHaveDisplayValue('Батьки');
     expect(status('Світла немає')).toBeInTheDocument();
     f.nav({ view: 'schedule', locationId: 'home' });
-    expect(pill('Дім')).toHaveAttribute('aria-selected', 'true');
+    expect(picker()).toHaveDisplayValue('Дім');
     expect(status('Світло є')).toBeInTheDocument();
   });
 
   test('from the window\'s query', async () => {
     pinDate();
     render(<App api={fake(twoState()).api} view="schedule" locationId="b" />);
-    expect(await screen.findByRole('tablist', { name: 'Адреси' })).toBeInTheDocument();
-    expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('combobox', { name: 'Адреса' })).toBeInTheDocument();
+    expect(picker()).toHaveDisplayValue('Батьки');
     expect(status('Світла немає')).toBeInTheDocument();
   });
 
@@ -190,12 +191,12 @@ describe('a navigate with a locationId selects it', () => {
     pinDate();
     const f = fake(twoState());
     render(<App api={f.api} view="schedule" locationId="gone" />);
-    expect(await screen.findByRole('tablist', { name: 'Адреси' })).toBeInTheDocument();
-    expect(pill('Дім')).toHaveAttribute('aria-selected', 'true');
-    await userEvent.click(pill('Батьки'));
+    expect(await screen.findByRole('combobox', { name: 'Адреса' })).toBeInTheDocument();
+    expect(picker()).toHaveDisplayValue('Дім');
+    await pick('Батьки');
     // Батьки deleted: back on Дім, and with one location left no switcher.
     f.push(appState([locOf(HOME)]));
-    expect(screen.queryByRole('tablist', { name: 'Адреси' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Адреса' })).toBeNull();
     expect(status('Світло є')).toBeInTheDocument();
   });
 });
@@ -207,7 +208,7 @@ test('Додати адресу opens the add wizard; Скасувати returns
   await userEvent.click(await screen.findByRole('button', { name: 'Додати адресу' }));
   expect(screen.getByText('Нова адреса')).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Регіон і компанія' })).toBeInTheDocument();
-  expect(screen.queryByRole('tablist', { name: 'Адреси' })).toBeNull(); // the wizard fills the window
+  expect(screen.queryByRole('combobox', { name: 'Адреса' })).toBeNull(); // the wizard fills the window
   await userEvent.click(screen.getByRole('button', { name: 'Скасувати' }));
   expect(screen.getByRole('tab', { name: 'Налаштування' })).toHaveAttribute('aria-selected', 'true');
   expect(f.api.addLocation).not.toHaveBeenCalled();
@@ -248,7 +249,7 @@ test('the line-changed banner\'s «Змінити адресу» edits the selec
   expect(f.api.addLocation).not.toHaveBeenCalled();
   // Done: back on the schedule, Батьки still selected.
   expect(await screen.findByRole('tab', { name: 'Графік' })).toHaveAttribute('aria-selected', 'true');
-  expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
+  expect(picker()).toHaveDisplayValue('Батьки');
 });
 
 test('the first setup stays the first setup when its own location arrives before it is done', async () => {
@@ -287,7 +288,7 @@ describe('after «Додати адресу»', () => {
     expect(f.api.addLocation).toHaveBeenCalledWith({ name: 'Дача', address: ADDRESS, widgetStyle: 'compact' });
   }
   const expectCottageShown = () => {
-    expect(pill('Дача')).toHaveAttribute('aria-selected', 'true');
+    expect(picker()).toHaveDisplayValue('Дача');
     expect(screen.getByRole('tab', { name: 'Графік' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Дані ще не отримано')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 2, name: 'Світло є' })).toBeNull();
@@ -319,13 +320,13 @@ describe('after «Додати адресу»', () => {
     await addCottage(user, f);
     // Back on the schedule; the new location is not in the state yet.
     expect(await screen.findByRole('tab', { name: 'Графік' })).toHaveAttribute('aria-selected', 'true');
-    expect(pill('Батьки')).toHaveAttribute('aria-selected', 'true');
+    expect(picker()).toHaveDisplayValue('Батьки');
     f.push(added());
     expectCottageShown();
     // Only once: a later push does not pull the selection back.
-    await user.click(pill('Дім'));
+    await user.selectOptions(picker(), 'Дім');
     f.push(added());
-    expect(pill('Дім')).toHaveAttribute('aria-selected', 'true');
+    expect(picker()).toHaveDisplayValue('Дім');
   });
 
   test('a cancelled add selects nothing new', async () => {
@@ -337,7 +338,7 @@ describe('after «Додати адресу»', () => {
     await user.click(screen.getByRole('button', { name: 'Скасувати' }));
     // A location that appears some other way (another window, a settings re-read) does not take the selection.
     f.push(added());
-    expect(pill('Дім')).toHaveAttribute('aria-selected', 'true');
+    expect(picker()).toHaveDisplayValue('Дім');
   });
 });
 

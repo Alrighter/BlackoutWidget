@@ -101,30 +101,29 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
   return (
     <div className="app">
       <header className="app-bar">
-        <div className="app-nav">
-          <nav role="tablist" aria-label="Розділи" className="app-tabs">
-            <button role="tab" aria-selected={tab === 'schedule'} className="app-tab" onClick={() => show('schedule')}>Графік</button>
-            <button role="tab" aria-selected={tab === 'settings'} className="app-tab" onClick={() => show('settings')}>Налаштування</button>
-          </nav>
+        <nav role="tablist" aria-label="Розділи" className="app-tabs">
+          <button role="tab" aria-selected={tab === 'schedule'} className="app-tab" onClick={() => show('schedule')}>Графік</button>
+          <button role="tab" aria-selected={tab === 'settings'} className="app-tab" onClick={() => show('settings')}>Налаштування</button>
+        </nav>
+        <div className="app-tools">
           {locations.length > 1 && (
-            <div role="tablist" aria-label="Адреси" className="app-locs" data-capture="switcher">
-              {locations.map(l => (
-                <button key={l.location.id} role="tab" aria-selected={l.location.id === id} className="app-loc" title={l.location.name}
-                  onClick={() => select(l.location.id)}>
-                  <span>{l.location.name}</span>
-                </button>
-              ))}
-            </div>
+            <span className="app-pick" data-capture="switcher">
+              <svg className="app-pick-pin" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>
+              <select aria-label="Адреса" title={loc.location.name} value={id} onChange={e => select(e.target.value)}>
+                {locations.map(l => <option key={l.location.id} value={l.location.id}>{l.location.name}</option>)}
+              </select>
+              <svg className="app-pick-chev" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            </span>
+          )}
+          {tab === 'schedule' && (
+            <button className="app-refresh" aria-label="Оновити зараз" title="Оновити зараз" onClick={() => {
+              // A location deleted meanwhile is refused by main; the next state drops it, so there is nothing to show.
+              api.refreshNow(id).catch(() => {});
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></svg>
+            </button>
           )}
         </div>
-        {tab === 'schedule' && (
-          <button className="app-refresh" aria-label="Оновити зараз" title="Оновити зараз" onClick={() => {
-            // A location deleted meanwhile is refused by main; the next state drops it, so there is nothing to show.
-            api.refreshNow(id).catch(() => {});
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></svg>
-          </button>
-        )}
       </header>
       <main className="app-body" data-capture="body">
         {tab === 'schedule'
