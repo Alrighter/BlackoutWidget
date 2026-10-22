@@ -4,6 +4,7 @@ import { ecoflowPreview, ecoflowTest } from '../../../src/main/actual/ecoflow/in
 import {
   EcoflowSource, MQTT_AUTH_PAUSE_MS, type MqttClientLike, type MqttConnect,
 } from '../../../src/main/actual/ecoflow/source';
+import type { BleLinkLike } from '../../../src/main/actual/ecoflow/ble/link';
 import { createActualSources, findActualSource } from '../../../src/main/actual/registry';
 import type { ActualReading } from '../../../src/main/actual/types';
 import { silentLogger } from '../../../src/main/log';
@@ -42,6 +43,7 @@ function deferred<T>() {
 
 class FakeClient extends EventEmitter implements MqttClientLike {
   subscribe = vi.fn();
+  publish = vi.fn();
   end = vi.fn();
 }
 
@@ -107,6 +109,7 @@ test('start: lists, polls, connects with stable clientId and subscribes quota+st
   expect(api.listDevices).toHaveBeenCalledTimes(2);
   expect(api.getCertification).toHaveBeenCalledTimes(1);
   expect(mqtt.connect).toHaveBeenCalledTimes(1);
+  expect(c.publish).not.toHaveBeenCalled();
 });
 
 test('MQTT quota message makes data fresh → on with detail', async () => {
@@ -688,7 +691,7 @@ test('registry: the EcoFlow factory wires region, keys and the stable clientId',
     return { ok: true, status: 200, text: async () => JSON.stringify({ code: '0', data }) };
   });
   const mqtt = fakeMqtt();
-  const list = createActualSources({ fetch, connect: mqtt.connect });
+  const list = createActualSources({ fetch, connect: mqtt.connect, ble: {} as BleLinkLike });
   const factory = findActualSource(list, 'ecoflow');
   expect([factory.id, factory.displayName]).toEqual(['ecoflow', 'EcoFlow']);
   expect(() => findActualSource(list, 'nope')).toThrow('nope');
@@ -714,7 +717,7 @@ test('registry: the created source knows its keys and scrubs a server echo of th
   const fetch = vi.fn<FetchLike>(async () => ({
     ok: true, status: 200, text: async () => JSON.stringify({ code: '9999', message: 'accessKey=AKEY1234567 secretKey=SECRET-xyz' }),
   }));
-  const src = findActualSource(createActualSources({ fetch, connect: fakeMqtt().connect }), 'ecoflow').create(
+  const src = findActualSource(createActualSources({ fetch, connect: fakeMqtt().connect, ble: {} as BleLinkLike }), 'ecoflow').create(
     { id: 'ecoflow', region: 'eu', deviceSn: 'SN1', deviceName: 'RIVER 2', accessKeyHint: 'AKEY…' },
     { accessKey: 'AKEY1234567', secretKey: 'SECRET-xyz' },
     { clientId: CLIENT_ID, log: silentLogger },

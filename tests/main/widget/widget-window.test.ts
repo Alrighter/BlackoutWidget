@@ -25,6 +25,7 @@ const h = vi.hoisted(() => {
     readonly showInactive = vi.fn(() => { order.push('showInactive'); });
     readonly setVibrancy = vi.fn((type: unknown) => { order.push(`setVibrancy ${String(type)}`); });
     readonly setAlwaysOnTop = vi.fn((on: boolean) => { order.push(`setAlwaysOnTop ${on}`); });
+    readonly setShape = vi.fn(() => { order.push('setShape'); });
     readonly loadFile = vi.fn(() => Promise.resolve());
     readonly loadURL = vi.fn(() => Promise.resolve());
     constructor(readonly options: Record<string, unknown>) { FakeWin.all.push(this); }
@@ -50,8 +51,17 @@ vi.mock('electron', () => ({
 type Win = InstanceType<typeof h.FakeWin>;
 const fakeLog = () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
+/** One location, 'a', with no saved position; `restyle` changes its style the way the settings or the tray do. */
 function fakeStore(style: WidgetStyle = 'compact') {
-  return { getSettings: () => ({ widgetStyle: style, widgetPosition: null }), updateSettings: vi.fn() } as unknown as AppStore;
+  const location = { id: 'a', name: 'Дім', widgetStyle: style, widgetPosition: null };
+  const store = { getLocation: (id: string) => (id === 'a' ? location : undefined), updateLocation: vi.fn() } as unknown as AppStore;
+  return { store, location };
+}
+
+/** A style change: the store first, then main tells the widget to sync. */
+function restyle(widget: WidgetWindow, location: { widgetStyle: WidgetStyle }, style: WidgetStyle) {
+  location.widgetStyle = style;
+  widget.sync();
 }
 
 function fakePinner(): DesktopPinner {
@@ -85,10 +95,14 @@ function setup(o: { glass?: NativeGlass | null; style?: WidgetStyle; platform?: 
   const log = o.log ?? fakeLog();
   const pinner = fakePinner();
   const platform = o.platform ?? (o.glass ? 'darwin' : 'win32');
-  const widget = new WidgetWindow({ store: fakeStore(o.style), pinner, preload: '/preload.js', log, glass: o.glass ?? null, platform });
+  const { store, location } = fakeStore(o.style);
+  const widget = new WidgetWindow({
+    locationId: 'a', store, pinner, preload: '/preload.js', log, glass: o.glass ?? null, platform,
+    otherBounds: () => [], quitting: () => false,
+  });
   widget.show();
   const win = h.FakeWin.all.at(-1)!;
-  return { widget, win, pinner, log };
+  return { widget, win, pinner, log, location };
 }
 
 const backgrounds = (win: Win) => win.sent.filter(([ch]) => ch === IPC.background).map(([, bg]) => bg);
@@ -111,10 +125,10 @@ describe('WidgetWindow without a native glass (Windows, or macOS with native cal
     expect(win.options).toEqual(WINDOWS_OPTIONS);
   });
 
-  test('ready-to-show: bounds, show, pin; no background sent (the glass updater or the renderer\'s tint owns it)', () => {
+  test('ready-to-show: bounds, the Windows corner shape, show, pin; no background sent (the glass updater or the renderer\'s tint owns it)', () => {
     const { win } = setup();
     win.emit('ready-to-show');
-    expect(h.order).toEqual(['setBounds', 'showInactive', 'pin']);
+    expect(h.order).toEqual(['setBounds', 'setShape', 'showInactive', 'pin']);
     expect(backgrounds(win)).toEqual([]);
   });
 });
@@ -142,12 +156,12 @@ describe('WidgetWindow with the macOS native glass', () => {
 
   test('every style change re-applies the corners for the new card; the same style does nothing', () => {
     const glass = fakeGlass();
-    const { widget, win } = setup({ glass });
+    const { widget, win, location } = setup({ glass });
     win.emit('ready-to-show');
     h.order.length = 0;
-    widget.setStyle('ring');
-    widget.setStyle('ring');
-    widget.setStyle('timeline');
+    restyle(widget, location, 'ring');
+    restyle(widget, location, 'ring');
+    restyle(widget, location, 'timeline');
     expect(h.order).toEqual(['setBounds', 'round ring', 'setBounds', 'round timeline']);
     expect(backgrounds(win)).toEqual([{ kind: 'native' }]); // already native: not re-sent
   });
@@ -173,10 +187,10 @@ describe('WidgetWindow with the macOS native glass', () => {
     vi.useFakeTimers();
     try {
       const glass = fakeGlass(() => false);
-      const { widget, win } = setup({ glass });
+      const { widget, win, location } = setup({ glass });
       win.emit('ready-to-show');
       h.order.length = 0;
-      widget.setStyle('ring');
+      restyle(widget, location, 'ring');
       expect(h.order).toEqual(['setBounds']);
       win.destroyed = true;
       win.emit('closed'); // e.g. the window went away: WidgetWindow builds a new one a second later
@@ -216,6 +230,39 @@ describe('WidgetWindow on macOS: the first click and Cmd+M, with or without the 
   });
 });
 
+describe('WidgetWindow: one native glass shared by several widgets', () => {
+  test('another widget\'s failed corners turn the glass off: this one drops its vibrancy and sends «tint» at its next style change', () => {
+    let ok = true;
+    const glass = fakeGlass(() => ok);
+    const home = setup({ glass });
+    home.win.emit('ready-to-show');
+    const parents = setup({ glass });
+    ok = false;
+    parents.win.emit('ready-to-show'); // its rounding fails: the shared glass goes off
+    expect(glass.enabled).toBe(false);
+    h.order.length = 0;
+    restyle(home.widget, home.location, 'ring');
+    expect(home.win.setVibrancy).toHaveBeenCalledWith(null);
+    expect(backgrounds(home.win)).toEqual([{ kind: 'native' }, { kind: 'tint' }]);
+    expect(h.order).toEqual(['setBounds', 'setVibrancy null']); // no corner call on a glass that is off
+    restyle(home.widget, home.location, 'timeline');
+    expect(home.win.setVibrancy).toHaveBeenCalledTimes(1);
+    expect(backgrounds(home.win)).toEqual([{ kind: 'native' }, { kind: 'tint' }]);
+  });
+
+  test('a window created with vibrancy whose glass went off before it showed: no vibrancy, «tint»', () => {
+    let ok = true;
+    const glass = fakeGlass(() => ok);
+    const home = setup({ glass });
+    const parents = setup({ glass }); // both windows built with vibrancy
+    ok = false;
+    home.win.emit('ready-to-show'); // fails: the glass is off
+    parents.win.emit('ready-to-show');
+    expect(parents.win.setVibrancy).toHaveBeenCalledWith(null);
+    expect(backgrounds(parents.win)).toEqual([{ kind: 'tint' }]);
+  });
+});
+
 describe('WidgetWindow with the real MacNativeGlass over fake bindings', () => {
   function fakeObjc(o: { throwOnCornerRadius?: boolean } = {}) {
     const names = new Map<bigint, string>();
@@ -241,9 +288,9 @@ describe('WidgetWindow with the real MacNativeGlass over fake bindings', () => {
     const log = fakeLog();
     const glass = new MacNativeGlass(fakeObjc({ throwOnCornerRadius: true }).objc,
       createPinGuard(memFs().fs, '/data/pin-darwin.pending', '1.2.3', log), log);
-    const { widget, win } = setup({ glass, log });
+    const { widget, win, location } = setup({ glass, log });
     win.emit('ready-to-show');
-    widget.setStyle('ring'); // the glass is off now: no second attempt, no second line
+    restyle(widget, location, 'ring'); // the glass is off now: no second attempt, no second line
     expect(backgrounds(win)).toEqual([{ kind: 'tint' }]);
     expect(win.setVibrancy).toHaveBeenCalledTimes(1);
     expect(win.setVibrancy).toHaveBeenCalledWith(null);
@@ -254,9 +301,9 @@ describe('WidgetWindow with the real MacNativeGlass over fake bindings', () => {
   test('compact sends 22 at ready-to-show; a style change to ring re-sends 26', () => {
     const f = fakeObjc();
     const glass = new MacNativeGlass(f.objc, createPinGuard(memFs().fs, '/data/pin-darwin.pending', '1.2.3'));
-    const { widget, win } = setup({ glass });
+    const { widget, win, location } = setup({ glass });
     win.emit('ready-to-show');
-    widget.setStyle('ring');
+    restyle(widget, location, 'ring');
     expect(f.radii).toEqual([22, 26]);
     expect(backgrounds(win)).toEqual([{ kind: 'native' }]);
   });

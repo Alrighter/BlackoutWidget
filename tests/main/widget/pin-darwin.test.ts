@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import { createDesktopNative, createDesktopPinner, NoopPinner } from '../../../src/main/widget/desktop-pin';
+import { createDesktopNative, NoopPinner } from '../../../src/main/widget/desktop-pin';
 import { MacNativeGlass } from '../../../src/main/widget/glass-darwin';
 import { COREGRAPHICS_PATH, LIBOBJC_PATH, loadObjc, type KoffiLike, type ObjcBindings } from '../../../src/main/widget/objc-darwin';
 import {
@@ -53,7 +53,12 @@ function setup(o: { window?: bigint; throwOn?: string } = {}) {
   const guard = createPinGuard(m.fs, MARKER, '1.2.3');
   const f = fakeObjc({ ...o, guarded: () => m.files.has(MARKER) });
   const log = fakeLog();
-  return { m, f, log, pinner: new MacDesktopPinner(f.objc, guard, log) };
+  return { m, f, log, guard, pinner: new MacDesktopPinner(f.objc, guard, log) };
+}
+
+/** One widget's pinner, as main gets it: from the process's one DesktopNative. */
+function pinnerFrom(...args: Parameters<typeof createDesktopNative>) {
+  return createDesktopNative(...args).createPinner();
 }
 
 describe('MacDesktopPinner', () => {
@@ -78,13 +83,13 @@ describe('MacDesktopPinner', () => {
   });
 
   test('every native call of pin and unpin runs inside guard.run, and the marker is gone afterwards', () => {
-    const { m, f, pinner } = setup();
+    const { m, f, guard, pinner } = setup();
     const { win } = fakeWin();
     pinner.pin(win);
     pinner.unpin(win);
     expect(f.unguarded).toEqual([]);
     expect(f.msgs.length).toBeGreaterThan(0);
-    pinner.dispose(); // a good pin holds the marker for its grace period (next test); quitting ends it
+    guard.release(); // a good pin holds the marker for its grace period (next test); quitting ends it
     expect(m.files.has(MARKER)).toBe(false);
   });
 
@@ -104,12 +109,15 @@ describe('MacDesktopPinner', () => {
     }
   });
 
-  test('dispose (app will-quit) drops a held marker at once', () => {
+  test('dispose (its widget gone) keeps a held marker: the other widgets\' pins share it; the guard\'s release drops it', () => {
     vi.useFakeTimers();
     try {
-      const { m, pinner } = setup();
+      const { m, guard, pinner } = setup();
       pinner.pin(fakeWin().win);
       pinner.dispose();
+      expect(pinner.pinned).toBe(false);
+      expect(m.files.get(MARKER)).toBe('1.2.3');
+      guard.release();
       expect(m.files.has(MARKER)).toBe(false);
       expect(vi.getTimerCount()).toBe(0);
     } finally {
@@ -300,14 +308,14 @@ describe('loadObjc', () => {
   // The parse check with the real koffi moved to objc-darwin.smoke.test.ts: this fakes suite never loads the native addon.
 });
 
-describe('createDesktopPinner on macOS', () => {
+describe('createDesktopNative(...).createPinner() on macOS', () => {
   const opts = { userData: '/data', version: '1.2.3' };
   const marker = join('/data', 'pin-darwin.pending');
 
   test('darwin with the guard enabled gives a MacDesktopPinner and logs nothing', () => {
     const log = fakeLog();
     const m = memFs();
-    const pinner = createDesktopPinner(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
+    const pinner = pinnerFrom(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
     expect(pinner).toBeInstanceOf(MacDesktopPinner);
     expect(log.warn).not.toHaveBeenCalled();
     expect(log.error).not.toHaveBeenCalled();
@@ -317,7 +325,7 @@ describe('createDesktopPinner on macOS', () => {
   test('loadObjc runs inside the guard, with the marker at <userData>/pin-darwin.pending', () => {
     const m = memFs();
     let markerDuringLoad: string | undefined;
-    createDesktopPinner(fakeLog(), opts, {
+    pinnerFrom(fakeLog(), opts, {
       platform: 'darwin', fs: m.fs, loadObjc: () => { markerDuringLoad = m.files.get(marker); return fakeObjc().objc; },
     });
     expect(markerDuringLoad).toBe('1.2.3');
@@ -327,7 +335,7 @@ describe('createDesktopPinner on macOS', () => {
     const log = fakeLog();
     const m = memFs({ [marker]: '1.2.3' });
     const load = vi.fn(() => fakeObjc().objc);
-    const pinner = createDesktopPinner(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: load });
+    const pinner = pinnerFrom(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: load });
     expect(pinner).toBeInstanceOf(NoopPinner);
     expect(log.warn).toHaveBeenCalledTimes(1);
     expect(log.error).not.toHaveBeenCalled();
@@ -337,7 +345,7 @@ describe('createDesktopPinner on macOS', () => {
 
   test('darwin with a marker from another version pins again', () => {
     const m = memFs({ [marker]: '1.2.2' });
-    const pinner = createDesktopPinner(fakeLog(), opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
+    const pinner = pinnerFrom(fakeLog(), opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
     expect(pinner).toBeInstanceOf(MacDesktopPinner);
     expect(m.files.has(marker)).toBe(false);
   });
@@ -345,7 +353,7 @@ describe('createDesktopPinner on macOS', () => {
   test('darwin with a throwing loadObjc gives NoopPinner and exactly one error; the marker is cleared', () => {
     const log = fakeLog();
     const m = memFs();
-    const pinner = createDesktopPinner(log, opts, {
+    const pinner = pinnerFrom(log, opts, {
       platform: 'darwin', fs: m.fs, loadObjc: () => { throw new Error('dlopen failed'); },
     });
     expect(pinner).toBeInstanceOf(NoopPinner);
@@ -358,7 +366,7 @@ describe('createDesktopPinner on macOS', () => {
     const log = fakeLog();
     const m = memFs({ [marker]: '1.2.3' });
     m.fs.readFileSync = () => { throw new Error('EACCES'); };
-    const pinner = createDesktopPinner(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
+    const pinner = pinnerFrom(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
     expect(pinner).toBeInstanceOf(NoopPinner);
     expect(log.error).toHaveBeenCalledTimes(1);
   });
@@ -367,7 +375,7 @@ describe('createDesktopPinner on macOS', () => {
     const log = fakeLog();
     const m = memFs();
     const load = vi.fn(() => fakeObjc().objc);
-    const pinner = createDesktopPinner(log, opts, { platform: 'linux', fs: m.fs, loadObjc: load });
+    const pinner = pinnerFrom(log, opts, { platform: 'linux', fs: m.fs, loadObjc: load });
     expect(pinner).toBeInstanceOf(NoopPinner);
     expect(log.warn).toHaveBeenCalledTimes(1);
     expect(load).not.toHaveBeenCalled();
@@ -377,7 +385,7 @@ describe('createDesktopPinner on macOS', () => {
   test('a userData that join() rejects is caught like any other failure: NoopPinner, one error, no throw', () => {
     const log = fakeLog();
     const bad = { userData: undefined as unknown as string, version: '1.2.3' };
-    expect(createDesktopPinner(log, bad, { platform: 'darwin', fs: memFs().fs, loadObjc: () => fakeObjc().objc }))
+    expect(pinnerFrom(log, bad, { platform: 'darwin', fs: memFs().fs, loadObjc: () => fakeObjc().objc }))
       .toBeInstanceOf(NoopPinner);
     expect(log.error).toHaveBeenCalledTimes(1);
   });
@@ -391,31 +399,87 @@ describe('createDesktopNative: the pinner and the native glass share one runtime
     const log = fakeLog();
     const load = vi.fn(() => fakeObjc().objc);
     const native = createDesktopNative(log, opts, { platform: 'darwin', fs: memFs().fs, loadObjc: load });
-    expect(native.pinner).toBeInstanceOf(MacDesktopPinner);
+    expect(native.createPinner()).toBeInstanceOf(MacDesktopPinner);
     expect(native.glass).toBeInstanceOf(MacNativeGlass);
     expect(load).toHaveBeenCalledTimes(1);
     expect(log.error).not.toHaveBeenCalled();
     expect(log.warn).not.toHaveBeenCalled();
   });
 
-  test('both under the one guard: a held glass marker is dropped by the pinner\'s dispose at quit', () => {
+  test('all under the one guard: a held glass marker outlives a widget\'s pinner dispose and goes at release (quit)', () => {
     vi.useFakeTimers();
     try {
       const m = memFs();
       const native = createDesktopNative(fakeLog(), opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
       expect(native.glass?.round(fakeWin().win, 'compact')).toBe(true);
       expect(m.files.get(marker)).toBe('1.2.3');
-      native.pinner.dispose();
+      native.createPinner().dispose();
+      expect(m.files.get(marker)).toBe('1.2.3');
+      native.release();
       expect(m.files.has(marker)).toBe(false);
     } finally {
       vi.useRealTimers();
     }
   });
 
+  test('two widgets: a pinner built while the first one\'s pin still holds the marker pins too; the runtime loads once', () => {
+    vi.useFakeTimers();
+    try {
+      const log = fakeLog();
+      const m = memFs();
+      const load = vi.fn(() => fakeObjc().objc);
+      const native = createDesktopNative(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: load });
+      const home = native.createPinner();
+      home.pin(fakeWin().win);
+      expect(m.files.get(marker)).toBe('1.2.3'); // held for PIN_HOLD_MS
+      const parents = native.createPinner(); // e.g. a location added a moment later
+      expect(parents).toBeInstanceOf(MacDesktopPinner);
+      parents.pin(fakeWin().win);
+      expect([home.pinned, parents.pinned]).toEqual([true, true]);
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(log.warn).not.toHaveBeenCalled();
+      expect(log.error).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('one widget going away keeps the marker the other widget\'s later pin holds', () => {
+    vi.useFakeTimers();
+    try {
+      const m = memFs();
+      const native = createDesktopNative(fakeLog(), opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
+      const home = native.createPinner();
+      const parents = native.createPinner();
+      home.pin(fakeWin().win);
+      vi.advanceTimersByTime(5_000);
+      parents.pin(fakeWin().win); // holds until 15 s
+      home.dispose(); // its location deleted
+      vi.advanceTimersByTime(PIN_HOLD_MS - 1);
+      expect(m.files.get(marker)).toBe('1.2.3');
+      vi.advanceTimersByTime(1);
+      expect(m.files.has(marker)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a pinner that can\'t be built (the marker can\'t be written) is a NoopPinner with one error; the next one may work', () => {
+    const log = fakeLog();
+    const m = memFs();
+    const native = createDesktopNative(log, opts, { platform: 'darwin', fs: m.fs, loadObjc: () => fakeObjc().objc });
+    const write = m.fs.writeFileSync;
+    m.fs.writeFileSync = () => { throw new Error('EROFS'); };
+    expect(native.createPinner()).toBeInstanceOf(NoopPinner);
+    expect(log.error).toHaveBeenCalledTimes(1);
+    m.fs.writeFileSync = write;
+    expect(native.createPinner()).toBeInstanceOf(MacDesktopPinner);
+  });
+
   test('darwin with a disabled guard: NoopPinner, no glass (the tint), one warning', () => {
     const log = fakeLog();
     const native = createDesktopNative(log, opts, { platform: 'darwin', fs: memFs({ [marker]: '1.2.3' }).fs, loadObjc: () => fakeObjc().objc });
-    expect(native.pinner).toBeInstanceOf(NoopPinner);
+    expect(native.createPinner()).toBeInstanceOf(NoopPinner);
     expect(native.glass).toBeNull();
     expect(log.warn).toHaveBeenCalledTimes(1);
     expect(log.error).not.toHaveBeenCalled();
@@ -426,7 +490,7 @@ describe('createDesktopNative: the pinner and the native glass share one runtime
     const native = createDesktopNative(log, opts, {
       platform: 'darwin', fs: memFs().fs, loadObjc: () => { throw new Error('dlopen failed'); },
     });
-    expect(native.pinner).toBeInstanceOf(NoopPinner);
+    expect(native.createPinner()).toBeInstanceOf(NoopPinner);
     expect(native.glass).toBeNull();
     expect(log.error).toHaveBeenCalledTimes(1);
   });
@@ -435,7 +499,7 @@ describe('createDesktopNative: the pinner and the native glass share one runtime
     const log = fakeLog();
     const broken = fakeObjc({ throwOn: 'sel' }).objc;
     const native = createDesktopNative(log, opts, { platform: 'darwin', fs: memFs().fs, loadObjc: () => broken });
-    expect(native.pinner).toBeInstanceOf(NoopPinner);
+    expect(native.createPinner()).toBeInstanceOf(NoopPinner);
     expect(native.glass).toBeNull();
     expect(log.error).toHaveBeenCalledTimes(1);
   });

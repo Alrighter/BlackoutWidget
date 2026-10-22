@@ -1,5 +1,6 @@
-import stale from '../fixtures/dtek-krem/getHomeNum-stale-updateFact.json';
-import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage, hasOutageFields, hasActiveOutage, queueLabelFromId } from '../../src/main/providers/dtek-krem/parse';
+import stale from '../fixtures/dtek/getHomeNum-stale-updateFact.json';
+import { parseHomeNumResponse, hourToSlots, factToDays, deriveLines, parseHouses, parseCurrentOutage, hasOutageFields, hasActiveOutage, queueLabelFromId, isQuietToday, factDays, DTEK_QUIET_NOTE } from '../../src/main/providers/dtek/parse';
+import mirror from '../fixtures/dtek-feeds/mirror-kyiv-region.json';
 import { ProviderError } from '../../src/main/providers/types';
 const resp = parseHomeNumResponse(stale);
 const fact = resp.fact!; const names = resp.preset!.sch_names;
@@ -101,4 +102,33 @@ test('queueLabelFromId', () => {
   expect(queueLabelFromId('GPV4.2')).toBe('Черга 4.2');
   expect(queueLabelFromId('GPV12')).toBe('Черга 12');
   expect(queueLabelFromId('weird')).toBe('weird');
+});
+
+const tsOf = (iso: string) => String(Date.parse(iso) / 1000);
+const TODAY_TS = tsOf('2026-10-20T09:00:00Z');
+test('isQuietToday: answered normally (update stamp present) and no key of data is today', () => {
+  expect(isQuietToday({ data: {}, update: '12:17 17.10.2026', today: 0 }, '2026-10-20')).toBe(true);
+  expect(isQuietToday({ data: { [tsOf('2026-10-21T09:00:00Z')]: { 'GPV1.1': {} } }, update: '12:17 17.10.2026', today: 0 }, '2026-10-20')).toBe(true);
+});
+test('isQuietToday: a blank or missing update stamp is never a quiet day', () => {
+  expect(isQuietToday({ data: {}, update: '', today: 0 }, '2026-10-20')).toBe(false);
+  expect(isQuietToday({ data: {}, update: '   ', today: 0 }, '2026-10-20')).toBe(false);
+  expect(isQuietToday({ data: {}, today: 0 } as any, '2026-10-20')).toBe(false);
+});
+test('isQuietToday: today present for other groups only is not quiet', () => {
+  expect(isQuietToday({ data: { [TODAY_TS]: { 'GPV9.9': {} } }, update: '12:17 17.10.2026', today: 0 }, '2026-10-20')).toBe(false);
+});
+
+test('factDays: a quiet today is 48 on slots plus the quiet note', () => {
+  const quiet = { data: {}, update: '17.10.2026 09:55', today: 1792616400 };
+  expect(factDays(quiet, 'GPV1.1', '2026-10-22')).toEqual({
+    days: [{ date: '2026-10-22', slots: Array(48).fill('on') }],
+    note: DTEK_QUIET_NOTE,
+  });
+});
+test('factDays: a published today is factToDays as is', () => {
+  const f = (mirror as unknown as { fact: Parameters<typeof factToDays>[0] }).fact;
+  const r = factDays(f, 'GPV1.1', '2026-10-22');
+  expect(r.days).toEqual(factToDays(f, 'GPV1.1'));
+  expect(r.note).toBeUndefined();
 });

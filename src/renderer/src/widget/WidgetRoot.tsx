@@ -1,6 +1,6 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import type { RendererApi } from '../../../shared/ipc';
-import type { AppState, WidgetBackground } from '../../../shared/types';
+import type { WidgetBackground, WidgetState } from '../../../shared/types';
 import { usePointerGestures } from './usePointerGestures';
 import { Widget } from './Widget';
 
@@ -38,7 +38,7 @@ function MoveOverlay({ onDone }: { onDone(): void }) {
 
 /** Subscribes to main-process state and ticks the clock on minute boundaries. The root element is where gestures attach. */
 export function WidgetRoot({ api }: { api: RendererApi }) {
-  const [state, setState] = useState<AppState | null>(null);
+  const [state, setState] = useState<WidgetState | null>(null);
   const [background, setBackground] = useState<WidgetBackground>({ kind: 'tint' });
   const [now, setNow] = useState(() => new Date());
   const [moving, setMoving] = useState(false);
@@ -49,16 +49,21 @@ export function WidgetRoot({ api }: { api: RendererApi }) {
   useEffect(() => {
     let alive = true;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    let pushed = false;
     const load = () => {
-      api.getState().then(
-        // A pushed state is always newer than the initial fetch, so never overwrite it.
-        s => { if (alive) setState(prev => prev ?? s); },
-        (e: unknown) => { console.error('widget getState failed', e); if (alive) retry = setTimeout(load, 2000); },
+      api.getWidgetState().then(
+        // A pushed state is always newer than the initial fetch, so never overwrite it. Null: main doesn't know this
+        // window yet (a reconcile in flight), so try again rather than show anything.
+        s => {
+          if (!alive) return;
+          if (s) setState(prev => prev ?? s); else if (!pushed) retry = setTimeout(load, 2000);
+        },
+        (e: unknown) => { console.error('widget getWidgetState failed', e); if (alive) retry = setTimeout(load, 2000); },
       );
     };
     load();
     // A push is fresh data: re-read the clock with it, rather than keep a `now` up to a minute old.
-    const offState = api.onState(s => { setState(s); setNow(new Date()); });
+    const offState = api.onWidgetState(s => { pushed = true; setState(s); setNow(new Date()); });
     const offBg = api.onBackground(setBackground);
     return () => { alive = false; clearTimeout(retry); offState(); offBg(); };
   }, [api]);

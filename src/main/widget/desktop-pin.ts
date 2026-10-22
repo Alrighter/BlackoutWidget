@@ -45,21 +45,27 @@ export interface DesktopPinnerEnv {
 
 const nodeFs: PinGuardFs = { existsSync, readFileSync, rmSync, writeFileSync };
 
-/** The widget window's native side: the desktop pinner and, on macOS, the native glass (null: the tint glass). */
+/**
+ * The widgets' native side, built once per process: a pinner per widget (a pinner tracks one window) and, on macOS,
+ * the native glass they all share. On macOS every pinner and the glass run behind one crash guard: per-widget guards
+ * over the one marker file would mistake another widget's hold for a crash.
+ */
 export interface DesktopNative {
-  pinner: DesktopPinner;
-  glass: NativeGlass | null;
+  /** A new pinner for one widget window. Never throws: a pinner that can't be built is a NoopPinner, logged. */
+  createPinner(): DesktopPinner;
+  /** macOS: the native glass every widget shares; null elsewhere or with native calls off (the tint glass). */
+  readonly glass: NativeGlass | null;
+  /** App will-quit, after the widgets are gone (macOS): drops the crash marker still held after the last native call. */
+  release(): void;
 }
 
 export function createDesktopNative(log: Logger, opts: DesktopPinnerOptions, env: Partial<DesktopPinnerEnv> = {}): DesktopNative {
   const platform = env.platform ?? process.platform;
   if (platform === 'darwin') return createMacNative(log, opts, env.fs ?? nodeFs, env.loadObjc ?? (() => loadObjc()));
-  return { pinner: createOtherPinner(log, platform), glass: null };
+  return { createPinner: () => createOtherPinner(log, platform), glass: null, release: () => {} };
 }
 
-export function createDesktopPinner(log: Logger, opts: DesktopPinnerOptions, env: Partial<DesktopPinnerEnv> = {}): DesktopPinner {
-  return createDesktopNative(log, opts, env).pinner;
-}
+const noNative: DesktopNative = { createPinner: () => new NoopPinner(), glass: null, release: () => {} };
 
 function createOtherPinner(log: Logger, platform: NodeJS.Platform): DesktopPinner {
   if (platform === 'win32') {
@@ -77,7 +83,7 @@ function createOtherPinner(log: Logger, platform: NodeJS.Platform): DesktopPinne
 
 /**
  * A wrong FFI call kills the process instead of throwing, so the native side runs behind one crash guard, shared by
- * the pinner and the glass: if the previous run of this version died inside it, both stay off. Each fallback logs one
+ * every pinner and the glass: if the previous run of this version died inside it, all stay off. Each fallback logs one
  * line.
  */
 function createMacNative(log: Logger, opts: DesktopPinnerOptions, fs: PinGuardFs, load: () => ObjcBindings): DesktopNative {
@@ -87,14 +93,23 @@ function createMacNative(log: Logger, opts: DesktopPinnerOptions, fs: PinGuardFs
     if (guard.disabled) {
       log.warn(`macOS native window calls crashed Blackout Widget ${opts.version} before; using NoopPinner (widget not ` +
         `pinned) and the tint glass. Delete ${marker} to try again`);
-      return { pinner: new NoopPinner(), glass: null };
+      return noNative;
     }
     // Loading runs under the guard too: a native crash loading koffi or the dylibs must not become a crash loop.
     const objc = guard.run(load);
-    return { pinner: new MacDesktopPinner(objc, guard, log), glass: new MacNativeGlass(objc, guard, log) };
+    const glass = new MacNativeGlass(objc, guard, log);
+    const createPinner = (): DesktopPinner => {
+      try {
+        return new MacDesktopPinner(objc, guard, log);
+      } catch (err) {
+        log.error('macOS desktop pinning unavailable for this widget, falling back to NoopPinner (widget not pinned)', err);
+        return new NoopPinner();
+      }
+    };
+    return { createPinner, glass, release: () => guard.release() };
   } catch (err) {
     log.error('macOS desktop pinning and native glass unavailable, falling back to NoopPinner (widget not pinned) ' +
       'and the tint glass', err);
-    return { pinner: new NoopPinner(), glass: null };
+    return noNative;
   }
 }

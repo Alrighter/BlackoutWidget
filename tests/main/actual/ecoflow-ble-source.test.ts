@@ -1,0 +1,464 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { decodeHeartbeat } from '../../../src/main/actual/ecoflow/ble/heartbeats';
+import { ADAPTER_UNREADY_MS, INV_SILENT_MS, type BleLinkLike, type LinkEvent } from '../../../src/main/actual/ecoflow/ble/link';
+import { decodePacket } from '../../../src/main/actual/ecoflow/ble/protocol';
+import {
+  DRAIN_HOLD_MS, EcoflowBleSource, LINK_GRACE_MS, ON_BATTERY_DETAIL, PD_FRESH_MS, READING_MS, REASON_REPEAT_MS,
+} from '../../../src/main/actual/ecoflow/ble/source';
+import type { AdapterState } from '../../../src/main/actual/ecoflow/ble/messages';
+import type { ActualReading } from '../../../src/main/actual/types';
+import { BLE_REASON } from '../../../src/shared/ecoflow-ble';
+import { INV } from '../../helpers/ble-station';
+
+const SN = 'R601ZEB4XXXX0000';
+const OTHER_SN = 'R601ZEB4YYYY1111';
+const TOKEN = '0123456789ABCDEF0123456789ABCDEF';
+const T0 = Date.parse('2026-10-19T10:00:00Z');
+
+class FakeLink implements BleLinkLike {
+  cbs = new Set<(e: LinkEvent) => void>();
+  connected: string | null = null;
+  adapter: AdapterState | null = null;
+  failed = false;
+  watch = vi.fn<(sn: string, token: string) => void>();
+  unwatch = vi.fn<() => void>();
+  scan = vi.fn(() => Promise.resolve({ adverts: [] }));
+  connectedSn() { return this.connected; }
+  adapterState() { return this.adapter; }
+  hostFailed() { return this.failed; }
+  onEvent(cb: (e: LinkEvent) => void) { this.cbs.add(cb); return () => { this.cbs.delete(cb); }; }
+  emit(e: LinkEvent) { for (const cb of [...this.cbs]) cb(e); }
+}
+
+function setup() {
+  const link = new FakeLink();
+  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const source = new EcoflowBleSource({ sn: SN, token: TOKEN }, link, { log });
+  const readings: ActualReading[] = [];
+  const start = () => source.start(r => readings.push(r));
+  const state = (state: 'connected' | 'lost' | 'refused' | 'stalled' | 'unsupported' | 'searching', sn = SN) =>
+    link.emit({ ev: 'link', sn, state });
+  const inv = (fields: Record<string, number | string>, sn = SN) => link.emit({ ev: 'heartbeat', sn, module: 'inv', fields });
+  const mppt = (fields: Record<string, number>) => link.emit({ ev: 'heartbeat', sn: SN, module: 'mppt', fields });
+  const pd = (fields: Record<string, number>) => link.emit({ ev: 'heartbeat', sn: SN, module: 'pd', fields });
+  /** PD heartbeats every 2 s for `ms`. */
+  const pdFor = (ms: number, fields: Record<string, number>) => {
+    for (let t = 0; t < ms; t += 2_000) {
+      pd(fields);
+      vi.advanceTimersByTime(2_000);
+    }
+  };
+  const GRID = { acInVol: 119_189, acInFreq: 60, inputWatts: 100 };
+  return { link, log, source, readings, start, state, inv, mppt, pd, pdFor, GRID };
+}
+
+const DRAIN = { wattsInSum: 0, wattsOutSum: 12 };
+
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(T0); });
+afterEach(() => { vi.useRealTimers(); });
+
+describe('EcoflowBleSource', () => {
+  it('start watches the station with its token', () => {
+    const { link, start } = setup();
+    start();
+    expect(link.watch).toHaveBeenCalledWith(SN, TOKEN);
+  });
+
+  it('inverter heartbeat with 119189 mV reports on', () => {
+    const { start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    inv(GRID);
+    expect(readings).toEqual([{ power: 'on', observedAt: new Date(T0).toISOString(), detail: 'на вході 119 В' }]);
+  });
+
+  it('0 V and 0 Hz reports off', () => {
+    const { start, state, inv, readings } = setup();
+    start();
+    state('connected');
+    inv({ acInVol: 0, acInFreq: 0, inputWatts: 0 });
+    expect(readings).toHaveLength(1);
+    expect(readings[0].power).toBe('off');
+  });
+
+  it('an inverter heartbeat without both voltage and frequency gives no verdict: a 28-byte payload is never «off»', () => {
+    const { start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    // 0 V and no frequency would read «off»: the frequency is what tells a real zero from a payload cut short.
+    inv(decodeHeartbeat('inv', Buffer.alloc(28)));
+    inv(decodeHeartbeat('inv', decodePacket(INV).payload.subarray(0, 28)));
+    inv({ acInFreq: 0, inputWatts: 0 });
+    expect(readings).toEqual([]);
+    // Nor does it count as the inverter reporting: kept up every 5 s, the silence reason still comes at 20 s.
+    for (let i = 0; i < 6; i++) {
+      vi.advanceTimersByTime(5_000);
+      inv(decodeHeartbeat('inv', Buffer.alloc(28)));
+    }
+    expect(readings.map(r => r.reason)).toEqual([BLE_REASON.invSilent]);
+    inv(GRID);
+    expect(readings.at(-1)).toMatchObject({ power: 'on' });
+  });
+
+  it('throttles to one reading per 10 s unless the power changes', () => {
+    const { start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    inv(GRID);
+    vi.advanceTimersByTime(READING_MS - 1000);
+    inv(GRID);
+    expect(readings).toHaveLength(1);
+    inv({ acInVol: 0, acInFreq: 0, inputWatts: 0 });
+    expect(readings.map(r => r.power)).toEqual(['on', 'off']);
+    vi.advanceTimersByTime(READING_MS);
+    inv({ acInVol: 0, acInFreq: 0, inputWatts: 0 });
+    expect(readings).toHaveLength(3);
+    expect(readings[2].observedAt).toBe(new Date(T0 + READING_MS - 1000 + READING_MS).toISOString());
+  });
+
+  it('20 s without an inverter heartbeat reports unknown, with the AC-off hint when MPPT says 0', () => {
+    const a = setup();
+    a.start();
+    a.state('connected');
+    a.inv(a.GRID);
+    a.readings.length = 0;
+    vi.advanceTimersByTime(INV_SILENT_MS - 1000);
+    expect(a.readings).toEqual([]);
+    vi.advanceTimersByTime(2000);
+    expect(a.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.invSilent })]);
+
+    const b = setup();
+    b.start();
+    b.state('connected');
+    b.mppt({ cfgAcEnabled: 0 });
+    vi.advanceTimersByTime(INV_SILENT_MS + 1000);
+    expect(b.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.invSilent + BLE_REASON.acOffHint })]);
+  });
+
+  it('a drop shorter than 30 s reports nothing; longer reports «станція поза зв’язком Bluetooth»', () => {
+    const { start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    inv(GRID);
+    readings.length = 0;
+    vi.advanceTimersByTime(5_000);
+    state('lost');
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1000);
+    expect(readings).toEqual([]);
+    state('connected');
+    inv(GRID);
+    vi.advanceTimersByTime(5_000);
+    state('lost');
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    const last = readings[readings.length - 1];
+    expect(last).toMatchObject({ power: 'unknown', reason: 'станція поза зв’язком Bluetooth' });
+  });
+
+  it('a sleep between ticks starts a fresh grace: nothing at the wake, the usual waits after it', () => {
+    const MIN10 = 10 * 60_000;
+    // Lost at the suspend; the tick after the wake sees a 10 min jump.
+    const a = setup();
+    a.start();
+    a.state('connected');
+    a.inv(a.GRID);
+    a.state('lost');
+    a.readings.length = 0;
+    vi.setSystemTime(Date.now() + MIN10);
+    vi.advanceTimersByTime(1_000);
+    expect(a.readings).toEqual([]);
+    vi.advanceTimersByTime(LINK_GRACE_MS - 2_000);
+    expect(a.readings).toEqual([]);
+    vi.advanceTimersByTime(2_000);
+    expect(a.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.lost })]);
+    a.source.stop();
+
+    // The host's first event after the resume can come before the tick.
+    const b = setup();
+    b.start();
+    b.state('connected');
+    b.inv(b.GRID);
+    b.state('lost');
+    b.readings.length = 0;
+    vi.setSystemTime(Date.now() + MIN10);
+    b.state('searching');
+    expect(b.readings).toEqual([]);
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1_000);
+    expect(b.readings).toEqual([]);
+    vi.advanceTimersByTime(1_000);
+    expect(b.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.lost })]);
+    b.source.stop();
+
+    // Still connected across the gap: the inverter's silence counts from the wake too.
+    const c = setup();
+    c.start();
+    c.state('connected');
+    c.inv(c.GRID);
+    c.readings.length = 0;
+    vi.setSystemTime(Date.now() + MIN10);
+    vi.advanceTimersByTime(1_000);
+    expect(c.readings).toEqual([]);
+    vi.advanceTimersByTime(INV_SILENT_MS - 2_000);
+    expect(c.readings).toEqual([]);
+    vi.advanceTimersByTime(2_000);
+    expect(c.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.invSilent })]);
+    c.source.stop();
+
+    // A clock set back an hour does not hold the grace for that hour.
+    const d = setup();
+    d.start();
+    d.state('lost');
+    vi.setSystemTime(Date.now() - 60 * 60_000);
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1_000);
+    expect(d.readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.lost })]);
+  });
+
+  it('never connecting reports lost only after the grace from start', () => {
+    const { start, readings } = setup();
+    start();
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1000);
+    expect(readings).toEqual([]);
+    vi.advanceTimersByTime(2000);
+    expect(readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.lost })]);
+  });
+
+  it('refused / stalled / unsupported / bt-off / host-failed map to their reasons', () => {
+    const cases: Array<[string, (s: ReturnType<typeof setup>) => void, string]> = [
+      ['refused', s => s.state('refused'), BLE_REASON.refused],
+      ['stalled', s => s.state('stalled'), BLE_REASON.stalled],
+      ['unsupported', s => s.state('unsupported'), BLE_REASON.unsupported],
+      ['bt-off', s => s.link.emit({ ev: 'adapter', state: 'poweredOff' }), BLE_REASON['bt-off']],
+      ['bt-denied', s => s.link.emit({ ev: 'adapter', state: 'unauthorized' }), BLE_REASON['bt-denied']],
+      ['bt-missing', s => s.link.emit({ ev: 'adapter', state: 'unsupported' }), BLE_REASON['bt-missing']],
+      ['bt-unavailable', s => s.link.emit({ ev: 'adapter', state: 'resetting' }), BLE_REASON['bt-unavailable']],
+      ['host-failed', s => s.link.emit({ ev: 'host-failed' }), BLE_REASON['host-failed']],
+    ];
+    for (const [name, apply, reason] of cases) {
+      const s = setup();
+      s.start();
+      apply(s);
+      vi.advanceTimersByTime(LINK_GRACE_MS - 1000);
+      expect(s.readings, name).toEqual([]);
+      vi.advanceTimersByTime(2000);
+      expect(s.readings, name).toEqual([{ power: 'unknown', observedAt: expect.any(String), reason }]);
+    }
+  });
+
+  it('host-failed ends on an adapter state other than unknown, not on unknown', () => {
+    const { link, start, readings } = setup();
+    start();
+    link.emit({ ev: 'host-failed' });
+    link.emit({ ev: 'adapter', state: 'unknown' });
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    expect(readings[0].reason).toBe(BLE_REASON['host-failed']);
+    link.emit({ ev: 'adapter', state: 'poweredOn' });
+    vi.advanceTimersByTime(REASON_REPEAT_MS);
+    expect(readings[readings.length - 1].reason).toBe(BLE_REASON.lost);
+  });
+
+  it('repeats an unknown reason every 60 s', () => {
+    const { start, readings } = setup();
+    start();
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    expect(readings).toHaveLength(1);
+    vi.advanceTimersByTime(REASON_REPEAT_MS - 2000);
+    expect(readings).toHaveLength(1);
+    vi.advanceTimersByTime(3000);
+    expect(readings).toHaveLength(2);
+    vi.advanceTimersByTime(REASON_REPEAT_MS);
+    expect(readings).toHaveLength(3);
+  });
+
+  it('ignores events of another station and non-link events', () => {
+    const { link, start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected', OTHER_SN);
+    inv(GRID, OTHER_SN);
+    link.emit({ ev: 'log', level: 'info', msg: 'x' } as unknown as LinkEvent);
+    expect(readings).toEqual([]);
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    expect(readings[0].reason).toBe(BLE_REASON.lost);
+  });
+
+  it('starts connected when the link already is', () => {
+    const { link, start, readings } = setup();
+    link.connected = SN;
+    start();
+    vi.advanceTimersByTime(LINK_GRACE_MS + INV_SILENT_MS);
+    expect(readings[0].reason).toBe(BLE_REASON.invSilent);
+  });
+
+  it('a throwing consumer does not stop the loop: the next reason still arrives', () => {
+    const { start, source, log } = setup();
+    let calls = 0;
+    source.start(() => { calls++; throw new Error('boom'); });
+    void start;
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    expect(calls).toBe(1);
+    expect(log.warn).toHaveBeenCalledWith('ecoflow-ble: reading handler failed');
+    vi.advanceTimersByTime(REASON_REPEAT_MS);
+    expect(calls).toBe(2);
+  });
+
+  it('seeds the adapter state from a link that already reports it', () => {
+    const a = setup();
+    a.link.adapter = 'poweredOff';
+    a.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1000);
+    expect(a.readings).toEqual([]);
+    vi.advanceTimersByTime(2000);
+    expect(a.readings[0].reason).toBe(BLE_REASON['bt-off']);
+
+    const b = setup();
+    b.link.failed = true;
+    b.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    expect(b.readings[0].reason).toBe(BLE_REASON['host-failed']);
+  });
+
+  it('an adapter unknown for under 10 s is no problem; one that lasts is bt-unavailable', () => {
+    const a = setup();
+    a.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS - 1000);
+    a.link.emit({ ev: 'adapter', state: 'unknown' });
+    vi.advanceTimersByTime(ADAPTER_UNREADY_MS - 1000);
+    a.link.emit({ ev: 'adapter', state: 'poweredOn' });
+    vi.advanceTimersByTime(3000);
+    expect(a.readings.map(r => r.reason)).toEqual([BLE_REASON.lost]);
+
+    const b = setup();
+    b.start();
+    vi.advanceTimersByTime(LINK_GRACE_MS + 1000);
+    b.link.emit({ ev: 'adapter', state: 'unknown' });
+    vi.advanceTimersByTime(ADAPTER_UNREADY_MS - 2000);
+    expect(b.readings.map(r => r.reason)).toEqual([BLE_REASON.lost]);
+    vi.advanceTimersByTime(3000);
+    expect(b.readings.map(r => r.reason)).toEqual([BLE_REASON.lost, BLE_REASON['bt-unavailable']]);
+  });
+
+  it('the AC-off hint prefers MPPT over an older inverter value', () => {
+    const { start, state, inv, mppt, readings } = setup();
+    start();
+    state('connected');
+    inv({ cfgAcEnabled: 0, acInVol: 0, acInFreq: 0, inputWatts: 0 });
+    mppt({ cfgAcEnabled: 1 });
+    readings.length = 0;
+    vi.advanceTimersByTime(INV_SILENT_MS + 1000);
+    expect(readings[0].reason).toBe(BLE_REASON.invSilent);
+  });
+
+  it('a heartbeat after the link dropped is ignored', () => {
+    const { start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    state('lost');
+    inv(GRID);
+    expect(readings).toEqual([]);
+  });
+
+  describe('on battery: the inverter silent, PD 0 W in and some W out', () => {
+    it('reports off once it has held 30 s, with no unknown before it', () => {
+      const { start, state, mppt, pdFor, readings } = setup();
+      start();
+      state('connected');
+      mppt({ cfgAcEnabled: 0 });
+      pdFor(DRAIN_HOLD_MS - 2_000, DRAIN);
+      expect(readings).toEqual([]);
+      pdFor(4_000, DRAIN);
+      expect(readings).toEqual([{ power: 'off', observedAt: new Date(T0 + DRAIN_HOLD_MS).toISOString(), detail: ON_BATTERY_DETAIL }]);
+      pdFor(60_000, DRAIN);
+      expect(readings.every(r => r.power === 'off')).toBe(true);
+      expect(readings.length).toBeGreaterThanOrEqual(6);
+    });
+
+    it('holds while the input stays 0, even when the output falls to 0', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      pdFor(2 * REASON_REPEAT_MS, { wattsInSum: 0, wattsOutSum: 0 });
+      expect(readings.length).toBeGreaterThan(1);
+      expect(readings.every(r => r.power === 'off')).toBe(true);
+    });
+
+    it('nothing plugged in (0 W out) stays unknown: it looks the same as the grid on and idle', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(2 * DRAIN_HOLD_MS, { wattsInSum: 0, wattsOutSum: 0 });
+      expect(readings).toEqual([expect.objectContaining({ power: 'unknown', reason: BLE_REASON.invSilent })]);
+    });
+
+    it('input above 0 ends it: back to unknown, never on', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      expect(readings.at(-1)?.power).toBe('off');
+      pdFor(4_000, { wattsInSum: 50, wattsOutSum: 12 });
+      expect(readings.at(-1)).toMatchObject({ power: 'unknown', reason: BLE_REASON.invSilent });
+      expect(readings.some(r => r.power === 'on')).toBe(false);
+    });
+
+    it('the inverter wins: its heartbeat gives the verdict and keeps it', () => {
+      const { start, state, inv, pd, pdFor, readings, GRID } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      expect(readings.at(-1)?.power).toBe('off');
+      const n = readings.length;
+      for (let i = 0; i < 15; i++) {
+        inv(GRID);
+        pd(DRAIN);
+        vi.advanceTimersByTime(2_000);
+      }
+      expect(readings.slice(n).map(r => r.power)).toEqual(['on', 'on', 'on']);
+    });
+
+    it('a stale PD heartbeat gives unknown', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      expect(readings.at(-1)?.power).toBe('off');
+      vi.advanceTimersByTime(PD_FRESH_MS + 1_000);
+      expect(readings.at(-1)).toMatchObject({ power: 'unknown', reason: BLE_REASON.invSilent });
+    });
+
+    it('a link drop starts the hold over', () => {
+      const { start, state, pdFor, readings } = setup();
+      start();
+      state('connected');
+      pdFor(DRAIN_HOLD_MS + 2_000, DRAIN);
+      state('lost');
+      state('connected');
+      const n = readings.length;
+      pdFor(DRAIN_HOLD_MS - 2_000, DRAIN);
+      expect(readings.slice(n)).toEqual([]);
+      pdFor(4_000, DRAIN);
+      expect(readings.slice(n).map(r => r.power)).toEqual(['off']);
+    });
+
+    it('a PD heartbeat before the link is up does not count', () => {
+      const { start, state, pd, pdFor, readings } = setup();
+      start();
+      pd(DRAIN);
+      vi.advanceTimersByTime(10_000);
+      state('connected');
+      pdFor(DRAIN_HOLD_MS - 2_000, DRAIN);
+      expect(readings).toEqual([]);
+    });
+  });
+
+  it('stop unwatches and stays silent', () => {
+    const { link, source, start, state, inv, readings, GRID } = setup();
+    start();
+    state('connected');
+    source.stop();
+    expect(link.unwatch).toHaveBeenCalledTimes(1);
+    expect(link.cbs.size).toBe(0);
+    inv(GRID);
+    vi.advanceTimersByTime(10 * REASON_REPEAT_MS);
+    expect(readings).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});

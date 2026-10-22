@@ -1,65 +1,113 @@
+import type { BleProblem } from './ecoflow-ble';
+import type { LocationInput } from './locations';
 import type {
-  ActualPower, Address, AppState, DaySchedule, EcoflowRegion, HouseInfo, LineInfo, WidgetBackground, WidgetStyle,
+  ActualPower, AppState, DaySchedule, EcoflowRegion, HouseInfo, LineInfo, WidgetBackground, WidgetState, WidgetStyle,
 } from './types';
 
 export const IPC = {
   getState: 'state:get', state: 'state:changed', background: 'widget:background',
   listProviders: 'providers:list', listCities: 'addr:cities', listStreets: 'addr:streets', listHouses: 'addr:houses',
-  previewLines: 'addr:preview-lines', saveAddress: 'settings:address', setWidgetStyle: 'settings:style',
+  previewLines: 'addr:preview-lines', houseLines: 'addr:house-lines',
+  widgetGetState: 'widget:get-state', widgetState: 'widget:state',
+  addLocation: 'loc:add', editLocation: 'loc:edit', renameLocation: 'loc:rename', deleteLocation: 'loc:delete',
+  setWidgetStyle: 'loc:style', setActualLocation: 'loc:actual',
   setAutostart: 'settings:autostart', refreshNow: 'refresh:now', solveCaptcha: 'captcha:solve',
   openMainWindow: 'window:open-main', widgetContextMenu: 'widget:context-menu', widgetDrag: 'widget:drag', navigate: 'window:navigate',
   widgetMoveMode: 'widget:move-mode', widgetMoveDone: 'widget:move-done',
   ecoflowTest: 'actual:ecoflow-test', ecoflowPreview: 'actual:ecoflow-preview', ecoflowSave: 'actual:ecoflow-save',
-  actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openDtekSite: 'addr:dtek-site',
+  actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openProviderSite: 'addr:provider-site',
+  actualLive: 'actual:live', getActualLive: 'actual:get-live', ecoflowScan: 'actual:ecoflow-scan',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
 export const CAPTCHA_MARKER = 'CAPTCHA_REQUIRED';
 
 export type MainView = 'schedule' | 'settings' | 'setup';
+/** Where main sends the main window: a view and, if given, the location to select. */
+export interface MainNav { view: MainView; locationId?: string }
 
-/** Keys travel renderer → main only in these calls; no result ever carries them back. */
-export interface EcoflowKeysInput { region: EcoflowRegion; accessKey: string; secretKey: string }
+/**
+ * Keys or the account travel renderer → main only in these calls; no result ever carries them back. `ble` is the
+ * account sign-in again, for the save of a station read over Bluetooth.
+ */
+export type EcoflowInput =
+  | { mode: 'keys'; region: EcoflowRegion; accessKey: string; secretKey: string }
+  | { mode: 'account'; region: EcoflowRegion; email: string; password: string }
+  | { mode: 'ble'; region: EcoflowRegion; email: string; password: string };
+/** `online` is the account's cloud state; whether a station is nearby comes from `ecoflowScan`. */
 export interface EcoflowDeviceView { sn: string; label: string; online: boolean }
 export type EcoflowTestResult = { ok: true; devices: EcoflowDeviceView[] } | { ok: false; error: string };
+/** The setup scan: the SNs seen nearby plus the station the running Bluetooth source holds; `bluetooth`: why it could not scan. */
+export interface EcoflowScanResult { nearby: string[]; bluetooth?: string }
 export type EcoflowPreviewResult =
   | { ok: true; online: boolean; power: ActualPower; detail?: string; reason?: string; unsupported?: boolean }
   | { ok: false; error: string };
+/** The live line of the Bluetooth source: link state plus the latest values the station has sent (absent = not sent yet). */
+export interface ActualLive {
+  link: 'searching' | 'connecting' | 'connected' | 'refused' | 'stalled' | 'unsupported' | Exclude<BleProblem, 'scan-failed'>;
+  acInVolts?: number; acInHz?: number; inputWatts?: number; acOut?: boolean; soc?: number; invSilent?: boolean;
+  /** The station's total input and output, from the PD heartbeat. */
+  wattsIn?: number; wattsOut?: number;
+}
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export interface RendererApi {
+  /** The main window's state: every location. Main answers a widget with null; widgets use getWidgetState. */
   getState(): Promise<AppState>;
   onState(cb: (s: AppState) => void): () => void;
+  /** A widget's own state. Main knows the widget by its window, so no id is sent. Null for a widget that is gone. */
+  getWidgetState(): Promise<WidgetState | null>;
+  onWidgetState(cb: (s: WidgetState) => void): () => void;
   onBackground(cb: (b: WidgetBackground) => void): () => void;
   listProviders(): Promise<{ id: string; displayName: string }[]>;
   listCities(providerId: string): Promise<string[]>;
   listStreets(providerId: string, city: string): Promise<string[]>;
   listHouses(providerId: string, city: string, street: string): Promise<HouseInfo[]>;
+  /** The picked house's lines, for a house marked `linesPending`. */
+  houseLines(providerId: string, city: string, street: string, house: string): Promise<LineInfo[]>;
   previewLines(providerId: string, city: string, street: string, house: string): Promise<{ line: LineInfo; today: DaySchedule | null }[]>;
-  saveAddress(a: Address): Promise<void>;
-  setWidgetStyle(s: WidgetStyle): Promise<void>;
+  /** The location calls reject with the reason main refused: a name rule, the 5-location limit, a gone id. */
+  addLocation(input: LocationInput): Promise<void>;
+  /** Resolves once the first fetch of a changed address is done. */
+  editLocation(id: string, input: LocationInput): Promise<void>;
+  renameLocation(id: string, name: string): Promise<void>;
+  deleteLocation(id: string): Promise<void>;
+  setWidgetStyle(id: string, s: WidgetStyle): Promise<void>;
+  /** The EcoFlow station stands at this location. */
+  setActualLocation(id: string): Promise<void>;
   setAutostart(on: boolean): Promise<void>;
-  refreshNow(): Promise<void>;
-  solveCaptcha(): Promise<void>;
+  /** One location, or every one without an id. */
+  refreshNow(id?: string): Promise<void>;
+  solveCaptcha(providerId?: string): Promise<void>;
+  /** From a widget, main opens the schedule on that widget's own location, whatever the view. */
   openMainWindow(view?: MainView): void;
-  /** Main process asks the open main window to switch its in-app view. */
-  onNavigate(cb: (view: MainView) => void): () => void;
+  /** Main process asks the open main window to switch its in-app view and, if given, its location. */
+  onNavigate(cb: (nav: MainNav) => void): () => void;
   widgetContextMenu(): void;
   widgetDrag(phase: 'start' | 'move' | 'end', screenX: number, screenY: number): void;
   /** Main switches the widget in/out of move mode (frame + «Готово» button). */
   onMoveMode(cb: (on: boolean) => void): () => void;
   /** The widget's «Готово» button: save the position and pin the widget again. */
   endMoveMode(): void;
-  ecoflowTest(i: EcoflowKeysInput): Promise<EcoflowTestResult>;
-  /** HTTP only: never opens MQTT, so it spends none of the account's daily clientIds. */
-  ecoflowPreview(i: EcoflowKeysInput, sn: string): Promise<EcoflowPreviewResult>;
-  ecoflowSave(i: EcoflowKeysInput, device: { sn: string; label: string }): Promise<ActionResult>;
+  ecoflowTest(i: EcoflowInput): Promise<EcoflowTestResult>;
+  /** Scans Bluetooth for stations nearby (8 s). Never rejects: a problem comes back as `bluetooth`. */
+  ecoflowScan(): Promise<EcoflowScanResult>;
+  /**
+   * Keys: HTTP only, so it spends none of the account's daily clientIds. Account: one short MQTT session with a
+   * throw-away clientId, signed in with the check's session when it is fresh (no HTTP call gives the readings).
+   */
+  ecoflowPreview(i: EcoflowInput, sn: string): Promise<EcoflowPreviewResult>;
+  ecoflowSave(i: EcoflowInput, device: { sn: string; label: string }): Promise<ActionResult>;
   /** Forgets the source and its keys; the history and the clientId stay. */
   actualDisconnect(): Promise<void>;
   /** Opens the EcoFlow developer site (a fixed address) in the browser. */
   openEcoflowHelp(): void;
-  /** Opens the DTEK outage schedule page (a fixed address) in the browser (D11). */
-  openDtekSite(): void;
+  /** Opens the given provider's outage schedule page in the browser (D11); main looks the address up by the id. */
+  openProviderSite(providerId: string): void;
+  /** The Bluetooth source's live line for the first paint; null unless that source is the saved one. */
+  getActualLive(): Promise<ActualLive | null>;
+  /** Live line pushes to the main window, at most one a second; null once nothing is watched. */
+  onActualLive(cb: (live: ActualLive | null) => void): () => void;
 }
 
 declare global { interface Window { api: RendererApi } }

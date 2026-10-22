@@ -3,8 +3,9 @@ import type { RendererApi } from '../../../shared/ipc';
 import { outageParts, recentOutages } from '../../../shared/actual-view';
 import { dayCells, type DayCell } from '../../../shared/day-cells';
 import { outageRanges } from '../../../shared/outage-ranges';
-import { addDays, formatDM, formatHM, parseDtekDateTime } from '../../../shared/time';
-import type { AppState, DaySchedule } from '../../../shared/types';
+import { providerShortName } from '../../../shared/providers';
+import { addDays, formatDM, formatHM, kyivDateKey, parseDtekDateTime } from '../../../shared/time';
+import type { DaySchedule, LocationState, Settings } from '../../../shared/types';
 import { computeWidgetView, countdownText } from '../../../shared/widget-state';
 import { ActualStrip } from './ActualStrip';
 import { DayStrip } from './DayStrip';
@@ -19,7 +20,7 @@ function outageLine(day: DaySchedule, emergencyFrom?: string): string {
   return emergencyFrom ? `${line} · аварійне з ${emergencyFrom}` : line;
 }
 
-function Banner({ tone, title, text, action }: {
+export function Banner({ tone, title, text, action }: {
   tone: 'warn' | 'danger'; title: string; text?: string; action?: { label: string; run(): void };
 }) {
   return (
@@ -36,16 +37,18 @@ function Banner({ tone, title, text, action }: {
 
 /** Hour labels, the day's cells, the «Фактично» row under them on the same scale, and the «now» marker across. */
 function DayGrid({ cells, emptyText, actualRow, now }: {
-  cells: DayCell[] | null; emptyText: string; actualRow: ReactNode; now?: { min: number; label: string };
+  cells: DayCell[] | null; emptyText: string;
+  /** The «Фактично» row; null leaves out the row and its label (a location the station does not stand at). */
+  actualRow: ReactNode | null; now?: { min: number; label: string };
 }) {
   const left = now ? `${(now.min / 1440) * 100}%` : undefined;
   return (
     <div className="sv-grid" data-capture="grid">
-      <div className="sv-grid-labels"><span /><span>Графік</span><span>Фактично</span></div>
+      <div className="sv-grid-labels"><span /><span>Графік</span>{actualRow !== null && <span>Фактично</span>}</div>
       <div className="sv-grid-main">
         <div className="sv-hours" aria-hidden="true">{HOURS.map(h => <span key={h}>{h}</span>)}</div>
         {cells ? <DayStrip cells={cells} /> : <div className="sv-noday"><span>{emptyText}</span></div>}
-        <div className="sv-actual-row">{actualRow}</div>
+        {actualRow !== null && <div className="sv-actual-row">{actualRow}</div>}
         {now && (
           <>
             <div className="sv-now" style={{ left }} />
@@ -61,26 +64,35 @@ function RowNote({ children }: { children: ReactNode }) {
   return <div className="sv-row-note">{children}</div>;
 }
 
-export function ScheduleView({ state, now, api, onConnectEcoflow }: {
-  state: AppState; now: Date; api: RendererApi;
+/** The «Графік» tab of one location: `loc`, the one the switcher selected. */
+export function ScheduleView({ loc, settings, now, api, onConnectEcoflow, onChangeAddress }: {
+  loc: LocationState; settings: Settings; now: Date; api: RendererApi;
   /** «Підключити» / «Підключити EcoFlow» (D10): open the settings with the EcoFlow form. */
   onConnectEcoflow(): void;
+  /** The line-changed banner's «Змінити адресу»: the wizard for this location. */
+  onChangeAddress(): void;
 }) {
   const [tab, setTab] = useState<'today' | 'tomorrow'>('today');
-  const { snapshot } = state;
-  const view = snapshot ? computeWidgetView(snapshot, now, state.actual) : null;
+  const { snapshot } = loc;
+  // The station belongs to one location: anywhere else nothing of it shows, not even the offer to connect it.
+  const stationHere = loc.location.id === settings.actualLocationId;
+  const actual = stationHere ? loc.actual : undefined;
+  const view = snapshot ? computeWidgetView(snapshot, now, actual) : null;
   const todayKey = view?.todayKey ?? '';
   const tomorrowKey = todayKey ? addDays(todayKey, 1) : '';
-  const outages = state.actual ? recentOutages(state.actual.history, now) : [];
+  const outages = actual ? recentOutages(actual.history, now) : [];
   const isToday = tab === 'today';
   const day = isToday ? view?.today ?? null : view?.tomorrow ?? null;
   // A saved source without a status yet is not «not connected»: nothing to offer then.
-  const ecoflow = !!state.actual || !!state.settings.actualSource;
+  const ecoflow = !!actual || !!settings.actualSource;
   const nowMin = view && isToday ? Math.round(view.nowFraction * 1440) : undefined;
   const emergency = isToday ? view?.emergency : undefined;
   const cells = day ? dayCells(day.slots, nowMin, emergency) : null;
   const emergencyStart = emergency && snapshot?.currentOutage?.start ? parseDtekDateTime(snapshot.currentOutage.start) : undefined;
   const count = view ? countdownText(view) : undefined;
+  // A note speaks of the day it was fetched on: a quiet day fetched at 23:50 says nothing about the day after midnight.
+  const fetchedAt = snapshot ? new Date(snapshot.fetchedAt) : null;
+  const noteToday = !!snapshot?.note && !!fetchedAt && !Number.isNaN(fetchedAt.getTime()) && kyivDateKey(fetchedAt) === todayKey;
 
   const connectNote = (
     <RowNote>
@@ -88,24 +100,25 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
       <button className="sv-link" onClick={onConnectEcoflow}>Підключити</button>
     </RowNote>
   );
-  const actualRow = !ecoflow ? connectNote
+  const actualRow = !stationHere ? null
+    : !ecoflow ? connectNote
     : !isToday ? <RowNote><span>з’явиться, коли настане день</span></RowNote>
     : <ActualStrip parts={view?.actualStrip ?? []} />;
 
   return (
     <div className="sv">
       {view?.outageBadge && snapshot?.currentOutage && (
-        <Banner tone="danger" title={`${view.outageBadge} відключення`} text={`ДТЕК: «${snapshot.currentOutage.text}»`} />
+        <Banner tone="danger" title={`${view.outageBadge} відключення`} text={`${providerShortName(snapshot.providerId)}: «${snapshot.currentOutage.text}»`} />
       )}
-      {state.lineChanged && (
+      {loc.lineChanged && (
         <Banner tone="warn" title="Схема підключення змінилась — перевірте лінію" text="Графік для вашої адреси тепер може бути іншим."
-          action={{ label: 'Змінити адресу', run: () => api.openMainWindow('setup') }} />
+          action={{ label: 'Змінити адресу', run: onChangeAddress }} />
       )}
-      {state.phase === 'captcha' && (
+      {loc.phase === 'captcha' && (
         <Banner tone="warn" title="Сайт ДТЕК просить пройти перевірку" text="Поки її не пройдено, графік не оновлюється."
-          action={{ label: 'Пройти перевірку', run: () => void api.solveCaptcha() }} />
+          action={{ label: 'Пройти перевірку', run: () => void api.solveCaptcha(loc.location.address.providerId) }} />
       )}
-      {state.phase === 'error' && <Banner tone="warn" title={`Не вдалося оновити: ${state.lastError ?? 'невідома помилка'}`} />}
+      {loc.phase === 'error' && <Banner tone="warn" title={`Не вдалося оновити: ${loc.lastError ?? 'невідома помилка'}`} />}
 
       {!snapshot || !view ? (
         <div className="sv-card sv-nodata">Дані ще не отримано</div>
@@ -143,7 +156,7 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
               <span><i className="off" />Немає</span>
               <span><i className="maybe" />Можливо немає</span>
               <span><i className="unknown" />Невідомо</span>
-              {cells?.some(c => c.emergency) && <span><i className="emergency" />Аварійне</span>}
+              {cells?.some(c => c.emergency) && <span><i className="emergency" />{view.outageBadge ?? 'Аварійне'}</span>}
             </div>
           </div>
 
@@ -151,25 +164,27 @@ export function ScheduleView({ state, now, api, onConnectEcoflow }: {
             emptyText={isToday ? 'Графік на сьогодні ще не отримано' : 'Графік на завтра ще не опубліковано'}
             now={nowMin === undefined ? undefined : { min: nowMin, label: formatHM(now) }} />
 
+          {isToday && noteToday && <div className="sv-note-line" data-capture="note">{snapshot.note}</div>}
+
           <div className="sv-foot">
             <span className="sv-outage-line" data-capture="outage-line">
               {day ? outageLine(day, emergencyStart && formatHM(emergencyStart)) : ''}
             </span>
             <span className="sv-updated" data-capture="updated">
-              {`Оновлено о ${formatHM(new Date(snapshot.fetchedAt))}${snapshot.sourceUpdatedAt ? ` · графік ДТЕК від ${snapshot.sourceUpdatedAt}` : ''}`}
+              {`Оновлено о ${formatHM(new Date(snapshot.fetchedAt))}${snapshot.sourceUpdatedAt ? ` · графік ${providerShortName(snapshot.providerId)} від ${snapshot.sourceUpdatedAt}` : ''}`}
               {view.stale && <span className="sv-stale">дані застаріли</span>}
             </span>
           </div>
         </section>
       )}
 
-      {snapshot && (state.actual || !ecoflow) && (
+      {snapshot && stationHere && (actual || !ecoflow) && (
         <section className="sv-section">
           <div className="sv-section-head">
             <h3 className="sv-section-title">Фактичні відключення <span>· 7 днів</span></h3>
             <span className="sv-section-src">за даними EcoFlow</span>
           </div>
-          {!state.actual ? (
+          {!actual ? (
             <div className="sv-connect">
               <div className="sv-connect-text">
                 <span className="sv-connect-title">Тут будуть реальні відключення</span>

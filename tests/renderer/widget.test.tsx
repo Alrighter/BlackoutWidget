@@ -6,13 +6,18 @@ import { Widget } from '../../src/renderer/src/widget/Widget';
 import { DayBar } from '../../src/renderer/src/widget/DayBar';
 import { dayCells } from '../../src/shared/day-cells';
 import { actualGradient, ringGradient, segmentPaint } from '../../src/renderer/src/widget/RingWidget';
-import { DEFAULT_SETTINGS } from '../../src/main/store';
-import type { ActualStatus, AppState, Slot, WidgetStyle } from '../../src/shared/types';
+import type { ActualStatus, LocationState, Slot, WidgetState, WidgetStyle } from '../../src/shared/types';
 import { fixtureSnapshot } from '../helpers/snapshot';
 
 const now = new Date('2026-10-17T08:50:00Z');
-const st = (p: Partial<AppState> = {}, style: WidgetStyle = 'compact'): AppState =>
-  ({ settings: { ...DEFAULT_SETTINGS, widgetStyle: style, address: fixtureSnapshot().address }, snapshot: fixtureSnapshot(), phase: 'ok', lineChanged: false, ...p });
+type StateOpts = Partial<Pick<LocationState, 'snapshot' | 'phase' | 'lineChanged' | 'actual'>> & { showName?: boolean; name?: string };
+const st = ({ showName = false, name = 'Дім', ...p }: StateOpts = {}, style: WidgetStyle = 'compact'): WidgetState => ({
+  showName,
+  location: {
+    location: { id: 'loc-1', name, address: fixtureSnapshot().address, widgetStyle: style, widgetPosition: null },
+    snapshot: fixtureSnapshot(), phase: 'ok', lineChanged: false, ...p,
+  },
+});
 test.each(['compact', 'ring', 'timeline'] as const)('%s shows status and countdown', style => {
   render(<Widget state={st({}, style)} now={now} background={{ kind: 'tint' }} />);
   expect(screen.getByText('Світло є')).toBeInTheDocument();
@@ -26,6 +31,28 @@ test('compact caption', () => {
   const { container } = render(<Widget state={st()} now={now} background={{ kind: 'tint' }} />);
   expect(container.querySelector('.w-cap')).toHaveTextContent('Лінія 1 · черга 1.2 · оновлено 11:48');
   expect(container.querySelector('.w-cap')).toHaveAttribute('title', 'Лінія 1 · черга 1.2 · оновлено 11:48');
+});
+test('one location: the caption is today’s, without a name', () => {
+  const { container } = render(<Widget state={st({ showName: false, name: 'Батьки' })} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('.w-cap')).toHaveTextContent('Лінія 1 · черга 1.2 · оновлено 11:48');
+  expect(container.querySelector('.w-cap')).toHaveAttribute('title', 'Лінія 1 · черга 1.2 · оновлено 11:48');
+});
+test.each(['compact', 'ring', 'timeline'] as const)('%s: several locations, the caption leads with the name', style => {
+  const { container } = render(<Widget state={st({ showName: true, name: 'Батьки' }, style)} now={now} background={{ kind: 'tint' }} />);
+  const cap = container.querySelector('.w-cap')!;
+  expect(cap.textContent!.startsWith('Батьки · Лінія 1 · черга 1.2')).toBe(true);
+  expect(cap.getAttribute('title')!.startsWith('Батьки · ')).toBe(true);
+  expect(cap.querySelector('.w-ellipsis')!.textContent).toMatch(/^Батьки · /);
+  expect(cap.querySelector('.w-fixed')!.textContent).not.toContain('Батьки');
+});
+test.each(['compact', 'ring', 'timeline'] as const)('%s: the name shows before the first schedule', style => {
+  const { container } = render(<Widget state={st({ showName: true, name: 'Батьки', snapshot: null }, style)} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('.w-cap')).toHaveTextContent(/^Батьки$/);
+  expect(container.querySelector('.w-cap .w-sep')).toBeNull();
+});
+test.each(['compact', 'ring', 'timeline'] as const)('%s: a location without actual shows no EcoFlow chip', style => {
+  const { container } = render(<Widget state={st({ showName: true }, style)} now={now} background={{ kind: 'tint' }} />);
+  expect(container.querySelector('[data-actual]')).toBeNull();
 });
 test.each(['compact', 'ring', 'timeline'] as const)('%s: line changed + stale keeps the updated time and the stale mark next to the warning', style => {
   const { container } = render(<Widget state={st({ lineChanged: true }, style)} now={new Date('2026-10-17T09:40:00Z')} background={{ kind: 'tint' }} />);
@@ -105,7 +132,7 @@ test('compact: no schedule today → 48 hatched unknown cells, not the «ще н
 test.each([
   ['on', st()],
   ['emergency', st({ snapshot: fixtureSnapshot({ currentOutage: { kind: 'emergency', text: 'Аварійне відключення' } }) })],
-  ['unknown', { ...st(), settings: DEFAULT_SETTINGS, snapshot: null }],
+  ['unknown', st({ snapshot: null })],
 ] as const)('card is tinted by the state: %s', (tone, state) => {
   const { container } = render(<Widget state={state} now={now} background={{ kind: 'tint' }} />);
   expect(container.querySelector('.w-card')).toHaveClass(`w-tone-${tone}`);
@@ -115,13 +142,11 @@ test('emergency badge', () => {
   render(<Widget state={s} now={now} background={{ kind: 'tint' }} />);
   expect(screen.getByText('Аварійне')).toBeInTheDocument(); expect(screen.getByText('Світла немає')).toBeInTheDocument();
 });
-test('stale, line changed, no address', () => {
+test('stale, line changed', () => {
   const { rerender } = render(<Widget state={st()} now={new Date('2026-10-17T09:40:00Z')} background={{ kind: 'tint' }} />);
   expect(screen.getByText(/дані застаріли/)).toBeInTheDocument();
   rerender(<Widget state={st({ lineChanged: true })} now={now} background={{ kind: 'tint' }} />);
   expect(screen.getByText('Схема підключення змінилась — перевірте лінію')).toBeInTheDocument();
-  rerender(<Widget state={{ ...st(), settings: DEFAULT_SETTINGS, snapshot: null }} now={now} background={{ kind: 'tint' }} />);
-  expect(screen.getByText('Налаштуйте адресу')).toBeInTheDocument();
 });
 
 test.each(['compact', 'ring', 'timeline'] as const)('%s: overflow protection on long text', style => {
@@ -261,7 +286,7 @@ describe('ring', () => {
 
 describe('timeline', () => {
   const bg = { kind: 'tint' } as const;
-  const tl = (p: Partial<AppState> = {}, at = now) => render(<Widget state={st(p, 'timeline')} now={at} background={bg} />);
+  const tl = (p: Partial<StateOpts> = {}, at = now) => render(<Widget state={st(p, 'timeline')} now={at} background={bg} />);
   const DTEK = 'ДТЕК Київські регіональні електромережі';
 
   test('head: the status row and the next change under it; the big countdown and its caption on the right', () => {

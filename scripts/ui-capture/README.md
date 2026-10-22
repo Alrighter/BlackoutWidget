@@ -25,8 +25,10 @@ Rebuild after every source change: the rig only sees `out/`.
 | `--now` | `HH:MM` (Kyiv, on 2026-10-17) or an ISO date-time; overrides the scenario's clock | the scenario's |
 | `--wallpaper` | `auto` (= theme), `light`, `dark`, `busy`, `none` (no image: `{ kind: 'tint' }`), `native` (macOS: `{ kind: 'native' }` over a stand-in for the vibrancy, see below) | `auto` |
 | `--move-mode` | flag: the widget is told it is in move mode (`onMoveMode(true)`) | off |
-| `--patch` | JSON merged into the AppState (`settings` one level deep), e.g. `'{"phase":"captcha"}'` | none |
-| `--stubs` | JSON replacing what `window.api` calls resolve with, by name: `providers`, `cities`, `streets`, `houses`, `previewLines`, `ecoflowTest`, `ecoflowPreview`, `ecoflowSave` (see [Scenarios](#scenarios)); `"pending"` never settles (EcoFlow calls only) | none |
+| `--locations` | `1`, `2`: with 2 the app also has «Батьки» (id `parents`, its own address, the same fake schedule); the widget then shows its name | `1` |
+| `--widget-location` | id of the location the widget shows (`home`, `parents`) | the first |
+| `--patch` | JSON merged into the AppState (`settings` one level deep); the key `location` is merged into the first LocationState instead, e.g. `'{"location":{"phase":"captcha"}}'`. The widget's state is built after the patch | none |
+| `--stubs` | JSON replacing what `window.api` calls resolve with, by name: `providers`, `cities`, `streets`, `houses`, `previewLines`, `ecoflowTest`, `ecoflowScan`, `ecoflowPreview`, `ecoflowSave` (see [Scenarios](#scenarios)); `"pending"` never settles (EcoFlow calls only) | none |
 | `--exec` | JS run in the page after it rendered (awaited if it returns a promise), e.g. clicks | none |
 | `--tag` | text appended to the file name, for variants made with `--now` / `--patch` / `--exec` | none |
 | `--delay` | ms to wait before the capture (after `--exec`) | `300` |
@@ -43,6 +45,7 @@ stdout.
 
 - **Widget names:** `widget-<style>-<scenario>-<theme>[-wp-<wallpaper>][-move][-<tag>]`.
 - **App names:** `app-<view>[-<style>]-<scenario>-<theme>…`. The style appears only when the run has several.
+- `--locations` and `--widget-location` do not change the name: use `--tag` or another `--out` for a second variant.
 
 The JSON fields:
 
@@ -127,6 +130,8 @@ The fake data departs from the mockup in a few places, so that the app's own log
 - **EcoFlow history** adds two earlier outages (15.10 08:00–12:04, 16.10 16:02–19:58), so the main window's 7-day
   list has entries.
 
+The state has the shape main sends: `locations` (one LocationState each, in `settings.locations` order), `actualLocationId: 'home'`, and the EcoFlow `actual` on `home` and on `AppState.actual`, as `composeAppState` does. The widget gets `getWidgetState()` (as `widgetStateOf`: its own location, `showName` only with several); `getState()` is the main window's.
+
 Non-EcoFlow scenarios have `actual: null` and no `actualSource`, so the main window shows the EcoFlow empty state.
 
 The other `window.api` methods resolve with plausible data: providers, cities, streets, houses, the two lines with
@@ -145,19 +150,24 @@ npm run ui:capture -- --style all --scenario all --theme all --out .superpowers/
 # the main window's three views
 npm run ui:capture -- --target app --view all --scenario ecoMatch --theme all --out …
 # the captcha banner
-npm run ui:capture -- --target app --scenario on --patch '{"phase":"captcha"}' --tag captcha --out …
-# no address saved: the main window opens the wizard
-npm run ui:capture -- --target app --patch '{"settings":{"address":null}}' --tag first-run --out …
+npm run ui:capture -- --target app --scenario on --patch '{"location":{"phase":"captcha"}}' --tag captcha --out …
+# two locations: the switcher in the app bar, the name in the widget's caption
+npm run ui:capture -- --target app --view schedule,settings --locations 2 --out …
+# no location saved: the main window opens the wizard
+npm run ui:capture -- --target app --patch '{"settings":{"locations":[]},"locations":[]}' --tag first-run --out …
 # move mode on busy wallpaper
 npm run ui:capture -- --style compact --scenario on --theme all --wallpaper busy --move-mode --out …
 # the EcoFlow check that never ends: open the form, type the keys (React needs the native value setter), press «Перевірити»
 npm run ui:capture -- --target app --view settings --stubs '{"ecoflowTest":"pending"}' --exec "(async () => { …clicks… })()" --tag checking --out …
 # on Windows `npm run` goes through cmd.exe, which ends the command at a newline: keep --exec on one line there, or run
 # node_modules/electron/dist/electron.exe scripts/ui-capture/capture.cjs … directly (same options) for multi-line JS
+# EcoFlow account mode: «Налаштування» opens the form (account is the default «Джерело»); the stubs answer the account input like the keys one
+# connected via the account: --patch swaps actualSource whole (accountHint instead of accessKeyHint)
+npm run ui:capture -- --target app --view settings --scenario ecoMatch --patch '{"settings":{"actualSource":{"id":"ecoflow-app","region":"eu","deviceSn":"R331ZEB4ZEA00142","deviceName":"Delta 2","accountHint":"r…@dully.io"}}}' --tag account-connected --out …
 # a later wizard step: click through first (the page's Date is frozen, so wait with setTimeout, not Date)
 npm run ui:capture -- --target app --view setup --exec "[...document.querySelectorAll('button')].find(b => b.textContent === 'Далі').click()" --tag step2 --out …
 # the wizard's house step with 140 houses: the grid scrolls, the buttons stay (JSON from a file, via bash)
-node_modules/electron/dist/electron.exe scripts/ui-capture/capture.cjs --target app --view setup --patch '{"settings":{"address":null}}' --stubs "$(cat houses.json)" --exec "$(cat steps.js)" --tag many --out …
+node_modules/electron/dist/electron.exe scripts/ui-capture/capture.cjs --target app --view setup --patch '{"settings":{"locations":[]},"locations":[]}' --stubs "$(cat houses.json)" --exec "$(cat steps.js)" --tag many --out …
 ```
 
 ## Files and limits
@@ -165,7 +175,7 @@ node_modules/electron/dist/electron.exe scripts/ui-capture/capture.cjs --target 
 - `capture.cjs`: the Electron main script, which also handles CLI parsing, windows, capture and JSON.
 - `preload.cjs`: the fake `window.api`, the frozen clock and the wallpaper painter. It is sandboxed, so it gets
   everything from `capture.cjs` in one sync IPC call.
-- `scenarios.cjs`: the AppState and stub data per scenario.
+- `scenarios.cjs`: the AppState, the first widget's WidgetState and the stub data per scenario.
 
 Limits:
 

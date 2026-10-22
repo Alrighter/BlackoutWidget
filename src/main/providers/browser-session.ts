@@ -23,7 +23,7 @@ const EVAL_GUARD_MS = 5000;
 
 // Evidence the loaded document is the real DTEK / Imperva page, not a browser error page.
 const REAL_PAGE_CHECK =
-  "(() => { const h = document.documentElement ? document.documentElement.outerHTML : ''; return h.includes('_Incapsula_Resource') || /ДТЕК|dtek-krem/i.test(document.title + h); })()";
+  "(() => { const h = document.documentElement ? document.documentElement.outerHTML : ''; return h.includes('_Incapsula_Resource') || /ДТЕК|dtek-/i.test(document.title + h); })()";
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -96,6 +96,22 @@ export class BrowserSession implements PageSession {
       this.showing = false;
       if (!win.isDestroyed()) win.hide();
     }
+  }
+
+  isOpen(): boolean {
+    return !!this.win && !this.win.isDestroyed();
+  }
+
+  /** Closes the window but keeps the session: the next ensureReady() builds a new one on the same partition. */
+  release(): void {
+    // Never pull the window from under a verification or a load in flight; after dispose() there is nothing to do.
+    if (this.disposed || this.showing || this.pending) return;
+    const win = this.win;
+    this.win = null;
+    this.loaded = false;
+    this.netError = false;
+    this.netFailure = undefined;
+    if (win && !win.isDestroyed()) { win.removeAllListeners('close'); win.destroy(); }
   }
 
   dispose(): void {
@@ -206,6 +222,9 @@ export class BrowserSession implements PageSession {
     }
     const win = new BrowserWindow({
       show: false, width: 1280, height: 900, title: 'ДТЕК — перевірка',
+      // A never-shown window otherwise renders the whole site as if on screen: about 100 MB of GPU memory and some
+      // renderer memory for a page nobody sees (smoke-memory). Shown for a verification, it paints as usual.
+      paintWhenInitiallyHidden: false,
       webPreferences: { partition: this.opts.partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

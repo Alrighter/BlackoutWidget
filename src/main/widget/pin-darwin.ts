@@ -77,9 +77,12 @@ export class MacDesktopPinner implements DesktopPinner {
     if (!win.isDestroyed()) win.setBounds(rect);
   }
 
-  /** App will-quit: a clean exit, so the crash marker still held after the last pin (or corner call) goes now. */
+  /**
+   * Its widget is gone (location deleted, or app quit). Nothing native to undo, and the crash marker stays: it is shared
+   * with the other widgets' pins, and DesktopNative.release() drops it once, at quit.
+   */
   dispose(): void {
-    this.guard.release();
+    this.isPinned = false;
   }
 
   private apply(win: BrowserWindow, level: number, behavior: number): void {

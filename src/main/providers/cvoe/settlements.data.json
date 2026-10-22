@@ -1,0 +1,1846 @@
+[
+ {
+  "district": 1,
+  "name": "м. Чернівці"
+ },
+ {
+  "district": 2,
+  "name": "с. БАНИЛІВ"
+ },
+ {
+  "district": 2,
+  "name": "селище Берегомет"
+ },
+ {
+  "district": 2,
+  "name": "м. ВИЖНИЦЯ"
+ },
+ {
+  "district": 2,
+  "name": "м. ВАШКІВЦІ"
+ },
+ {
+  "district": 2,
+  "name": "с. ЛУКАВЦІ"
+ },
+ {
+  "district": 2,
+  "name": "с. МИГОВЕ"
+ },
+ {
+  "district": 2,
+  "name": "с. Лекече"
+ },
+ {
+  "district": 2,
+  "name": "с. ЧОРНОГУЗИ"
+ },
+ {
+  "district": 2,
+  "name": "с. ЧЕРЕШЕНЬКА"
+ },
+ {
+  "district": 2,
+  "name": "с. ЗАМОСТЯ"
+ },
+ {
+  "district": 2,
+  "name": "с. ІСПАС"
+ },
+ {
+  "district": 2,
+  "name": "с. МІЛІЄВЕ"
+ },
+ {
+  "district": 2,
+  "name": "с. ЛОПУШНА"
+ },
+ {
+  "district": 2,
+  "name": "с. ДОЛІШНІЙ ШЕПІТ"
+ },
+ {
+  "district": 2,
+  "name": "с. КОРИТНЕ"
+ },
+ {
+  "district": 2,
+  "name": "с. ВОВЧИНЕЦЬ"
+ },
+ {
+  "district": 2,
+  "name": "с. ВИЖЕНКА"
+ },
+ {
+  "district": 2,
+  "name": "с. БАГНА"
+ },
+ {
+  "district": 2,
+  "name": "с. ПІДЗАХАРИЧІ"
+ },
+ {
+  "district": 2,
+  "name": "с. КАРАПЧІВ"
+ },
+ {
+  "district": 2,
+  "name": "с. БЕРЕЖНИЦЯ"
+ },
+ {
+  "district": 2,
+  "name": "с. ВЕЛИКЕ"
+ },
+ {
+  "district": 2,
+  "name": "с. СЛОБОДА БАНИЛІВ"
+ },
+ {
+  "district": 2,
+  "name": "с. БАБИНЕ"
+ },
+ {
+  "district": 2,
+  "name": "с. МАЙДАН МІЛІЄВЕ"
+ },
+ {
+  "district": 2,
+  "name": "с. ЛИПОВАНИ"
+ },
+ {
+  "district": 2,
+  "name": "с. МАЙДАН ЛУКАВЕЦЬКИЙ"
+ },
+ {
+  "district": 2,
+  "name": "с. РІВНЯ"
+ },
+ {
+  "district": 2,
+  "name": "с. БЕРЕЖОНКА"
+ },
+ {
+  "district": 2,
+  "name": "с. ВАЛИ"
+ },
+ {
+  "district": 2,
+  "name": "с. КИБАКИ"
+ },
+ {
+  "district": 2,
+  "name": "с. МАЙДАН ІСПАС"
+ },
+ {
+  "district": 2,
+  "name": "с. ВОЛОКА"
+ },
+ {
+  "district": 2,
+  "name": "с. ВАХНІВЦІ"
+ },
+ {
+  "district": 2,
+  "name": "с. СЕРЕДНІЙ МАЙДАН"
+ },
+ {
+  "district": 2,
+  "name": "с. МАЙДАН"
+ },
+ {
+  "district": 2,
+  "name": "с. ЗАРІЧЧЯ"
+ },
+ {
+  "district": 3,
+  "name": "с. Остриця"
+ },
+ {
+  "district": 3,
+  "name": "м. Герца"
+ },
+ {
+  "district": 3,
+  "name": "с. Тернавка"
+ },
+ {
+  "district": 3,
+  "name": "с. Горбова"
+ },
+ {
+  "district": 3,
+  "name": "с. Годинівка"
+ },
+ {
+  "district": 3,
+  "name": "с. Круп'янське"
+ },
+ {
+  "district": 3,
+  "name": "с. Петрашівка"
+ },
+ {
+  "district": 3,
+  "name": "с. Хряцька"
+ },
+ {
+  "district": 3,
+  "name": "с. Байраки"
+ },
+ {
+  "district": 3,
+  "name": "с. Радгоспівка"
+ },
+ {
+  "district": 3,
+  "name": "с. Хумарія"
+ },
+ {
+  "district": 3,
+  "name": "с. Підвальне"
+ },
+ {
+  "district": 3,
+  "name": "с. Велика Буда"
+ },
+ {
+  "district": 3,
+  "name": "м. Чернівці"
+ },
+ {
+  "district": 3,
+  "name": "с. Мала Буда"
+ },
+ {
+  "district": 3,
+  "name": "с. Мовила"
+ },
+ {
+  "district": 3,
+  "name": "с. Могилівка"
+ },
+ {
+  "district": 3,
+  "name": "с. Дяківці"
+ },
+ {
+  "district": 3,
+  "name": "с. Банчени"
+ },
+ {
+  "district": 3,
+  "name": "с. Буківка"
+ },
+ {
+  "district": 3,
+  "name": "с. Молниця"
+ },
+ {
+  "district": 3,
+  "name": "с. Мольниця"
+ },
+ {
+  "district": 3,
+  "name": "с. Великосілля"
+ },
+ {
+  "district": 3,
+  "name": "с. Лунка"
+ },
+ {
+  "district": 3,
+  "name": "с. Цурень"
+ },
+ {
+  "district": 3,
+  "name": "с. Маморниця"
+ },
+ {
+  "district": 3,
+  "name": "с. Куликівка"
+ },
+ {
+  "district": 3,
+  "name": "с. Луковци"
+ },
+ {
+  "district": 3,
+  "name": "с. Луковиця"
+ },
+ {
+  "district": 3,
+  "name": "с. Маморниця Вама"
+ },
+ {
+  "district": 4,
+  "name": "селище ГЛИБОКА"
+ },
+ {
+  "district": 4,
+  "name": "с. КАМ'ЯНКА"
+ },
+ {
+  "district": 4,
+  "name": "с. МОЛОДІЯ"
+ },
+ {
+  "district": 4,
+  "name": "с. В.КУЗЬМІН"
+ },
+ {
+  "district": 4,
+  "name": "с. Ст. ВОВЧИНЕЦЬ"
+ },
+ {
+  "district": 4,
+  "name": "с. ТЕРЕБЛЕЧЕ"
+ },
+ {
+  "district": 4,
+  "name": "с. ЧЕРЕПКІВЦІ"
+ },
+ {
+  "district": 4,
+  "name": "с. Н.СИНІВЦІ"
+ },
+ {
+  "district": 4,
+  "name": "с. ЛУКОВИЦЯ"
+ },
+ {
+  "district": 4,
+  "name": "с. Турятка"
+ },
+ {
+  "district": 4,
+  "name": "с. ТАРАШАНИ"
+ },
+ {
+  "district": 4,
+  "name": "с. КАРАПЧІВ"
+ },
+ {
+  "district": 4,
+  "name": "с. СТЕРЧЕ"
+ },
+ {
+  "district": 4,
+  "name": "с. ЧАГОР"
+ },
+ {
+  "district": 4,
+  "name": "с. СТАНІВЦІ"
+ },
+ {
+  "district": 4,
+  "name": "с. СЛОБІДКА"
+ },
+ {
+  "district": 4,
+  "name": "с. КУПКА"
+ },
+ {
+  "district": 4,
+  "name": "с. Біла Криниця"
+ },
+ {
+  "district": 4,
+  "name": "с. ЙОРДАНЕШТИ"
+ },
+ {
+  "district": 4,
+  "name": "с. ОПРИШЕНИ"
+ },
+ {
+  "district": 4,
+  "name": "с. Ч. ДІБРОВА"
+ },
+ {
+  "district": 4,
+  "name": "с. ВОЛОКА"
+ },
+ {
+  "district": 4,
+  "name": "с. ПОЛЯНА"
+ },
+ {
+  "district": 4,
+  "name": "с. КОРОВІЯ"
+ },
+ {
+  "district": 4,
+  "name": "с. КУТ"
+ },
+ {
+  "district": 4,
+  "name": "с. МИХАЙЛІВКА"
+ },
+ {
+  "district": 4,
+  "name": "с. Валя Кузьмина"
+ },
+ {
+  "district": 4,
+  "name": "с. ГРУШІВКА"
+ },
+ {
+  "district": 4,
+  "name": "с. ДИМКА"
+ },
+ {
+  "district": 4,
+  "name": "с. ПРОСІКА"
+ },
+ {
+  "district": 4,
+  "name": "с. БАГРИНІВКА"
+ },
+ {
+  "district": 4,
+  "name": "с. СУЧЕВЕНИ"
+ },
+ {
+  "district": 4,
+  "name": "с. ГОРБІВЦІ"
+ },
+ {
+  "district": 4,
+  "name": "с. КОРЧІВЦІ"
+ },
+ {
+  "district": 4,
+  "name": "с. ПРИВОРОКИ"
+ },
+ {
+  "district": 4,
+  "name": "м. Чернівці"
+ },
+ {
+  "district": 4,
+  "name": "с. Н.ВОВЧИНЕЦЬ"
+ },
+ {
+  "district": 4,
+  "name": "с. ПЕТРИЧАНКА"
+ },
+ {
+  "district": 4,
+  "name": "с. ПРОСИКУРЯНИ"
+ },
+ {
+  "district": 4,
+  "name": "с. В.СИНІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "м. ЗАСТАВНА"
+ },
+ {
+  "district": 5,
+  "name": "с. ЮРКІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. ШУБРАНЕЦЬ"
+ },
+ {
+  "district": 5,
+  "name": "с. КАДУБІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. КУЛІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. ЗВЕНЯЧИН"
+ },
+ {
+  "district": 5,
+  "name": "с. РЕПУЖИНЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. РЖАВИНЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. КОСТРИЖІВКА"
+ },
+ {
+  "district": 5,
+  "name": "с. ВЕРЕНЧАНКА"
+ },
+ {
+  "district": 5,
+  "name": "с. РУДКА"
+ },
+ {
+  "district": 5,
+  "name": "с. БАБИН"
+ },
+ {
+  "district": 5,
+  "name": "с. ВІКНО"
+ },
+ {
+  "district": 5,
+  "name": "с. ГОРОШІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. Г.ШЕРІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. ТОВТРИ"
+ },
+ {
+  "district": 5,
+  "name": "с. БАЛАМУТІВКА"
+ },
+ {
+  "district": 5,
+  "name": "с. ПОГОРІЛІВКА"
+ },
+ {
+  "district": 5,
+  "name": "с. М.КУЧУРІВ"
+ },
+ {
+  "district": 5,
+  "name": "с. ЯБЛУНІВКА"
+ },
+ {
+  "district": 5,
+  "name": "с. ДОБРИНІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. ХРЕЩАТИК"
+ },
+ {
+  "district": 5,
+  "name": "с. ДОРОШІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. БОЯНЧУК"
+ },
+ {
+  "district": 5,
+  "name": "с. ЗАДУБРІВКА"
+ },
+ {
+  "district": 5,
+  "name": "с. ВАСЛОВІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. ЧУНЬКІВ"
+ },
+ {
+  "district": 5,
+  "name": "с. ВАСИЛІВ"
+ },
+ {
+  "district": 5,
+  "name": "с. ПРИЛИПЧЕ"
+ },
+ {
+  "district": 5,
+  "name": "с. ЙОСИПІВКА"
+ },
+ {
+  "district": 5,
+  "name": "с. ЧОРНИЙ ПОТІК"
+ },
+ {
+  "district": 5,
+  "name": "с. ОНУТ"
+ },
+ {
+  "district": 5,
+  "name": "с. САМУШИН"
+ },
+ {
+  "district": 5,
+  "name": "с. МИТКІВ"
+ },
+ {
+  "district": 5,
+  "name": "с. БРІДОК"
+ },
+ {
+  "district": 5,
+  "name": "с. ВЕРБІВЦІ"
+ },
+ {
+  "district": 5,
+  "name": "с. МОСОРІВКА"
+ },
+ {
+  "district": 6,
+  "name": "с. ОШИХЛІБИ"
+ },
+ {
+  "district": 6,
+  "name": "с-ще НЕПОЛОКІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "м. КІЦМАНЬ"
+ },
+ {
+  "district": 6,
+  "name": "с. ВАЛЯВО"
+ },
+ {
+  "district": 6,
+  "name": "с-ще ЛУЖАНИ"
+ },
+ {
+  "district": 6,
+  "name": "с. БРУСНИЦЯ"
+ },
+ {
+  "district": 6,
+  "name": "с. СУХОВЕРХІВ"
+ },
+ {
+  "district": 6,
+  "name": "с. Стрілецький кут"
+ },
+ {
+  "district": 6,
+  "name": "с. СТАВЧАНИ"
+ },
+ {
+  "district": 6,
+  "name": "с. РЕВАКІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ВИТИЛІВКА"
+ },
+ {
+  "district": 6,
+  "name": "с. ДРАЧИНЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. МАМАЇВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ОРШІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. БОРІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. МАЛЯТИНЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ЧОРТОРИЯ"
+ },
+ {
+  "district": 6,
+  "name": "с. ДАВИДІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ГЛИНИЦЯ"
+ },
+ {
+  "district": 6,
+  "name": "с. ІВАНКІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ЛАШКІВКА"
+ },
+ {
+  "district": 6,
+  "name": "с. РЕВНЕ"
+ },
+ {
+  "district": 6,
+  "name": "с. БЕРЕГОМЕТ"
+ },
+ {
+  "district": 6,
+  "name": "с. КЛІВОДИН"
+ },
+ {
+  "district": 6,
+  "name": "с. ШИПИНЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ПЯДИКІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ДУБІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. ЮЖИНЕЦЬ"
+ },
+ {
+  "district": 6,
+  "name": "с. ШИШКІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. КИСЕЛІВ"
+ },
+ {
+  "district": 6,
+  "name": "с. КАЛЬНІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. Н.СТАНІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. БРУСЕНКИ"
+ },
+ {
+  "district": 6,
+  "name": "с. ЗЕЛЕНІВ"
+ },
+ {
+  "district": 6,
+  "name": "с. БІЛА"
+ },
+ {
+  "district": 6,
+  "name": "с. ОРОШАНИ"
+ },
+ {
+  "district": 6,
+  "name": "с. КЛОКІЧКА"
+ },
+ {
+  "district": 6,
+  "name": "с. В.СТАНІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. Н. КИСЕЛІВ"
+ },
+ {
+  "district": 6,
+  "name": "с. ВИНОГРАД"
+ },
+ {
+  "district": 6,
+  "name": "с. ОСТРА"
+ },
+ {
+  "district": 6,
+  "name": "с. ГАВРИЛІВЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. Н. ДРАЧИНЦІ"
+ },
+ {
+  "district": 6,
+  "name": "с. КОРОСТУВАТА"
+ },
+ {
+  "district": 6,
+  "name": "с. БУРДЕЙ"
+ },
+ {
+  "district": 6,
+  "name": "с. ДІБРОВА"
+ },
+ {
+  "district": 6,
+  "name": "с. ХЛІВИЩЕ"
+ },
+ {
+  "district": 6,
+  "name": "с. БОБІВЦІ"
+ },
+ {
+  "district": 7,
+  "name": "с-ще Кельменці"
+ },
+ {
+  "district": 7,
+  "name": "с. Лукачівка"
+ },
+ {
+  "district": 7,
+  "name": "с. Вовчинець"
+ },
+ {
+  "district": 7,
+  "name": "с. Нелипівці"
+ },
+ {
+  "district": 7,
+  "name": "с. Бурдюг"
+ },
+ {
+  "district": 7,
+  "name": "с. ст.Ларга"
+ },
+ {
+  "district": 7,
+  "name": "с. Новоселиця"
+ },
+ {
+  "district": 7,
+  "name": "ст. Іванівці"
+ },
+ {
+  "district": 7,
+  "name": "с. Іванівці"
+ },
+ {
+  "district": 7,
+  "name": "с. Росошани"
+ },
+ {
+  "district": 7,
+  "name": "с. Вартиківці"
+ },
+ {
+  "district": 7,
+  "name": "с. Мошанець"
+ },
+ {
+  "district": 7,
+  "name": "с. Берново"
+ },
+ {
+  "district": 7,
+  "name": "с. Перківці"
+ },
+ {
+  "district": 7,
+  "name": "с. Козиряни"
+ },
+ {
+  "district": 7,
+  "name": "с. Вороновиця"
+ },
+ {
+  "district": 7,
+  "name": "с. Комарів"
+ },
+ {
+  "district": 7,
+  "name": "с. Оселівка"
+ },
+ {
+  "district": 7,
+  "name": "с. Лівинці"
+ },
+ {
+  "district": 7,
+  "name": "с. Дністрівка"
+ },
+ {
+  "district": 7,
+  "name": "с. Бузовиця"
+ },
+ {
+  "district": 7,
+  "name": "с. Ленківці"
+ },
+ {
+  "district": 7,
+  "name": "с. Грушівці"
+ },
+ {
+  "district": 7,
+  "name": "с. Подвір'ївка"
+ },
+ {
+  "district": 7,
+  "name": "с. Путрине"
+ },
+ {
+  "district": 7,
+  "name": "с. Зелена"
+ },
+ {
+  "district": 7,
+  "name": "с. Макарівка"
+ },
+ {
+  "district": 7,
+  "name": "с. Анадоли"
+ },
+ {
+  "district": 7,
+  "name": "с. Михайлівка"
+ },
+ {
+  "district": 7,
+  "name": "с. Коновка"
+ },
+ {
+  "district": 7,
+  "name": "с. Бабин"
+ },
+ {
+  "district": 7,
+  "name": "с. Браїлівка"
+ },
+ {
+  "district": 7,
+  "name": "с. Нагоряни"
+ },
+ {
+  "district": 7,
+  "name": "с. С. Слобода"
+ },
+ {
+  "district": 7,
+  "name": "с. МАЙОРКА"
+ },
+ {
+  "district": 7,
+  "name": "с. Кроква"
+ },
+ {
+  "district": 7,
+  "name": "с. Слобідка"
+ },
+ {
+  "district": 7,
+  "name": "с. Бернове"
+ },
+ {
+  "district": 8,
+  "name": "с. Тарасівці"
+ },
+ {
+  "district": 8,
+  "name": "м. Новоселиця"
+ },
+ {
+  "district": 8,
+  "name": "с. Припруття"
+ },
+ {
+  "district": 8,
+  "name": "с. Остриця"
+ },
+ {
+  "district": 8,
+  "name": "с. Магала"
+ },
+ {
+  "district": 8,
+  "name": "с. Магала (Остриця)"
+ },
+ {
+  "district": 8,
+  "name": "с. Бояни"
+ },
+ {
+  "district": 8,
+  "name": "с. Боянівка"
+ },
+ {
+  "district": 8,
+  "name": "с. Топорівці"
+ },
+ {
+  "district": 8,
+  "name": "с. Чорнівка"
+ },
+ {
+  "district": 8,
+  "name": "с. Маршинці"
+ },
+ {
+  "district": 8,
+  "name": "с. Рокитне"
+ },
+ {
+  "district": 8,
+  "name": "с. Рідківці"
+ },
+ {
+  "district": 8,
+  "name": "с. Буда"
+ },
+ {
+  "district": 8,
+  "name": "с. Динівці"
+ },
+ {
+  "district": 8,
+  "name": "с. Шишківці"
+ },
+ {
+  "district": 8,
+  "name": "с. Котелеве"
+ },
+ {
+  "district": 8,
+  "name": "с. Рингач"
+ },
+ {
+  "district": 8,
+  "name": "с. Стальнівці"
+ },
+ {
+  "district": 8,
+  "name": "с. Несвоя"
+ },
+ {
+  "district": 8,
+  "name": "с. Балківці"
+ },
+ {
+  "district": 8,
+  "name": "с. Мамалига"
+ },
+ {
+  "district": 8,
+  "name": "с. Кошуляни"
+ },
+ {
+  "district": 8,
+  "name": "с. Драниця"
+ },
+ {
+  "district": 8,
+  "name": "с. Костичани"
+ },
+ {
+  "district": 8,
+  "name": "с. Ванчиківці"
+ },
+ {
+  "district": 8,
+  "name": "с. Щербинці"
+ },
+ {
+  "district": 8,
+  "name": "с. Форосна"
+ },
+ {
+  "district": 8,
+  "name": "с. Жилівка"
+ },
+ {
+  "district": 8,
+  "name": "с. Мамалига (Кошуляни)"
+ },
+ {
+  "district": 8,
+  "name": "с. Негринці"
+ },
+ {
+  "district": 8,
+  "name": "с. Драниця (Негринці)"
+ },
+ {
+  "district": 8,
+  "name": "с. Подвірне"
+ },
+ {
+  "district": 8,
+  "name": "с. Черленівка"
+ },
+ {
+  "district": 8,
+  "name": "с. Зелений Гай"
+ },
+ {
+  "district": 8,
+  "name": "м. Чернівці"
+ },
+ {
+  "district": 8,
+  "name": "с. Строїнці"
+ },
+ {
+  "district": 8,
+  "name": "с. Прут"
+ },
+ {
+  "district": 8,
+  "name": "с. Малинівка"
+ },
+ {
+  "district": 8,
+  "name": "с. Новоіванківці (Костичани)"
+ },
+ {
+  "district": 8,
+  "name": "с. Новоіванківці"
+ },
+ {
+  "district": 8,
+  "name": "с. Думени"
+ },
+ {
+  "district": 8,
+  "name": "с. Берестя"
+ },
+ {
+  "district": 8,
+  "name": "с. Слобода"
+ },
+ {
+  "district": 8,
+  "name": "с. Думени (Костичани)"
+ },
+ {
+  "district": 8,
+  "name": "с. Довжок"
+ },
+ {
+  "district": 8,
+  "name": "с. Ванчинець (Ванчиківці)"
+ },
+ {
+  "district": 8,
+  "name": "с. Прут (Магала)"
+ },
+ {
+  "district": 8,
+  "name": "с. Негринці (Драниця)"
+ },
+ {
+  "district": 8,
+  "name": "с. Боянівка ( Припруття)"
+ },
+ {
+  "district": 8,
+  "name": "с. Магала (Буда)"
+ },
+ {
+  "district": 8,
+  "name": "с. Ванчинець"
+ },
+ {
+  "district": 8,
+  "name": "с. Бояни ( Гай)"
+ },
+ {
+  "district": 8,
+  "name": "с. Ревківці"
+ },
+ {
+  "district": 8,
+  "name": "с. Гай"
+ },
+ {
+  "district": 9,
+  "name": "с-ще Путила"
+ },
+ {
+  "district": 9,
+  "name": "с. Мариничі"
+ },
+ {
+  "district": 9,
+  "name": "с. Дихтинец"
+ },
+ {
+  "district": 9,
+  "name": "с. Яблуница"
+ },
+ {
+  "district": 9,
+  "name": "с. Сергії"
+ },
+ {
+  "district": 9,
+  "name": "с. Усть-Путила"
+ },
+ {
+  "district": 9,
+  "name": "с. Довгопілля"
+ },
+ {
+  "district": 9,
+  "name": "с. Селятин"
+ },
+ {
+  "district": 9,
+  "name": "с. Плоска"
+ },
+ {
+  "district": 9,
+  "name": "с. Розтоки"
+ },
+ {
+  "district": 9,
+  "name": "с. Галицівка"
+ },
+ {
+  "district": 9,
+  "name": "с. Руська"
+ },
+ {
+  "district": 9,
+  "name": "с. Шепіт"
+ },
+ {
+  "district": 9,
+  "name": "с. Киселиці"
+ },
+ {
+  "district": 9,
+  "name": "с. Н.Ялівець"
+ },
+ {
+  "district": 9,
+  "name": "с.Тораки"
+ },
+ {
+  "district": 9,
+  "name": "с.Фошки"
+ },
+ {
+  "district": 9,
+  "name": "с. Яблуниця"
+ },
+ {
+  "district": 9,
+  "name": "с.Стебні"
+ },
+ {
+  "district": 9,
+  "name": "с. Конятин"
+ },
+ {
+  "district": 9,
+  "name": "с.Ропочівка"
+ },
+ {
+  "district": 9,
+  "name": "с. Паркулина"
+ },
+ {
+  "district": 9,
+  "name": "с. Самаково"
+ },
+ {
+  "district": 9,
+  "name": "с. В.Ялівець"
+ },
+ {
+  "district": 9,
+  "name": "с. Підзахаричі"
+ },
+ {
+  "district": 9,
+  "name": "с.Дихтинець"
+ },
+ {
+  "district": 9,
+  "name": "с. Поляківське"
+ },
+ {
+  "district": 9,
+  "name": "с. Сарата"
+ },
+ {
+  "district": 9,
+  "name": "с. Греблина"
+ },
+ {
+  "district": 9,
+  "name": "с.Бісків"
+ },
+ {
+  "district": 9,
+  "name": "с. Рижа"
+ },
+ {
+  "district": 9,
+  "name": "с. Петраші"
+ },
+ {
+  "district": 9,
+  "name": "с. Соколій"
+ },
+ {
+  "district": 9,
+  "name": "с. Верхній Ялівець"
+ },
+ {
+  "district": 9,
+  "name": "с.Ріжа"
+ },
+ {
+  "district": 9,
+  "name": "с. Шпетки"
+ },
+ {
+  "district": 9,
+  "name": "с.Ріпень"
+ },
+ {
+  "district": 9,
+  "name": "с. Тесницька"
+ },
+ {
+  "district": 9,
+  "name": "с. Малий Дихтинець"
+ },
+ {
+  "district": 9,
+  "name": "с.Гробище"
+ },
+ {
+  "district": 9,
+  "name": "с. Міжброди"
+ },
+ {
+  "district": 9,
+  "name": "с. Хорови"
+ },
+ {
+  "district": 9,
+  "name": "с.Перкалаба"
+ },
+ {
+  "district": 9,
+  "name": "с.Товарниця"
+ },
+ {
+  "district": 9,
+  "name": "с. Самакова"
+ },
+ {
+  "district": 9,
+  "name": "с. Замогила"
+ },
+ {
+  "district": 9,
+  "name": "с. Голошина"
+ },
+ {
+  "district": 9,
+  "name": "с. Голошино"
+ },
+ {
+  "district": 9,
+  "name": "с.Площі"
+ },
+ {
+  "district": 9,
+  "name": "с. Великий Липовець"
+ },
+ {
+  "district": 9,
+  "name": "с.Лустун"
+ },
+ {
+  "district": 9,
+  "name": "с. Андреківське"
+ },
+ {
+  "district": 9,
+  "name": "с.Кобилора"
+ },
+ {
+  "district": 10,
+  "name": "м. Сокиряни"
+ },
+ {
+  "district": 10,
+  "name": "м. Новодністровськ"
+ },
+ {
+  "district": 10,
+  "name": "с. Сербичани"
+ },
+ {
+  "district": 10,
+  "name": "с. Вітрянка"
+ },
+ {
+  "district": 10,
+  "name": "с. ст.Романківці"
+ },
+ {
+  "district": 10,
+  "name": "с. Романківці"
+ },
+ {
+  "district": 10,
+  "name": "с. Волошкове"
+ },
+ {
+  "district": 10,
+  "name": "с. Ломачинці"
+ },
+ {
+  "district": 10,
+  "name": "с. Коболчин"
+ },
+ {
+  "district": 10,
+  "name": "с. Кормань"
+ },
+ {
+  "district": 10,
+  "name": "с. Шебутинці"
+ },
+ {
+  "district": 10,
+  "name": "с. Новоолексіївка"
+ },
+ {
+  "district": 10,
+  "name": "с. Михалкове"
+ },
+ {
+  "district": 10,
+  "name": "с. Кулішівка"
+ },
+ {
+  "district": 10,
+  "name": "с. Селище"
+ },
+ {
+  "district": 10,
+  "name": "с. Грубна"
+ },
+ {
+  "district": 10,
+  "name": "с. Вашківці"
+ },
+ {
+  "district": 10,
+  "name": "с. Білоусівка"
+ },
+ {
+  "district": 10,
+  "name": "с. Струмок"
+ },
+ {
+  "district": 10,
+  "name": "с. Василівка"
+ },
+ {
+  "district": 10,
+  "name": "с. Непоротове"
+ },
+ {
+  "district": 10,
+  "name": "с. Гвіздівці"
+ },
+ {
+  "district": 10,
+  "name": "с. Лопатів"
+ },
+ {
+  "district": 10,
+  "name": "с. Ожеве"
+ },
+ {
+  "district": 10,
+  "name": "с. Шишківці"
+ },
+ {
+  "district": 10,
+  "name": "с. Шишківці (ст. Васкауци)"
+ },
+ {
+  "district": 10,
+  "name": "с. Братанівка"
+ },
+ {
+  "district": 10,
+  "name": "с. Олексіївка"
+ },
+ {
+  "district": 10,
+  "name": "с. Покровка"
+ },
+ {
+  "district": 10,
+  "name": "с. Галиця"
+ },
+ {
+  "district": 10,
+  "name": "с. Нова Слобода"
+ },
+ {
+  "district": 10,
+  "name": "с. Розкопинці"
+ },
+ {
+  "district": 10,
+  "name": "м. Вашківці"
+ },
+ {
+  "district": 11,
+  "name": "с-ще Красноїльськ"
+ },
+ {
+  "district": 11,
+  "name": "м. Сторожинець"
+ },
+ {
+  "district": 11,
+  "name": "с. Ропча"
+ },
+ {
+  "district": 11,
+  "name": "с. Банилів-Підгірний"
+ },
+ {
+  "district": 11,
+  "name": "с. Їжівці"
+ },
+ {
+  "district": 11,
+  "name": "с. Годилів"
+ },
+ {
+  "district": 11,
+  "name": "с. Великий Кучурів"
+ },
+ {
+  "district": 11,
+  "name": "с. Нові Бросківці"
+ },
+ {
+  "district": 11,
+  "name": "с. Старі Бросківці"
+ },
+ {
+  "district": 11,
+  "name": "с. Кам'яна"
+ },
+ {
+  "district": 11,
+  "name": "с. Чудей"
+ },
+ {
+  "district": 11,
+  "name": "с. Череш"
+ },
+ {
+  "district": 11,
+  "name": "с. Верхні Петрівці"
+ },
+ {
+  "district": 11,
+  "name": "с. Снячів"
+ },
+ {
+  "district": 11,
+  "name": "с. Тисовець"
+ },
+ {
+  "district": 11,
+  "name": "с. Михальча"
+ },
+ {
+  "district": 11,
+  "name": "с. Спаська"
+ },
+ {
+  "district": 11,
+  "name": "с. Зруб-Комарівці"
+ },
+ {
+  "district": 11,
+  "name": "с. Панка"
+ },
+ {
+  "district": 11,
+  "name": "с. Стара Жадова"
+ },
+ {
+  "district": 11,
+  "name": "с. Заволока"
+ },
+ {
+  "district": 11,
+  "name": "с. Давидівка"
+ },
+ {
+  "district": 11,
+  "name": "с. Буденець"
+ },
+ {
+  "district": 11,
+  "name": "с. Комарівці"
+ },
+ {
+  "district": 11,
+  "name": "с. Нова Жадова"
+ },
+ {
+  "district": 11,
+  "name": "с. Глибочок"
+ },
+ {
+  "district": 11,
+  "name": "с. Костинці"
+ },
+ {
+  "district": 11,
+  "name": "с. Заболоття"
+ },
+ {
+  "district": 11,
+  "name": "с. Бобівці"
+ },
+ {
+  "district": 11,
+  "name": "с. Нижні Петрівці"
+ },
+ {
+  "district": 11,
+  "name": "с. Глибочок, Кам'янська ТГ"
+ },
+ {
+  "district": 11,
+  "name": "с. Слобода-Комарівці"
+ },
+ {
+  "district": 11,
+  "name": "с. Дубове"
+ },
+ {
+  "district": 11,
+  "name": "с. Аршиця"
+ },
+ {
+  "district": 11,
+  "name": "с. Стара Красношора"
+ },
+ {
+  "district": 11,
+  "name": "смт. Стрілецький кут"
+ },
+ {
+  "district": 11,
+  "name": "с. Ясени"
+ },
+ {
+  "district": 11,
+  "name": "с. Дібрівка"
+ },
+ {
+  "district": 11,
+  "name": "с. Зруб-Комарівський"
+ },
+ {
+  "district": 11,
+  "name": "с. Косованка"
+ },
+ {
+  "district": 11,
+  "name": "с. КОРЧІВЦІ"
+ },
+ {
+  "district": 11,
+  "name": "с. Нова Красношора"
+ },
+ {
+  "district": 11,
+  "name": "с. Нова Жадова кут Дібрівка"
+ },
+ {
+  "district": 11,
+  "name": "с. Глибочок (Снячівська с/р)"
+ },
+ {
+  "district": 11,
+  "name": "с. Глибочок, Великокучурівська ТГ"
+ },
+ {
+  "district": 11,
+  "name": "с. Стара Красношора1"
+ },
+ {
+  "district": 11,
+  "name": "с. Брусенки"
+ },
+ {
+  "district": 11,
+  "name": "с. Стрілецький Кут"
+ },
+ {
+  "district": 12,
+  "name": "с. РУКШИН"
+ },
+ {
+  "district": 12,
+  "name": "с. НЕДОБОЇВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. КЛІШКІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. ПЕРЕБИКІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. МАЛИНЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. МЛИНКИ"
+ },
+ {
+  "district": 12,
+  "name": "с. ПОЛЯНА"
+ },
+ {
+  "district": 12,
+  "name": "с. РУХОТИН"
+ },
+ {
+  "district": 12,
+  "name": "с. РАШКІВ"
+ },
+ {
+  "district": 12,
+  "name": "с. ГОРДІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "м. ХОТИН"
+ },
+ {
+  "district": 12,
+  "name": "с. БОЧКІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. ЗАРОЖАНИ"
+ },
+ {
+  "district": 12,
+  "name": "с. КОЛІНКІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. ВЛАДИЧНА"
+ },
+ {
+  "district": 12,
+  "name": "с. ГРОЗИНЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. КАПЛІВКА"
+ },
+ {
+  "district": 12,
+  "name": "с. САНКІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. КЕРСТЕНЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. СТАВЧАНИ"
+ },
+ {
+  "district": 12,
+  "name": "с. ДОЛИНЯНИ"
+ },
+ {
+  "district": 12,
+  "name": "с. ПАШКІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. КРУГЛИК"
+ },
+ {
+  "district": 12,
+  "name": "с. ЯРІВКА"
+ },
+ {
+  "district": 12,
+  "name": "с. КРУТЕНЬКИ"
+ },
+ {
+  "district": 12,
+  "name": "с. БЛИЩАДЬ"
+ },
+ {
+  "district": 12,
+  "name": "с. ДАНКІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. АНАДОЛИ"
+ },
+ {
+  "district": 12,
+  "name": "с. АТАКИ"
+ },
+ {
+  "district": 12,
+  "name": "с. БІЛІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. ЗЕЛЕНА ЛИПА"
+ },
+ {
+  "district": 12,
+  "name": "с. ВОРНИЧАНИ"
+ },
+ {
+  "district": 12,
+  "name": "с. ШИРІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. ПРИГОРОДОК"
+ },
+ {
+  "district": 12,
+  "name": "с. ОРИСТІВКА"
+ },
+ {
+  "district": 12,
+  "name": "с. ШИЛІВЦІ"
+ },
+ {
+  "district": 12,
+  "name": "с. ЧЕПОНОСИ"
+ },
+ {
+  "district": 12,
+  "name": "с. КОРНЕШТИ"
+ },
+ {
+  "district": 12,
+  "name": "с. ГРИНЯЧКА"
+ },
+ {
+  "district": 12,
+  "name": "с. Урочище \"4 корчми\""
+ },
+ {
+  "district": 12,
+  "name": "с. БРІДКИ"
+ }
+]

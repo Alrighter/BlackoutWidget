@@ -1,4 +1,4 @@
-import type { Address, HouseInfo, ScheduleSnapshot } from '../../shared/types';
+import type { Address, HouseInfo, LineInfo, ScheduleSnapshot } from '../../shared/types';
 
 /** Shown when the source could not be reached at all (also the message of NetworkError). */
 export const OFFLINE_MESSAGE = 'Немає з’єднання з сайтом ДТЕК';
@@ -14,6 +14,8 @@ export interface PageSession {
   reload(): Promise<void>;
   isOnline(): boolean; // the OS-level connectivity hint (electron net.isOnline())
   showForUser(): Promise<void>; // shows the window, resolves when the page is ready again
+  isOpen(): boolean; // a page window exists
+  release(): void; // closes the window; the next ensureReady() opens a new one (unlike dispose, not final)
   dispose(): void;
 }
 
@@ -23,7 +25,10 @@ export interface ScheduleProvider {
   listCities(): Promise<string[]>;
   listStreets(city: string): Promise<string[]>;
   listHouses(city: string, street: string): Promise<HouseInfo[]>;
-  fetchSnapshot(address: Address): Promise<ScheduleSnapshot>;
+  /** Sources whose `listHouses` marks houses `linesPending` give the picked house's lines here (one request per house). */
+  houseLines?(city: string, street: string, house: string): Promise<LineInfo[]>;
+  /** `previous`: the stored snapshot of the same address (null when none), for sources that reuse parts of it. */
+  fetchSnapshot(address: Address, previous?: ScheduleSnapshot | null): Promise<ScheduleSnapshot>;
   showVerification(): Promise<void>;
   dispose(): void;
 }

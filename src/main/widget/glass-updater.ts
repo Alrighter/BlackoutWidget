@@ -17,7 +17,7 @@ function union(rects: Rect[]): Rect {
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 
-/** Keeps the widget's background layer showing the wallpaper region under it. Returns a disposer. */
+/** Keeps one widget's background layer showing the wallpaper region under it. Returns a disposer, called with the widget's own disposal. */
 export function startGlassUpdater(widget: WidgetWindow): () => void {
   let running = false;
   let again = false;
@@ -74,7 +74,7 @@ export function startGlassUpdater(widget: WidgetWindow): () => void {
       .catch(() => {});
   }, 60_000);
 
-  widget.onMoved(trigger);
+  const offMoved = widget.onMoved(trigger);
   screen.on('display-metrics-changed', trigger);
   screen.on('display-added', trigger);
   screen.on('display-removed', trigger);
@@ -82,6 +82,7 @@ export function startGlassUpdater(widget: WidgetWindow): () => void {
 
   return () => {
     clearInterval(poll);
+    offMoved();
     screen.off('display-metrics-changed', trigger);
     screen.off('display-added', trigger);
     screen.off('display-removed', trigger);

@@ -1,22 +1,65 @@
-import { DtekKremProvider } from './dtek-krem';
-import { DTEK_URL, NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek-krem/page-scripts';
+import { DTEK_SITES, DtekProvider } from './dtek';
+import { mirrorFeed, yasnoFeed } from './dtek/feeds';
+import type { ScheduleFeed } from './dtek/feeds';
+import { NEUTRALIZE_TIMERS, READY_CHECK, isPagePollRequest } from './dtek/page-scripts';
 import type { SessionOptions } from './browser-session';
-import { silentLogger, type Logger } from '../log';
+import { CekProvider } from './cek';
+import { CvoeProvider } from './cvoe';
+import type { HttpFetch } from './http';
+import { LoeProvider } from './loe';
+import { MkoeProvider } from './mkoe';
+import { ToeProvider } from './toe';
+import { VoeProvider } from './voe';
+import { ZtoeProvider } from './ztoe';
+import { PROVIDERS, providerSiteUrl } from '../../shared/providers';
+import type { Logger } from '../log';
 import { ProviderError, type PageSession, type ScheduleProvider } from './types';
 
+/** What the plain-HTTP providers need from main: the fetch and the OS-level connectivity hint. */
+export interface ProviderHttp { fetch: HttpFetch; isOnline: () => boolean }
+
+/** The providers in the order of `PROVIDERS` (the wizard's card order). A new source is one `PROVIDERS` entry and one line in `make`. */
 export function createProviders(
-  makeSession: (o: SessionOptions) => PageSession, log: Logger = silentLogger,
+  makeSession: (o: SessionOptions) => PageSession, log: Logger, http: ProviderHttp, dtekOpts: { lingerMs?: number } = {},
 ): ScheduleProvider[] {
-  return [
-    new DtekKremProvider(makeSession({
-      url: DTEK_URL,
-      partition: 'persist:dtek-krem',
+  const deps = { fetch: http.fetch, isOnline: http.isOnline, log };
+  // Per site, in order: the first usable feed wins (spec §Goals).
+  const feedsFor = (id: string): ScheduleFeed[] => {
+    switch (id) {
+      case 'dtek-kem': return [yasnoFeed(deps), mirrorFeed('kyiv', deps)];
+      case 'dtek-krem': return [mirrorFeed('kyiv-region', deps)];
+      case 'dtek-dnem': return [mirrorFeed('dnipro', deps)];
+      case 'dtek-oem': return [mirrorFeed('odesa', deps)];
+      default: return [];
+    }
+  };
+  const dtek = (id: string): ScheduleProvider => {
+    const site = DTEK_SITES.find(s => s.id === id)!;
+    const url = providerSiteUrl(id)!;
+    return new DtekProvider(site, makeSession({
+      url,
+      partition: `persist:${id}`,
       readyCheck: READY_CHECK,
-      allowedHosts: ['dtek-krem.com.ua'],
+      allowedHosts: [new URL(url).hostname.replace(/^www\./, '')],
       afterReady: NEUTRALIZE_TIMERS,
       blockRequest: isPagePollRequest,
-    }), log),
-  ];
+    }), log, { feeds: feedsFor(id), lingerMs: dtekOpts.lingerMs });
+  };
+  const make: Record<string, () => ScheduleProvider> = {
+    'voe': () => new VoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'loe': () => new LoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'mkoe': () => new MkoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'toe': () => new ToeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'ztoe': () => new ZtoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'cvoe': () => new CvoeProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+    'cek': () => new CekProvider({ fetch: http.fetch, isOnline: http.isOnline, log }),
+  };
+  for (const site of DTEK_SITES) make[site.id] = () => dtek(site.id);
+  return Object.keys(PROVIDERS).map(id => {
+    const build = make[id];
+    if (!build) throw new ProviderError(`Невідомий провайдер: ${id}`);
+    return build();
+  });
 }
 
 export function findProvider(list: ScheduleProvider[], id: string): ScheduleProvider {

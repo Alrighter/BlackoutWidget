@@ -18,7 +18,19 @@ type Hwnd = bigint;
 const hwnd = (v: unknown): Hwnd => BigInt(v as number | bigint);
 const hwndOf = (win: BrowserWindow): Hwnd => win.getNativeWindowHandle().readBigUInt64LE(0);
 
-function loadUser32() {
+type User32 = ReturnType<typeof bindUser32>;
+let user32: User32 | null = null;
+
+/**
+ * Bound once for the whole process: every widget has its own pinner, and koffi rejects a second struct of the
+ * same name. A failed load is not kept, so the next pinner tries again (and falls back to NoopPinner on its own).
+ */
+function loadUser32(): User32 {
+  user32 ??= bindUser32();
+  return user32;
+}
+
+function bindUser32() {
   // Loaded lazily so the native binary is only touched on Windows, when a pinner is actually created.
   const koffi = require('koffi') as typeof import('koffi');
   const lib = koffi.load('user32.dll');

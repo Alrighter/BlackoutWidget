@@ -13,11 +13,25 @@ export function scrubKeys(text: string, keys: { accessKey: string; secretKey: st
   return out;
 }
 
+/** Log-safe form of an account email: first character, ellipsis, domain. */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  return at < 1 ? '…' : `${email[0]}…${email.slice(at)}`;
+}
+
+/** Every non-empty secret becomes `…`; longest first, so a secret that contains another is hidden whole. */
+export function scrubSecrets(text: string, secrets: readonly string[]): string {
+  let out = text;
+  for (const s of [...secrets].filter(Boolean).sort((a, b) => b.length - a.length)) out = out.split(s).join('…');
+  return out;
+}
+
 export interface Encryptor { isEncryptionAvailable(): boolean; encryptString(s: string): Buffer; decryptString(b: Buffer): string }
 
 export class SecretsUnavailableError extends Error {
-  constructor() {
-    super('Не вдалося безпечно зберегти ключі на цьому комп’ютері');
+  /** `what`: the keys of the developer API, or the account's sign-in data. */
+  constructor(what: 'keys' | 'account' = 'keys') {
+    super(`Не вдалося безпечно зберегти ${what === 'keys' ? 'ключі' : 'дані входу'} на цьому комп’ютері`);
     this.name = 'SecretsUnavailableError';
   }
 }

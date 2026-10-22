@@ -1,4 +1,6 @@
-import { computeWidgetView, slotRuns, formatDurationLong, formatDurationShort } from '../../src/shared/widget-state';
+import {
+  computeWidgetView, slotRuns, formatDurationLong, formatDurationShort, STALE_AFTER_MIN, EMERGENCY_HOUSE_STALE_MIN,
+} from '../../src/shared/widget-state';
 import { fixtureSnapshot } from '../helpers/snapshot';
 import type { ActualStatus, CurrentOutage, DaySchedule, Slot } from '../../src/shared/types';
 const at = (iso: string) => new Date(iso);
@@ -11,6 +13,10 @@ test('11:50 Kyiv: light on, outage at 15:00', () => {
   expect(v.countdownShort).toBe('3:10'); expect(v.countdownCaption).toBe('до вимкнення о 15:00');
   expect(v.lineLabel).toBe('Лінія 1 · черга 1.2'); expect(v.updatedText).toBe('оновлено 11:48');
   expect(v.stale).toBe(false); expect(v.tomorrow).toBeNull();
+});
+test('the line label lower-cases only the first letter of the queue label', () => {
+  const snap = { ...fixtureSnapshot({ lineIndex: 2 }), groupLabel: 'Не залучено до ГПВ' };
+  expect(computeWidgetView(snap, at('2026-10-17T08:50:00Z')).lineLabel).toBe('Лінія 2 · не залучено до ГПВ');
 });
 test('08:10: off until 08:30 ("first" half hour)', () =>
   expect(computeWidgetView(fixtureSnapshot(), at('2026-10-17T05:10:00Z')).nextText).toBe('Увімкнуть о 08:30 · через 20 хв'));
@@ -105,6 +111,13 @@ test('duration formats', () => {
 const NOW = at('2026-10-17T08:50:00Z');
 const withOutage = (o: CurrentOutage, fetchedAt?: string) =>
   computeWidgetView(fixtureSnapshot({ currentOutage: o, ...(fetchedAt ? { fetchedAt } : {}) }), NOW);
+test('a planned outage at the house overrides like an emergency, with the «Планове» badge', () => {
+  const planned: CurrentOutage = { kind: 'planned', text: 'Планові ремонтні роботи', start: '20.10.2026 09:36', end: '20.10.2026 19:00' };
+  const snap = fixtureSnapshot({ currentOutage: planned, fetchedAt: '2026-10-20T06:50:00.000Z' });
+  const v = computeWidgetView(snap, at('2026-10-20T07:00:00Z')); // 10:00 Kyiv
+  expect(v.state).toBe('emergency'); expect(v.title).toBe('Світла немає'); expect(v.outageBadge).toBe('Планове');
+  expect(computeWidgetView(snap, at('2026-10-20T16:30:00Z')).outageBadge).toBeUndefined(); // 19:30 Kyiv: it has ended
+});
 test('emergency that has not started yet → schedule state', () => {
   const v = withOutage({ kind: 'emergency', text: 'Аварійне відключення', start: '13:00 17.10.2026', end: '17:00 17.10.2026' });
   expect(v.state).toBe('on'); expect(v.outageBadge).toBeUndefined();
@@ -124,6 +137,28 @@ test('emergency without an end: overrides only while the snapshot is fresh', () 
   expect(stale.state).toBe('on'); expect(stale.outageBadge).toBeUndefined(); expect(stale.stale).toBe(true);
   const unreadableEnd = withOutage({ kind: 'emergency', text: 'Екстрене відключення', end: 'невідомо' }, '2026-10-17T07:50:00.000Z');
   expect(unreadableEnd.state).toBe('on');
+});
+describe('emergency without an end: its staleness is judged from houseCheckedAt (a feed renews only fetchedAt)', () => {
+  const noEnd: CurrentOutage = { kind: 'emergency', text: 'Екстрене відключення', start: '10:05 17.10.2026' };
+  const minAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
+  const feedSnap = (houseCheckedAt: string) =>
+    ({ ...fixtureSnapshot({ currentOutage: noEnd, fetchedAt: NOW.toISOString() }), houseCheckedAt });
+  test('a house check older than EMERGENCY_HOUSE_STALE_MIN (61 min) drops it, while the display stays fresh by fetchedAt', () => {
+    expect(EMERGENCY_HOUSE_STALE_MIN).toBe(60);
+    const v = computeWidgetView(feedSnap(minAgo(EMERGENCY_HOUSE_STALE_MIN + 1)), NOW);
+    expect(v.state).toBe('on'); expect(v.outageBadge).toBeUndefined(); expect(v.emergency).toBeUndefined();
+    expect(v.stale).toBe(false);
+  });
+  test('a house check 5 min or 50 min old keeps it (checks during an outage land up to ~48 min apart)', () => {
+    for (const age of [5, 50]) {
+      const v = computeWidgetView(feedSnap(minAgo(age)), NOW);
+      expect(v.state).toBe('emergency'); expect(v.outageBadge).toBe('Екстрене');
+    }
+  });
+  test('no houseCheckedAt: keyed on fetchedAt, as before', () => {
+    expect(withOutage(noEnd, minAgo(5)).state).toBe('emergency');
+    expect(withOutage(noEnd, minAgo(STALE_AFTER_MIN + 1)).state).toBe('on');
+  });
 });
 test("kind 'other' never overrides and gets no badge", () => {
   const v = withOutage({ kind: 'other', text: 'Планові ремонтні роботи', start: '10:00 17.10.2026', end: '17:00 17.10.2026' });

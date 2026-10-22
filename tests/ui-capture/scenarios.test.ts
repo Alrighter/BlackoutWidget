@@ -1,16 +1,18 @@
 import { createRequire } from 'node:module';
-import type { AppState } from '../../src/shared/types';
+import type { AppState, WidgetState } from '../../src/shared/types';
 import { computeWidgetView, type WidgetView } from '../../src/shared/widget-state';
 
 interface Rig {
   SCENARIO_NAMES: string[];
-  buildScenario(name: string, opts?: { style?: string; now?: string }): { nowMs: number; state: AppState };
+  buildScenario(
+    name: string, opts?: { style?: string; now?: string; locations?: number },
+  ): { nowMs: number; state: AppState; widget: WidgetState };
 }
 const rig = createRequire(import.meta.url)('../../scripts/ui-capture/scenarios.cjs') as Rig;
 
 function view(name: string, now?: string): { view: WidgetView; state: AppState } {
   const { nowMs, state } = rig.buildScenario(name, { now });
-  return { view: computeWidgetView(state.snapshot!, new Date(nowMs), state.actual), state };
+  return { view: computeWidgetView(state.locations[0].snapshot!, new Date(nowMs), state.locations[0].actual), state };
 }
 
 // What the mockup's SCEN (widget-compact.html) shows for each scenario, as the app's own logic computes it.
@@ -46,7 +48,8 @@ describe('UI capture rig scenarios', () => {
     const { view: v, state } = view(name);
     expect(v).toMatchObject(EXPECTED[name]);
     expect(v.lineLabel).toBe('Лінія 1 · черга 1.2');
-    expect(state.lineChanged).toBe(name === 'warning');
+    expect(state.locations[0].lineChanged).toBe(name === 'warning');
+    expect(!!state.locations[0].actual).toBe(name.startsWith('eco'));
     expect(!!state.actual).toBe(name.startsWith('eco'));
   });
 
@@ -63,5 +66,30 @@ describe('UI capture rig scenarios', () => {
     const { view: v } = view('on', '13:00');
     expect([v.state, v.nextText, v.updatedText]).toEqual(['on', 'Вимкнення о 15:00 · через 2 год', 'оновлено 11:45']);
     expect(view('off', '2026-10-20T16:00:00+03:00').view).toMatchObject({ todayKey: '2026-10-20', state: 'off' });
+  });
+
+  it('one location by default: no name on the widget, the EcoFlow status on the location and on AppState', () => {
+    const { state, widget } = rig.buildScenario('ecoMatch');
+    expect(state.locations.map(l => l.location.name)).toEqual(['Дім']);
+    expect(state.settings.locations).toEqual(state.locations.map(l => l.location));
+    expect(state.settings.actualLocationId).toBe('home');
+    expect(widget.showName).toBe(false);
+    expect(widget.location).toBe(state.locations[0]);
+    expect(state.actual).toBe(state.locations[0].actual);
+  });
+
+  it('--locations 2 adds «Батьки» with the same snapshot data, EcoFlow only on the first', () => {
+    const { state, widget } = rig.buildScenario('ecoMatch', { locations: 2 });
+    expect(state.locations.map(l => l.location.name)).toEqual(['Дім', 'Батьки']);
+    expect(state.settings.locations.map(l => l.id)).toEqual(['home', 'parents']);
+    expect(widget.showName).toBe(true);
+    expect(widget.location.location.id).toBe('home');
+    const [home, parents] = state.locations;
+    expect(parents.snapshot!.days).toEqual(home.snapshot!.days);
+    expect(parents.snapshot!.address).not.toEqual(home.snapshot!.address);
+    expect(parents.location.address).toEqual(parents.snapshot!.address);
+    expect(home.actual).toBeTruthy();
+    expect(parents.actual).toBeUndefined();
+    expect(state.actual).toBe(home.actual);
   });
 });

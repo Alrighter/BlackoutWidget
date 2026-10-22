@@ -1,0 +1,117 @@
+{
+ "25": {
+  "dsos": {
+   "902": {
+    "groups": {
+     "20.1": {
+      "slots": {
+       "0": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "1": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "2": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "3": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "4": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "5": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "6": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ]
+      }
+     },
+     "1.1": {
+      "slots": {
+       "0": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "1": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "2": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "3": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "4": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "5": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ],
+       "6": [
+        {
+         "start": 0,
+         "end": 1440,
+         "type": "NotPlanned"
+        }
+       ]
+      }
+     }
+    }
+   }
+  }
+ },
+ "_note": "trimmed: 2 of 60 groups"
+}

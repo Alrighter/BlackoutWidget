@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { providerDisplayName } from '../../../shared/providers';
-import type { AppState, WidgetBackground } from '../../../shared/types';
+import type { WidgetState, WidgetBackground } from '../../../shared/types';
 import { kyivDateKey, kyivMinutesOfDay } from '../../../shared/time';
 import { computeWidgetView, type WidgetView } from '../../../shared/widget-state';
 import { CompactWidget } from './CompactWidget';
@@ -20,24 +20,20 @@ const emptyView = (now: Date): WidgetView => ({
  * clipped to the card.
  */
 export function Widget({ state, now, background, children }: {
-  state: AppState; now: Date; background: WidgetBackground; children?: ReactNode;
+  state: WidgetState; now: Date; background: WidgetBackground; children?: ReactNode;
 }) {
-  const style = state.settings.widgetStyle;
-  const view = !state.settings.address ? null : state.snapshot ? computeWidgetView(state.snapshot, now, state.actual) : emptyView(now);
-
-  let body;
-  if (!view) {
-    body = <div className="w-status"><span>Налаштуйте адресу</span></div>;
-  } else {
-    const props = { view, lineChanged: state.lineChanged };
-    // From the snapshot the line label comes from; before the first one there is no caption.
-    const provider = state.snapshot ? providerDisplayName(state.snapshot.providerId) : '';
-    body = style === 'ring' ? <RingWidget {...props} />
-      : style === 'timeline' ? <TimelineWidget {...props} provider={provider} />
-      : <CompactWidget {...props} />;
-  }
+  const { location: loc, showName } = state;
+  const style = loc.location.widgetStyle;
+  const view = loc.snapshot ? computeWidgetView(loc.snapshot, now, loc.actual) : emptyView(now);
+  // The name leads the caption only among several locations; before the first schedule it is all the caption has.
+  const props = { view, lineChanged: loc.lineChanged, name: showName ? loc.location.name : '' };
+  // From the snapshot the line label comes from; before the first one there is no line or provider.
+  const provider = loc.snapshot ? providerDisplayName(loc.snapshot.providerId) : '';
+  const body = style === 'ring' ? <RingWidget {...props} />
+    : style === 'timeline' ? <TimelineWidget {...props} provider={provider} />
+    : <CompactWidget {...props} />;
   return (
-    <div className={`w-card w-${style} w-bg-${background.kind} w-tone-${view?.state ?? 'unknown'}`}>
+    <div className={`w-card w-${style} w-bg-${background.kind} w-tone-${view.state}`}>
       {background.kind === 'image' && <div className="w-bg" style={{ backgroundImage: `url("${background.dataUrl}")` }} />}
       <div className="w-glass" />
       <div className="w-content">{body}</div>

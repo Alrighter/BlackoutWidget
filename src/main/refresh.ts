@@ -1,101 +1,119 @@
-import type { Address, AppState, RefreshPhase, ScheduleSnapshot } from '../shared/types';
+import { sameAddress } from '../shared/locations';
+import type { LocationState, RefreshPhase } from '../shared/types';
+import { silentLogger, type Logger } from './log';
 import { CaptchaRequiredError, NetworkError } from './providers/types';
 import type { ScheduleProvider } from './providers/types';
 import type { RunOutcome } from './scheduler';
 import type { AppStore } from './store';
 
+/** The location's error when a fetched schedule cannot be written to snapshots.json (a locked or unwritable file). */
+export const SAVE_FAILED_TEXT = 'Не вдалося зберегти графік на цьому комп’ютері';
+
+interface Progress { phase: RefreshPhase; lastError?: string }
+
 export class RefreshService {
-  private phase: RefreshPhase = 'idle';
-  private lastError: string | undefined;
-  private listeners = new Set<(s: AppState) => void>();
-  private inFlight: Promise<RunOutcome> | null = null;
+  private progress = new Map<string, Progress>();
+  private inFlight = new Map<string, Promise<RunOutcome>>();
+  private listeners = new Set<() => void>();
 
-  constructor(private readonly deps: { store: AppStore; getProvider(id: string): ScheduleProvider }) {}
+  constructor(private readonly deps: { store: AppStore; getProvider(id: string): ScheduleProvider; log?: Logger }) {}
 
-  getState(): AppState {
-    const settings = this.deps.store.getSettings();
-    const a = settings.address;
-    // A snapshot cached for another address must never be shown as this one's schedule.
-    const stored = this.deps.store.getSnapshot();
-    const snapshot = stored && sameAddress(a, stored.address) ? stored : null;
-    // During a reported outage the source lists only the outage's queues, so a missing queue proves nothing then.
-    const lineChanged = !!a && !!snapshot && !snapshot.outageActive && !snapshot.lines.some(l => l.groupId === a.groupId);
-    const state: AppState = { settings, snapshot, phase: this.phase, lineChanged };
-    if (this.lastError !== undefined) state.lastError = this.lastError;
-    return state;
+  /** One entry per location, in settings order. `actual` is not set here: main adds it for the EcoFlow location. */
+  getStates(): LocationState[] {
+    return this.deps.store.getSettings().locations.map(location => {
+      const a = location.address;
+      // A snapshot cached for another address must never be shown as this one's schedule.
+      const stored = this.deps.store.getSnapshot(location.id);
+      const snapshot = stored && sameAddress(a, stored.address) ? stored : null;
+      // During a reported outage the source lists only the outage's queues, so a missing queue proves nothing then.
+      const lineChanged = !!snapshot && !snapshot.outageActive && !snapshot.lines.some(l => l.groupId === a.groupId);
+      const p = this.progress.get(location.id);
+      const state: LocationState = { location, snapshot, phase: p?.phase ?? 'idle', lineChanged };
+      if (p?.lastError !== undefined) state.lastError = p.lastError;
+      return state;
+    });
   }
 
-  onState(cb: (s: AppState) => void): () => void {
+  /** Called when any location's state changed; read the new state with getStates(). */
+  onState(cb: () => void): () => void {
     this.listeners.add(cb);
     return () => { this.listeners.delete(cb); };
   }
 
   /**
-   * 'ok' = success or nothing to do (no address); 'offline' = the source was never reached (NetworkError);
-   * 'failed' = any other failure. Never runs two requests in parallel.
+   * 'ok' = success or nothing to do (no such location); 'offline' = the source was never reached (NetworkError);
+   * 'failed' = any other failure. Never runs two requests for one location in parallel.
    */
-  refresh(): Promise<RunOutcome> {
-    if (this.inFlight) return this.inFlight;
-    const p = this.runLoop().finally(() => { this.inFlight = null; });
-    this.inFlight = p;
+  refresh(id: string): Promise<RunOutcome> {
+    const running = this.inFlight.get(id);
+    if (running) return running;
+    const p = this.runLoop(id).finally(() => { this.inFlight.delete(id); });
+    this.inFlight.set(id, p);
     return p;
   }
 
-  async setAddress(a: Address): Promise<void> {
-    this.deps.store.updateSettings({ address: a });
-    this.deps.store.setSnapshot(null);
-    this.lastError = undefined;
+  /** The location's address was just changed in the store: forget what was known for the old one and fetch again. */
+  async addressChanged(id: string): Promise<void> {
+    try { this.deps.store.setSnapshot(id, null); } catch { /* a snapshot for another address is never shown anyway */ }
+    this.progress.delete(id);
     // Joins an in-flight run if any; that run notices the address changed and refetches.
-    await this.refresh();
+    await this.refresh(id);
   }
 
-  private async runLoop(): Promise<RunOutcome> {
+  /** The location was deleted. */
+  forget(id: string): void {
+    this.progress.delete(id);
+  }
+
+  private async runLoop(id: string): Promise<RunOutcome> {
     for (;;) {
-      const r = await this.doRefresh();
+      const r = await this.doRefresh(id);
       if (r !== 'stale') return r;
     }
   }
 
-  private async doRefresh(): Promise<RunOutcome | 'stale'> {
-    const address = this.deps.store.getSettings().address;
-    if (!address) {
-      this.phase = 'idle';
-      this.lastError = undefined;
-      this.emit();
-      return 'ok';
-    }
-    this.phase = 'refreshing';
+  private async doRefresh(id: string): Promise<RunOutcome | 'stale'> {
+    const location = this.deps.store.getLocation(id);
+    if (!location) return 'ok';
+    const address = location.address;
+    this.progress.set(id, { phase: 'refreshing' });
     this.emit();
-    let snapshot: ScheduleSnapshot | undefined;
+    let snapshot;
     let error: unknown;
+    const stored = this.deps.store.getSnapshot(id);
+    const previous = stored && sameAddress(stored.address, address) ? stored : null;
     try {
-      snapshot = await this.deps.getProvider(address.providerId).fetchSnapshot(address);
+      snapshot = await this.deps.getProvider(address.providerId).fetchSnapshot(address, previous);
     } catch (err) {
       error = err;
     }
-    if (!sameAddress(this.deps.store.getSettings().address, address)) return 'stale';
+    const now = this.deps.store.getLocation(id);
+    if (!now) { this.progress.delete(id); return 'ok'; }
+    if (!sameAddress(now.address, address)) return 'stale';
     if (snapshot) {
-      this.deps.store.setSnapshot(snapshot);
-      this.phase = 'ok';
-      this.lastError = undefined;
+      try {
+        this.deps.store.setSnapshot(id, snapshot);
+      } catch (err) {
+        // The raw fs error names a path under the user's profile: it goes to the log, the location gets a fixed text.
+        (this.deps.log ?? silentLogger).error(`refresh: the schedule could not be saved for location ${id}`, err);
+        return this.fail(id, new Error(SAVE_FAILED_TEXT));
+      }
+      this.progress.set(id, { phase: 'ok' });
       this.emit();
       return 'ok';
     }
-    this.phase = error instanceof CaptchaRequiredError ? 'captcha' : 'error';
-    this.lastError = error instanceof Error ? error.message : String(error);
+    return this.fail(id, error);
+  }
+
+  private fail(id: string, error: unknown): RunOutcome {
+    this.progress.set(id, { phase: error instanceof CaptchaRequiredError ? 'captcha' : 'error', lastError: error instanceof Error ? error.message : String(error) });
     this.emit();
     return error instanceof NetworkError ? 'offline' : 'failed';
   }
 
   private emit(): void {
-    const s = this.getState();
     for (const cb of [...this.listeners]) {
-      try { cb(s); } catch (err) { console.error('RefreshService listener failed', err); }
+      try { cb(); } catch (err) { console.error('RefreshService listener failed', err); }
     }
   }
-}
-
-function sameAddress(a: Address | null, b: Address): boolean {
-  return !!a && a.providerId === b.providerId && a.city === b.city && a.street === b.street
-    && a.house === b.house && a.lineIndex === b.lineIndex && a.groupId === b.groupId;
 }
