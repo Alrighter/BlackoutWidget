@@ -3,7 +3,9 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DtekProvider, FEEDS_FAILED_TEXT } from '../../src/main/providers/dtek';
-import { PAGE_LINGER_MS, mirrorFeed, type FeedAnswer, type FeedResult } from '../../src/main/providers/dtek/feeds';
+import {
+  PAGE_LINGER_MS, PAGE_REFRESH_LINGER_MS, mirrorFeed, type FeedAnswer, type FeedResult,
+} from '../../src/main/providers/dtek/feeds';
 import { READ_FACT, getHomeNumScript, readStreetsScript } from '../../src/main/providers/dtek/page-scripts';
 import { factToDays } from '../../src/main/providers/dtek/parse';
 import { AddressNotFoundError } from '../../src/main/providers/resolve';
@@ -133,14 +135,14 @@ test('an outage at the last check → the page, every refresh within the budget'
   const { p, s, feeds } = provider();
   const previous = snap({ houseCheckedAt: ago(HOUR), outageActive: true });
   await p.fetchSnapshot(addr, previous); // t = 0: the page opens
-  await vi.advanceTimersByTimeAsync(MIN);
-  const again = await p.fetchSnapshot(addr, previous); // t = 1 min: still open, so free
+  await vi.advanceTimersByTimeAsync(MIN / 2);
+  const again = await p.fetchSnapshot(addr, previous); // t = 30 s: still open, so free
   expect(homeNums(s)).toBe(2);
   expect(again.houseCheckedAt).toBe(nowIso());
   expect(feeds[0].read).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(PAGE_LINGER_MS); // t = 6 min: released
+  await vi.advanceTimersByTimeAsync(PAGE_REFRESH_LINGER_MS); // t = 90 s: released
   expect(s.release).toHaveBeenCalledTimes(1);
-  await vi.advanceTimersByTimeAsync(4 * MIN); // t = 10 min: closed and opened 10 min ago
+  await vi.advanceTimersByTimeAsync(8.5 * MIN); // t = 10 min: closed and opened 10 min ago
   const fromFeed = await p.fetchSnapshot(addr, previous);
   expect(feeds[0].read).toHaveBeenCalledTimes(1);
   expect(fromFeed.days).toEqual(FEED_DAYS);
@@ -444,6 +446,23 @@ test('linger', async () => {
   await p.listStreets(C);
   p.dispose();
   await vi.advanceTimersByTimeAsync(PAGE_LINGER_MS);
+  expect(s.release).toHaveBeenCalledTimes(2);
+});
+
+test('a refresh\'s page lingers 1 min; it never shortens a wizard step\'s 5 min', async () => {
+  const { p, s } = provider();
+  await p.fetchSnapshot(addr, null); // a house check
+  await vi.advanceTimersByTimeAsync(PAGE_REFRESH_LINGER_MS - 1);
+  expect(s.release).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(s.release).toHaveBeenCalledTimes(1);
+  // The wizard's line preview right after its house list: the list's 5 min still holds.
+  await p.listStreets(C);
+  await vi.advanceTimersByTimeAsync(MIN);
+  await p.fetchSnapshot({ ...addr, house: '13' }, null);
+  await vi.advanceTimersByTimeAsync(PAGE_LINGER_MS - MIN - 1);
+  expect(s.release).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1);
   expect(s.release).toHaveBeenCalledTimes(2);
 });
 

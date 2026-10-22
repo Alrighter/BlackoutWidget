@@ -8,8 +8,8 @@ import {
   CaptchaRequiredError, NetworkError, OFFLINE_MESSAGE, ProviderError, type PageSession, type ScheduleProvider,
 } from '../types';
 import {
-  FEEDS_FAILED_TEXT, HOUSE_CHECK_MS, HOUSE_MISSING_SURFACE_MS, PAGE_GAP_MS, PAGE_LINGER_MS, type FeedResult,
-  type ScheduleFeed,
+  FEEDS_FAILED_TEXT, HOUSE_CHECK_MS, HOUSE_MISSING_SURFACE_MS, PAGE_GAP_MS, PAGE_LINGER_MS, PAGE_REFRESH_LINGER_MS,
+  type FeedResult, type ScheduleFeed,
 } from './feeds';
 import {
   deriveLines, factDays, hasActiveOutage, hasOutageFields, parseCurrentOutage, parseHomeNumResponse, parseHouses,
@@ -35,7 +35,10 @@ export const DTEK_SITES: ReadonlyArray<DtekSite> = [
 export interface DtekOptions {
   /** Tried in order on a refresh. None: every refresh reads the page, as before the feeds. */
   feeds?: ScheduleFeed[];
+  /** After a wizard step or a verification. */
   lingerMs?: number;
+  /** After a refresh; default the shorter of PAGE_REFRESH_LINGER_MS and `lingerMs`. */
+  refreshLingerMs?: number;
   pageGapMs?: number;
   houseCheckMs?: number;
 }
@@ -49,6 +52,7 @@ export class DtekProvider implements ScheduleProvider {
   private state: FactState | null = null;
   private readonly feeds: ScheduleFeed[];
   private readonly lingerMs: number;
+  private readonly refreshLingerMs: number;
   private readonly pageGapMs: number;
   private readonly houseCheckMs: number;
   /** When a page use last found the window closed, so opened it (the budget; in memory, per site). */
@@ -56,6 +60,8 @@ export class DtekProvider implements ScheduleProvider {
   /** Page uses running now: the linger is armed when the last one ends. */
   private pageUses = 0;
   private linger: ReturnType<typeof setTimeout> | undefined;
+  /** When the armed (or just paused) linger releases the page: a later, shorter use never brings it forward. */
+  private lingerUntil: number | undefined;
 
   constructor(
     private readonly site: DtekSite, private readonly session: PageSession, private readonly log: Logger = silentLogger,
@@ -65,6 +71,7 @@ export class DtekProvider implements ScheduleProvider {
     this.displayName = providerDisplayName(site.id);
     this.feeds = opts.feeds ?? [];
     this.lingerMs = opts.lingerMs ?? PAGE_LINGER_MS;
+    this.refreshLingerMs = opts.refreshLingerMs ?? Math.min(PAGE_REFRESH_LINGER_MS, this.lingerMs);
     this.pageGapMs = opts.pageGapMs ?? PAGE_GAP_MS;
     this.houseCheckMs = opts.houseCheckMs ?? HOUSE_CHECK_MS;
   }
@@ -174,7 +181,7 @@ export class DtekProvider implements ScheduleProvider {
   private pageFor(address: Address, reason: PageReason): Promise<ScheduleSnapshot> {
     // With no feeds there is no choice to explain: the log stays as it was before them.
     if (this.feeds.length > 0) this.log.info(`${this.id}: using the page`, { reason });
-    return this.usePage(() => this.pageSnapshot(address));
+    return this.usePage(() => this.pageSnapshot(address), this.refreshLingerMs);
   }
 
   /** Today's page refresh: the house's lines and outage, and the days, from one getHomeNum. */
@@ -212,9 +219,10 @@ export class DtekProvider implements ScheduleProvider {
    * Every page operation goes through here. It stops the linger while it runs. Finding the window closed means this use
    * opens it, which counts toward the budget whether or not the open succeeds. When the last running use ends, a success
    * arms the linger and a failure releases at once: a window whose load failed still counts as open, and a use inside
-   * the linger would load DTEK again past the budget. With no feeds the page stays, as before them.
+   * the linger would load DTEK again past the budget. With no feeds the page stays, as before them. `lingerMs`: a
+   * wizard step's or a verification's by default; a refresh passes its shorter one.
    */
-  private async usePage<T>(fn: () => Promise<T>): Promise<T> {
+  private async usePage<T>(fn: () => Promise<T>, lingerMs = this.lingerMs): Promise<T> {
     clearTimeout(this.linger);
     this.linger = undefined;
     if (!this.session.isOpen()) this.lastPageOpenAt = Date.now();
@@ -226,20 +234,23 @@ export class DtekProvider implements ScheduleProvider {
       return value;
     } finally {
       if (--this.pageUses === 0 && this.feeds.length > 0) {
-        if (ok) this.armLinger();
+        if (ok) this.armLinger(lingerMs);
         else this.releasePage();
       }
     }
   }
 
-  private armLinger(): void {
-    const timer = setTimeout(() => this.releasePage(), this.lingerMs);
+  private armLinger(ms: number): void {
+    const until = Math.max(Date.now() + ms, this.lingerUntil ?? 0);
+    const timer = setTimeout(() => this.releasePage(), until - Date.now());
     timer.unref?.();
     this.linger = timer;
+    this.lingerUntil = until;
   }
 
   private releasePage(): void {
     this.linger = undefined;
+    this.lingerUntil = undefined;
     this.session.release();
     this.state = null; // the next open reads the fact afresh
   }

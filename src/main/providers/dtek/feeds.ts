@@ -15,8 +15,10 @@ export const MIRROR_FUTURE_SLACK_MS = 5 * 60_000;
 export const FEED_CACHE_MS = 2 * 60_000;
 /** The least time between two automatic opens of the DTEK page, per site. */
 export const PAGE_GAP_MS = 30 * 60_000;
-/** How long the DTEK page window stays after its last operation. */
+/** How long the DTEK page window stays after a wizard step or a verification: the wizard's next step needs it. */
 export const PAGE_LINGER_MS = 5 * 60_000;
+/** How long it stays after a refresh used it: long enough for the next location's staggered refresh (30 s). */
+export const PAGE_REFRESH_LINGER_MS = 60_000;
 /** How often the house is checked on the DTEK page. */
 export const HOUSE_CHECK_MS = 24 * 60 * 60_000;
 /** A house check that finds the house missing is surfaced once the last good check is older than this. */
