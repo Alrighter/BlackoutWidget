@@ -90,7 +90,7 @@ export const THEMES: Record<'light' | 'dark', ThemeTokens> = {
     onInk: '#5dffa8', warnText: '#ffd27a', dangerInk: '#ffb4ae', dangerIcon: '#ff4d4d',
     thumbShadow: 'drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45))',
     thumbWp: 'radial-gradient(1.2px 1.2px at 18px 22px, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%) 0 0 / 74px 62px, radial-gradient(45% 60% at 82% 12%, rgba(92, 112, 255, 0.55) 0%, rgba(92, 112, 255, 0) 70%), radial-gradient(55% 60% at 8% 92%, rgba(255, 92, 160, 0.32) 0%, rgba(255, 92, 160, 0) 70%), linear-gradient(180deg, #0b0e18 0%, #10131f 100%)',
-    rail: 'rgba(255, 255, 255, 0.03)', popShadow: '0 12px 28px rgba(0, 0, 0, 0.4)', disabledInk: '#757b8b', doneInk: '#5dffa8',
+    rail: 'rgba(255, 255, 255, 0.03)', popShadow: 'none', disabledInk: '#757b8b', doneInk: '#5dffa8',
     menu: '#2b2d35',
   },
 };
