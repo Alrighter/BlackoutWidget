@@ -1,209 +1,219 @@
 # Blackout Widget
 
-Настільний віджет із графіком відключень електроенергії в Україні. На робочому
-столі він показує, чи є зараз світло за графіком, скільки лишилося до наступної
-зміни і як розподілені відключення протягом доби. Застосунок живе в треї (на
-macOS — у рядку меню) і оновлює дані приблизно кожні 15 хвилин. Можна додати
-кілька адрес, і кожна матиме свій віджет. За бажанням застосунок читає зарядну
-станцію EcoFlow і показує, чи світло є насправді. Інтерфейс — українською.
+A desktop widget with the power outage schedule for an address in Ukraine. On the
+desktop it shows whether the power is on by the schedule, how long until the next
+change, and how the outages fall across the day. The app lives in the tray (the
+menu bar on macOS) and refreshes about every 15 minutes. You can add several
+addresses, each with its own widget. Optionally, the app reads an EcoFlow power
+station and shows whether the power is actually on. The interface is in
+Ukrainian; this README quotes its labels as they appear, with a translation.
 
-Платформи: Windows (x64) і macOS на Apple Silicon (arm64). На macOS віджет поки
-не прикріплюється до робочого столу (див. «Відомі обмеження»).
+Platforms: Windows (x64) and macOS on Apple Silicon (arm64). On both, the widget
+is pinned to the desktop.
 
-## Встановлення
+## Installation
 
-Готові збірки лежать на сторінці релізів:
-<https://github.com/Alrighter/BlackoutWidget/releases>. Автооновлення немає:
-нову версію завантажуйте звідти ж і встановлюйте поверх старої.
+Builds are on the releases page:
+<https://github.com/Alrighter/BlackoutWidget/releases>. There is no auto-update:
+download a new version from the same page and install it over the old one.
 
 ### Windows
 
-1. Завантажте `Blackout-Widget-Setup-<версія>.exe` і запустіть його.
-2. Інсталятор не підписаний, тому Windows SmartScreen покаже попередження.
-   Натисніть «Докладніше» → «Виконати все одно».
-3. Застосунок встановлюється для поточного користувача, права адміністратора
-   не потрібні.
+1. Download `Blackout-Widget-Setup-<version>.exe` and run it.
+2. The installer is not signed, so Windows SmartScreen shows a warning. Click
+   «Докладніше» (More info) → «Виконати все одно» (Run anyway).
+3. The app installs for the current user; no administrator rights are needed.
 
-Під час першого запуску відкриється майстер налаштування адреси.
+On the first start, the address setup wizard opens.
 
 ### macOS (Apple Silicon)
 
-1. Завантажте `Blackout-Widget-<версія>-arm64.dmg`, відкрийте його й перетягніть
-   Blackout Widget у «Програми».
-2. Збірка має лише ad-hoc-підпис і не нотаризована, тому під час першого запуску
-   macOS її заблокує. Відкрийте «Системні параметри → Конфіденційність і
-   безпека» і натисніть «Все одно відкрити».
-3. Значка в Dock немає: застосунок живе в рядку меню.
+1. Download `Blackout-Widget-<version>-arm64.dmg`, open it and drag Blackout
+   Widget to Applications.
+2. The build is only ad-hoc signed and not notarized, so macOS blocks it on the
+   first start. Open System Settings → Privacy & Security and click «Open
+   Anyway».
+3. There is no Dock icon: the app lives in the menu bar.
 
-## Що вміє
+## Features
 
-**Графіки 11 компаній.** ДТЕК (Київ, Київська, Дніпропетровська, Одеська
-області), ЦЕК, а також обленерго Волинської, Львівської, Тернопільської,
-Миколаївської, Житомирської й Чернівецької областей. Повний список і звідки
-береться кожен графік — у розділі «Звідки дані». Майстер веде кроками: регіон і
-компанія → місто → вулиця → будинок → лінія (якщо в будинку їх дві) → стиль
-віджета → «Готово» (назва адреси й автозапуск).
+**Schedules from 11 companies.** DTEK (Kyiv city, Kyiv, Dnipropetrovsk and
+Odesa oblasts), CEK, and the oblenergos of the Volyn, Lviv, Ternopil, Mykolaiv,
+Zhytomyr and Chernivtsi oblasts. The full list, and where each schedule comes
+from, is in «Where the data comes from». The wizard goes step by step: region
+and company → town → street → house → line (if the house has two) → widget
+style → «Готово» (Done: the address name and autostart).
 
-**Кілька адрес.** До 5 адрес, наприклад «Дім» і «Батьки». Кожна має свою назву
-(до 24 символів), свій віджет на робочому столі й свій стиль віджета. Нову
-адресу додають у «Налаштування» → «Додати адресу». Там же є «Змінити адресу»,
-«Перейменувати» і «Видалити» (останню адресу видалити не можна). Коли адрес
-кілька, праворуч у заголовку головного вікна з’являється список для перемикання
-між ними.
+**Several addresses.** Up to 5 addresses, for example «Дім» (Home) and
+«Батьки» (Parents). Each has its own name (up to 24 characters), its own desktop
+widget and its own widget style. A new address is added in «Налаштування»
+(Settings) → «Додати адресу» (Add address). The same card has «Змінити адресу»
+(Change address), «Перейменувати» (Rename) and «Видалити» (Delete; the last
+address can't be deleted). With two or more addresses, a dropdown on the right
+of the main window's header switches between them.
 
-**Віджет.** Показує стан («Світло є», «Світла немає», «Можливе відключення»,
-«Немає даних»), відлік до наступної зміни та графік. Якщо джерело повідомляє про
-відключення саме в цьому будинку, з’являється позначка «Планове», «Аварійне» або
-«Екстрене». Є три стилі:
+**The widget.** It shows the state («Світло є» power on, «Світла немає» power
+off, «Можливе відключення» possible outage, «Немає даних» no data), the
+countdown to the next change, and the schedule. When the source reports an
+outage at this very house, a «Планове» (planned), «Аварійне» (emergency) or
+«Екстрене» (urgent) badge appears. There are three styles:
 
-- «Компакт» — маленька картка зі смужкою на сьогодні;
-- «Циферблат» — кільце з добою та відліком;
-- «Таймлайн» — сьогодні й завтра на одній шкалі.
+- «Компакт» (Compact): a small card with today's bar;
+- «Циферблат» (Dial): a ring with the day and the countdown;
+- «Таймлайн» (Timeline): today and tomorrow on one scale.
 
-Клік по віджету відкриває графік, перетягування переміщує віджет, а правий клік
-відкриває меню: стиль, «Оновити зараз», «Налаштування», «Вийти». На Windows
-віджет прикріплений до робочого столу. Він лежить під звичайними вікнами, не
-зникає після Win+D, а його фон імітує скло: це розмита ділянка шпалер під
-віджетом.
+A click on the widget opens the schedule, dragging moves it, and a right click
+opens a menu: style, «Оновити зараз» (Refresh now), «Налаштування» (Settings),
+«Вийти» (Quit).
 
-**Головне вікно.** Має вкладки «Графік» і «Налаштування». На вкладці «Графік» —
-доба по годинах на сьогодні й на завтра (якщо графік уже опубліковано), час
-оновлення джерела і кнопка «Оновити зараз». Якщо підключено EcoFlow,
-з’являються ще рядок «Фактично» і фактичні відключення за 7 днів. Світла й темна
-теми перемикаються разом із системою.
+- **Windows:** the widget is pinned to the desktop. It sits under normal
+  windows and stays after Win+D. Its background imitates glass: the blurred patch
+  of wallpaper under the widget.
+- **macOS:** the widget sits just above the desktop icons, under normal windows,
+  on every Space. «Show Desktop», Mission Control, Cmd+H and Cmd+M don't move or
+  hide it, and it is not in the Dock or Cmd+Tab. Its glass is the system's own
+  vibrancy, rounded to the card.
 
-**Трей.** Значок показує стан першої адреси, а підказка — стан кожної. Пункти
-меню: «Показати графік», «Оновити зараз», «Стиль віджета», «Перемістити віджет»,
-«Налаштування», «Автозапуск», «Вийти». Пункт «Пройти перевірку» з’являється,
-коли сайт ДТЕК просить пройти перевірку. На macOS меню починається з рядків
-стану.
+**The main window.** It has the «Графік» (Schedule) and «Налаштування»
+(Settings) tabs. «Графік» shows today's and tomorrow's day by the hour (once the
+schedule is published), the source's update time and «Оновити зараз» (Refresh
+now). With EcoFlow connected, it adds a «Фактично» (Actual) row and the actual
+outages over 7 days. The light and dark themes follow the system.
 
-**Автозапуск.** Увімкнений за замовчуванням, але працює лише у встановленій
-версії: під час розробки нічого не реєструється. Перемикається в «Налаштуваннях»
-(«Запускати разом із системою»), на останньому кроці майстра і в треї
-(«Автозапуск»).
+**The tray.** The icon shows the state of the first address; the tooltip shows
+each address. Menu items: «Показати графік» (Show schedule), «Оновити зараз»
+(Refresh now), «Стиль віджета» (Widget style), «Перемістити віджет» (Move
+widget), «Налаштування» (Settings), «Автозапуск» (Autostart), «Вийти» (Quit).
+«Пройти перевірку» (Pass the check) appears when the DTEK site asks for a
+verification. On macOS the menu starts with the state lines.
 
-## Звідки дані
+**Autostart.** On by default, but it works only in the installed app: nothing is
+registered during development. It is toggled in «Налаштування» («Запускати
+разом із системою», Start with the system), on the wizard's last step, and in
+the tray («Автозапуск»).
 
-Застосунок звертається лише до наведених нижче адрес (виняток — перевірка на
-сайті ДТЕК, див. нижче). Телеметрії й автооновлення немає.
+## Where the data comes from
 
-| Компанія | id | Регіон | Звідки береться графік |
+The app talks only to the hosts below (the one exception is the verification on
+the DTEK site, see below). There is no telemetry and no auto-update.
+
+| Company | id | Region | Where the schedule comes from |
 | --- | --- | --- | --- |
-| ДТЕК Київські електромережі | `dtek-kem` | м. Київ | API YASNO (`app.yasno.ua`), далі дзеркало outage-data-ua; сайт `dtek-kem.com.ua` |
-| ДТЕК Київські регіональні електромережі | `dtek-krem` | Київська область | дзеркало outage-data-ua; сайт `dtek-krem.com.ua` |
-| ДТЕК Дніпровські електромережі | `dtek-dnem` | Дніпропетровська область | дзеркало outage-data-ua; сайт `dtek-dnem.com.ua` |
-| ДТЕК Одеські електромережі | `dtek-oem` | Одеська область | дзеркало outage-data-ua; сайт `dtek-oem.com.ua` |
-| ПЕЕМ «ЦЕК» | `cek` | Дніпропетровська область | `cek.dp.ua` |
-| Волиньобленерго | `voe` | Волинська область | `api-voe-poweron.inneti.net` (картинка графіка), `energy.volyn.ua` |
-| Львівобленерго | `loe` | Львівська область | `api.loe.lviv.ua`, `power-api.loe.lviv.ua` |
-| Тернопільобленерго | `toe` | Тернопільська область | `api-poweron.toe.com.ua` |
-| Миколаївобленерго | `mkoe` | Миколаївська область | `off.energy.mk.ua` |
-| Житомиробленерго | `ztoe` | Житомирська область | `www.ztoe.com.ua`, `api-ztoe-poweron.inneti.net` |
-| Чернівціобленерго | `cvoe` | Чернівецька область | `oblenergo.cv.ua` |
+| DTEK Kyiv Electric Networks | `dtek-kem` | Kyiv city | YASNO API (`app.yasno.ua`), then the outage-data-ua mirror; site `dtek-kem.com.ua` |
+| DTEK Kyiv Regional Electric Networks | `dtek-krem` | Kyiv oblast | the outage-data-ua mirror; site `dtek-krem.com.ua` |
+| DTEK Dnipro Electric Networks | `dtek-dnem` | Dnipropetrovsk oblast | the outage-data-ua mirror; site `dtek-dnem.com.ua` |
+| DTEK Odesa Electric Networks | `dtek-oem` | Odesa oblast | the outage-data-ua mirror; site `dtek-oem.com.ua` |
+| CEK | `cek` | Dnipropetrovsk oblast | `cek.dp.ua` |
+| Volynoblenergo | `voe` | Volyn oblast | `api-voe-poweron.inneti.net` (schedule image), `energy.volyn.ua` |
+| Lvivoblenergo | `loe` | Lviv oblast | `api.loe.lviv.ua`, `power-api.loe.lviv.ua` |
+| Ternopiloblenergo | `toe` | Ternopil oblast | `api-poweron.toe.com.ua` |
+| Mykolaivoblenergo | `mkoe` | Mykolaiv oblast | `off.energy.mk.ua` |
+| Zhytomyroblenergo | `ztoe` | Zhytomyr oblast | `www.ztoe.com.ua`, `api-ztoe-poweron.inneti.net` |
+| Chernivtsioblenergo | `cvoe` | Chernivtsi oblast | `oblenergo.cv.ua` |
 
-**ДТЕК.** Графіки всіх чотирьох сайтів ДТЕК читаються як JSON, без відкриття
-сторінки:
+**DTEK.** The schedules of all four DTEK sites are read as JSON, without opening
+a page:
 
-- Київ: спершу публічний API YASNO. Якщо він не дав графіка, застосунок бере
-  дзеркало [outage-data-ua](https://github.com/Baskerville42/outage-data-ua)
-  (файли з `raw.githubusercontent.com`).
-- Київська, Дніпропетровська й Одеська області: дзеркало outage-data-ua.
+- Kyiv city: first the public YASNO API. If it gives no schedule, the app takes
+  the [outage-data-ua](https://github.com/Baskerville42/outage-data-ua) mirror
+  (files from `raw.githubusercontent.com`).
+- Kyiv, Dnipropetrovsk and Odesa oblasts: the outage-data-ua mirror.
 
-Дзеркало, оновлене понад 30 хвилин тому, не використовується.
+A mirror updated more than 30 minutes ago is not used.
 
-Сторінку `/ua/shutdowns` на сайті ДТЕК застосунок відкриває в прихованому вікні
-лише в таких випадках:
+The app opens the `/ua/shutdowns` page of the DTEK site in a hidden window only:
 
-- у майстрі налаштування (міста, вулиці, будинки, лінії);
-- раз на добу, щоб перевірити будинок (його лінії й поточне відключення); поки
-  перевірка застає відключення — частіше, у межах ліміту нижче;
-- коли YASNO повідомляє про аварійні відключення;
-- як запасний шлях, коли жодне JSON-джерело не дало графіка.
+- in the setup wizard (towns, streets, houses, lines);
+- once a day, to check the house (its lines and the current outage); more often
+  while the check finds an outage, within the limit below;
+- when YASNO reports emergency outages;
+- as a fallback, when no JSON source gave a schedule.
 
-Під час оновлень сторінка відкривається для кожного сайту не частіше ніж раз на
-30 хвилин. Вікно закривається через хвилину після оновлення або через 5 хвилин
-після кроку майстра. Запити прихованої сторінки до інших хостів, ніж сайт ДТЕК,
-блокуються. Якщо сайт ДТЕК просить пройти перевірку, у треї та в головному вікні
-з’являється «Пройти перевірку». Поки ви її проходите, сторінка показується і
-може завантажувати сторонні ресурси самого сайту (наприклад, віджет перевірки).
+During refreshes the page opens at most once per 30 minutes per site. The window
+closes a minute after a refresh, or 5 minutes after a wizard step. The hidden
+page's requests to hosts other than the DTEK site are blocked. When the DTEK site
+asks for a verification, «Пройти перевірку» (Pass the check) appears in the tray
+and the main window. While you pass it, the page is shown and may load the
+site's own third-party resources (for example, the verification widget).
 
-**Обленерго та ЦЕК.** Застосунок робить звичайні HTTPS-запити до сайту або API
-компанії, прихованого вікна немає. Графік Волиньобленерго читається з картинки,
-яку публікує компанія. Списки населених пунктів Волинської, Миколаївської,
-Житомирської й Чернівецької областей вбудовані в застосунок.
+**Oblenergos and CEK.** The app makes plain HTTPS requests to the company's site
+or API; there is no hidden window. Volynoblenergo's schedule is read from the
+image the company publishes. The town lists of the Volyn, Mykolaiv, Zhytomyr and
+Chernivtsi oblasts are built into the app.
 
-**EcoFlow** (лише якщо підключено): `api-e.ecoflow.com` для Європи або
-`api.ecoflow.com` для іншого регіону, а також MQTT-брокер, адресу якого
-повертає EcoFlow. У режимі Bluetooth після входу застосунок звертається лише до
-станції поруч.
+**EcoFlow** (only when connected): `api-e.ecoflow.com` for Europe or
+`api.ecoflow.com` for other regions, plus the MQTT broker whose address EcoFlow
+returns. In Bluetooth mode, after the sign-in the app talks only to the station
+nearby.
 
-**Як часто.** Кожна адреса оновлюється раз на 15 хвилин (±1 хвилина). Після
-помилки повтор буде через 1, 2, 4, 8, а далі через 15 хвилин. Якщо запит дійшов
-до джерела, наступний автоматичний запит буде не раніше ніж через 5 хвилин.
-Після пробудження комп’ютера чи повернення мережі застосунок оновлює дані
-позачергово, а «Оновити зараз» — одразу. Під час запуску адреси з одним
-джерелом рознесені на 30 секунд. Відповідь JSON-джерела ДТЕК тримається 2
-хвилини, тож дві адреси на одному сайті дають один запит.
+**How often.** Each address refreshes every 15 minutes (±1 minute). After an
+error it retries in 1, 2, 4 and 8 minutes, then every 15. Once a request has
+reached the source, the next automatic one is at least 5 minutes later. After the
+computer wakes up or the network comes back, the app refreshes out of turn;
+«Оновити зараз» (Refresh now) refreshes at once. At startup, addresses on the
+same source are spread 30 seconds apart. A DTEK JSON response is kept for 2
+minutes, so two addresses on one site make one request.
 
-## Фактичний стан (EcoFlow)
+## Actual state (EcoFlow)
 
-Окрім графіка, віджет може показувати, чи світло є насправді. Для цього
-застосунок читає зарядну станцію EcoFlow (лише читання) і за входом AC визначає,
-чи є мережа. Станція підключається одна на весь застосунок. Коли адрес кілька,
-у налаштуваннях обирають, де вона стоїть («Станція стоїть у:»). Фактичний стан
-показується лише для цієї адреси: на її віджеті, у рядку «Фактично» і у
-фактичних відключеннях за 7 днів.
+Besides the schedule, the widget can show whether the power is actually on. For
+that the app reads an EcoFlow power station (read-only) and tells from the AC
+input whether the grid is there. One station is connected for the whole app.
+With several addresses, the settings say where it stands («Станція стоїть у:»,
+The station is at). The actual state is shown only for that address: on its
+widget, in the «Фактично» (Actual) row and in the actual outages over 7 days.
 
-**Де підключати.** «Налаштування» → «Фактичний стан світла» → «Підключити
-EcoFlow». У полі «Джерело» є два способи входу. Bluetooth вмикається вже для
-конкретної станції після входу через акаунт. Регіон — «Європа» або «Інший
-регіон».
+**Where to connect it.** «Налаштування» (Settings) → «Фактичний стан світла»
+(Actual power state) → «Підключити EcoFlow» (Connect EcoFlow). The «Джерело»
+(Source) field has two ways to sign in. Bluetooth is switched on later, for a
+particular station, after an account sign-in. The region is «Європа» (Europe) or
+«Інший регіон» (Other region).
 
-1. **Вхід через акаунт** («EcoFlow — вхід через акаунт»): email і пароль від
-   застосунку EcoFlow. Це неофіційний спосіб, той самий вхід і MQTT, що в
-   застосунку EcoFlow, тож він може перестати працювати, якщо EcoFlow щось
-   змінить. Email і пароль зберігаються зашифрованими.
-2. **Ключі розробника** («EcoFlow — ключі розробника»): офіційний Open API.
-   Подайте заявку на <https://developer-eu.ecoflow.com/> («Become a
-   Developer»). Її розглядають вручну, це може тривати кілька днів. Коли доступ
-   схвалять, там же створіть Access Key і Secret Key. Обидва ключі
-   зберігаються зашифрованими.
-3. **Bluetooth** — для станцій сімейства RIVER 2 (серійний номер починається з
-   R601, R603, R611, R613, R621 або R623). Після входу через акаунт застосунок
-   шукає станції поруч, і для знайденої з’являється перемикач «Підключення:
-   Bluetooth | Інтернет». Для читання станції інтернет не потрібен, але вона має
-   стояти поруч із комп’ютером. Пароль не зберігається, лише ключ для цієї
-   станції, обчислений під час входу. Поки віджет підключений, телефон зможе
-   керувати станцією лише через інтернет. На macOS система спершу попросить
-   дозвіл на Bluetooth. Bluetooth працює в окремому процесі
+1. **Account sign-in** («EcoFlow — вхід через акаунт»): the email and password of
+   the EcoFlow app. This is an unofficial way, the same sign-in and MQTT as the
+   EcoFlow app, so it may stop working if EcoFlow changes something. The email
+   and password are stored encrypted.
+2. **Developer keys** («EcoFlow — ключі розробника»): the official Open API.
+   Apply at <https://developer-eu.ecoflow.com/> («Become a Developer»). Requests
+   are reviewed by hand, which can take several days. Once access is approved,
+   create an Access Key and a Secret Key there. Both keys are stored encrypted.
+3. **Bluetooth**, for RIVER 2 family stations (serial number starting with R601,
+   R603, R611, R613, R621 or R623). After an account sign-in the app looks for
+   stations nearby, and a found one gets a «Підключення: Bluetooth | Інтернет»
+   (Connection: Bluetooth | Internet) switch. Reading the station then needs no
+   internet, but it must be near the computer. The password is not stored, only a
+   key for that station, derived at sign-in. While the widget is connected, a
+   phone can control the station only over the internet. On macOS the system
+   first asks for Bluetooth permission. Bluetooth runs in a separate process
    (`src/main/ble-host.ts`).
 
-**Як зберігаються секрети.** Ключі, дані входу й ключ станції шифруються
-засобами ОС через Electron `safeStorage` (Windows — DPAPI, macOS — Keychain) і
-лежать у `secrets.json` у теці даних застосунку. Якщо шифрування недоступне,
-вони не зберігаються взагалі. У журнал секрети не потрапляють: замість них
-пишуться маски (перші 4 символи ключа, `x…@домен` для email).
+**How secrets are stored.** Keys, sign-in data and the station key are encrypted
+with the OS through Electron `safeStorage` (DPAPI on Windows, Keychain on macOS)
+and kept in `secrets.json` in the app data folder. If encryption is unavailable,
+they are not stored at all. Secrets never reach the log: it gets masks instead
+(the first 4 characters of a key, `x…@domain` for an email).
 
-**«Невідомо».** Означає, що застосунок не знає стану: станція не в мережі або
-поза зв’язком Bluetooth, немає інтернету чи дані застаріли. У такому разі «Світла
-немає» ніколи не показується.
+**«Невідомо» (Unknown).** The app doesn't know the state: the station is offline
+or out of Bluetooth range, there is no internet, or the data is stale. In that
+case «Світла немає» (power off) is never shown.
 
-**Обмеження.**
+**Limitations.**
 
-- Не кожну станцію EcoFlow можна прочитати через API розробника. Помилка `1006`
-  під час «Перевірити» означає, що станція прив’язана до іншого акаунта або ця
-  модель не підтримується. Підтримка River 2 через Open API не підтверджена.
-- Вхід через акаунт і ключі розробника працюють через хмару. Якщо роутер не
-  живиться від станції, під час відключення стан буде «невідомо»: інтернету
-  немає, і застосунок не бачить станцію. Bluetooth від інтернету не залежить.
-- EcoFlow дозволяє приблизно 10 різних MQTT clientId на добу для акаунта. Обидва
-  хмарні способи використовують один сталий clientId на установку. Виняток —
-  попередній перегляд станції після входу через акаунт (рядок «Перевірка»): він
-  відкриває коротку MQTT-сесію з одноразовим clientId.
+- Not every EcoFlow station can be read through the developer API. Error `1006`
+  during «Перевірити» (Check) means the station is bound to another account or
+  the model is not supported. River 2 support through the Open API is not
+  confirmed.
+- The account sign-in and the developer keys go through the cloud. If the router
+  is not powered by the station, during an outage the state is «Невідомо»
+  (unknown): there is no internet, and the app can't see the station. Bluetooth
+  doesn't depend on the internet.
+- EcoFlow allows about 10 different MQTT clientIds per day per account. Both
+  cloud ways use one fixed clientId per installation. The exception is the
+  station preview after an account sign-in (the «Перевірка», Check, row): it
+  opens a short MQTT session with a one-off clientId.
 
-**Живий smoke-скрипт для ключів розробника** (потрібен `npm run build`; ключі
-беруться зі змінних середовища, регіон за замовчуванням `eu`, за потреби `us`):
+**Live smoke script for the developer keys** (needs `npm run build`; the keys come
+from environment variables, the region defaults to `eu`, `us` if needed):
 
 ```
 $env:ECOFLOW_ACCESS_KEY = "..."
@@ -212,125 +222,130 @@ $env:ECOFLOW_REGION = "eu"
 npx electron out/main/smoke-ecoflow.js
 ```
 
-Перевірка триває близько 2 хв. Скрипт друкує маску Access Key і список станцій.
-Для кожної станції він двічі, з проміжком щонайменше 60 с, запитує `quota/all`.
-Він друкує:
+The check takes about 2 minutes. The script prints the Access Key mask and the
+list of stations. For each station it requests `quota/all` twice, at least 60 s
+apart. It prints:
 
-- вердикт мережі;
-- назви всіх ключів показів (значення — лише для ключів входу AC);
-- сирі значення `inv.acInVol` / `plugInInfoAcInVol`, щоб звірити, мілівольти це
-  чи вольти;
-- назви ключів, що змінилися між двома запитами. Якщо не змінилося нічого,
-  скрипт прямо про це попереджає: тоді за самим `quota/all` свіжість даних не
-  визначити.
+- the grid verdict;
+- the names of all readings (values only for the AC input keys);
+- the raw `inv.acInVol` / `plugInInfoAcInVol` values, to tell millivolts from
+  volts;
+- the names of the keys that changed between the two requests. If nothing
+  changed, the script warns about it: `quota/all` alone then can't tell whether
+  the data is fresh.
 
-Далі він 60 с слухає MQTT і друкує:
+Then it listens to MQTT for 60 s and prints:
 
-- коди SUBACK для кожної станції й теми (0–2 — наданий QoS; 128 — брокер
-  відмовив у підписці, тоді скрипт друкує коди й завершується з кодом 1);
-- чи позначене перше повідомлення `/quota` як retained (такі повідомлення
-  застосунок ігнорує);
-- кількість повідомлень за хвилину;
-- чи надсилає MQTT ключі входу AC, які є в `quota/all`;
-- вердикт після злиття.
+- the SUBACK codes for each station and topic (0–2: the granted QoS; 128: the
+  broker refused the subscription, and the script prints the codes and exits
+  with code 1);
+- whether the first `/quota` message is marked retained (the app ignores
+  retained messages);
+- the number of messages per minute;
+- whether MQTT sends the AC input keys that `quota/all` has;
+- the verdict after the merge.
 
-Скрипт нічого не пише на диск і не публікує в MQTT. Він використовує одноразовий
-clientId `BlackoutWidget-smoke`, що теж зараховується в ліміт приблизно 10
-clientId на добу. Код виходу: 0 — успіх; 1 — помилка, відмова в підписці, в
-акаунті немає станцій або жодна станція не віддала `quota/all`.
+The script writes nothing to disk and publishes nothing to MQTT. It uses the
+one-off clientId `BlackoutWidget-smoke`, which also counts toward the limit of
+about 10 clientIds per day. Exit code: 0 on success; 1 on an error, a refused
+subscription, an account with no stations, or no station returning `quota/all`.
 
-Запустіть скрипт, коли світло є, і ще раз під час справжнього відключення: так
-видно, що саме станція показує, коли мережі немає.
+Run the script while the power is on, and again during a real outage: that shows
+what the station reports when the grid is gone.
 
-Bluetooth перевіряє `npx electron out/main/smoke-ble.js` (без акаунта): він
-шукає станції й проходить рукостискання з першою станцією EcoFlow поруч до
-статусу входу. Серійний номер друкується лише першими 4 символами.
+Bluetooth is checked by `npx electron out/main/smoke-ble.js` (no account): it
+scans for stations and goes through the handshake with the first EcoFlow station
+nearby up to the sign-in status. The serial number is printed as its first 4
+characters only.
 
-## Розробка
+## Development
 
 ```
 npm i
-npm run dev        # застосунок у режимі розробки
-npm test           # тести (vitest)
-npm run typecheck  # перевірка типів
-npm run build      # збірка в out/
+npm run dev        # the app in development mode
+npm test           # tests (vitest)
+npm run typecheck  # type check
+npm run build      # build into out/
 ```
 
-Інші команди:
+Other commands:
 
-- `npm run ui:capture` — знімки віджета й головного вікна в невидимих вікнах,
-  без запуску застосунку на екрані. Див.
+- `npm run ui:capture`: captures of the widget and the main window in invisible
+  windows, without showing the app on screen. See
   [scripts/ui-capture/README.md](scripts/ui-capture/README.md).
-- `npm run tray:icons` — перегенерувати значки трею в `resources/tray/`.
+- `npm run tray:icons`: regenerates the tray icons in `resources/tray/`.
 - `node scripts/gen-mkoe-settlements.mjs`, `gen-ztoe-settlements.mjs`,
-  `gen-cvoe-settlements.mjs` — оновити вбудовані списки населених пунктів (живі
-  запити до сайту компанії).
+  `gen-cvoe-settlements.mjs`: update the built-in town lists (live requests to
+  the company's site).
 
-Код: `src/main` — головний процес (джерела графіків у `providers/`, EcoFlow в
-`actual/`, прикріплення й скло віджета у `widget/`); `src/renderer/src` —
-головне вікно (`app/`) і віджет (`widget/`); `src/shared` — спільні типи й тексти;
-`tests` — тести й фікстури.
+Code: `src/main` is the main process (schedule sources in `providers/`, EcoFlow
+in `actual/`, the widget's pinning and glass in `widget/`, with `pin-win32.ts`,
+`pin-darwin.ts` and `glass-darwin.ts`); `src/renderer/src` is the main window
+(`app/`) and the widget (`widget/`); `src/shared` holds shared types and texts;
+`tests` holds tests and fixtures.
 
-### Живі перевірки (smoke)
+### Live checks (smoke)
 
-Кожна потребує `npm run build` і запускається як
-`npx electron out/main/<скрипт>.js`. Скрипти роблять справжні запити, не чіпають даних
-застосунку (усі, крім `smoke-ecoflow`, працюють у тимчасовому профілі) і
-друкують результат у консоль. Код виходу 0 означає, що все гаразд.
+Each needs `npm run build` and runs as `npx electron out/main/<script>.js`. The
+scripts make real requests, don't touch the app's data (all but `smoke-ecoflow`
+run in a temporary profile) and print the result to the console. Exit code 0
+means everything is fine.
 
-- `smoke-dtek.js [--provider <id>] [--offline]` — один сайт ДТЕК (за
-  замовчуванням `dtek-krem`): місто → вулиця → будинок → графік зі сторінки,
-  потім той самий графік із JSON-джерела. Наприкінці перевіряє, що приховане
-  вікно закрилося.
-- `smoke-voe.js` — Волиньобленерго: вулиці Ковеля → будинки на вулиці
-  Незалежності → графік для будинку 25.
-- `smoke-loe.js` — Львівобленерго: Львів → коротка вулиця → перший будинок із
-  чергою → графік. Друкує шлях, статус і час кожного запиту.
-- `smoke-toe.js` — Тернопільобленерго: Тернопіль → перша вулиця з будинками →
-  будинок із чергою → графік. Друкує статус кожного запиту й заголовок Origin.
-- `smoke-mkoe.js` — Миколаївобленерго: м. Миколаїв → вулиця → будинок із чергою
-  ГПВ → графік. Якщо `v2/schedule/active` не порожній, зберігає його (лише id,
-  типи й час) у тимчасову теку.
-- `smoke-ztoe.js` — Житомиробленерго: м. Житомир, потім с. Березівка. Перевіряє,
-  що сторінки в windows-1251 читаються.
-- `smoke-cvoe.js` — Чернівціобленерго: м. Чернівці, потім м. Герца. Блокування
-  Cloudflare лише повідомляється.
-- `smoke-cek.js` — ЦЕК: сторінка-карта → м. Дніпро → вулиця → будинок з однією
-  чергою → графік.
-- `smoke-memory.js [--provider <id>] [--settle <секунди>] [--no-gpu]` — пам’ять
-  однієї сесії сторінки ДТЕК по кожному процесу Electron. `--no-gpu` вимикає
-  апаратне прискорення.
-- `smoke-ecoflow.js` — EcoFlow через ключі розробника, потрібні змінні
-  середовища (див. вище).
-- `smoke-ble.js` — EcoFlow через Bluetooth, без акаунта (див. вище).
+- `smoke-dtek.js [--provider <id>] [--offline]`: one DTEK site (`dtek-krem` by
+  default): town → street → house → the schedule from the page, then the same
+  schedule from the JSON source. At the end it checks that the hidden window has
+  closed.
+- `smoke-voe.js`: Volynoblenergo: the streets of Kovel → the houses on
+  Nezalezhnosti street → the schedule for house 25.
+- `smoke-loe.js`: Lvivoblenergo: Lviv → a short street → the first house with a
+  queue → the schedule. Prints the path, status and time of each request.
+- `smoke-toe.js`: Ternopiloblenergo: Ternopil → the first street with houses → a
+  house with a queue → the schedule. Prints the status of each request and the
+  Origin header.
+- `smoke-mkoe.js`: Mykolaivoblenergo: Mykolaiv city → a street → a house with a
+  scheduled-outage queue → the schedule. If `v2/schedule/active` is not empty, it
+  saves it (ids, types and times only) to a temp folder.
+- `smoke-ztoe.js`: Zhytomyroblenergo: Zhytomyr city, then the village of
+  Berezivka. Checks that the windows-1251 pages read correctly.
+- `smoke-cvoe.js`: Chernivtsioblenergo: Chernivtsi city, then Hertsa. A
+  Cloudflare block is only reported.
+- `smoke-cek.js`: CEK: the map page → Dnipro city → a street → a house with one
+  queue → the schedule.
+- `smoke-memory.js [--provider <id>] [--settle <seconds>] [--no-gpu]`: the
+  memory of one DTEK page session for each Electron process. `--no-gpu` turns
+  hardware acceleration off.
+- `smoke-ecoflow.js`: EcoFlow through the developer keys; needs environment
+  variables (see above).
+- `smoke-ble.js`: EcoFlow over Bluetooth, no account (see above).
 
-### Журнал і дані
+### Log and data
 
-Дані застосунку лежать у теці Electron `userData`. Для встановленої версії це
-`%APPDATA%\Blackout Widget` на Windows і
-`~/Library/Application Support/Blackout Widget` на macOS, а під час розробки —
-`%APPDATA%\blackoutwidget`. Там лежать, зокрема, `settings.json` (адреси й
-налаштування), `snapshots.json` (останні
-графіки), `secrets.json` (зашифровані секрети EcoFlow), `actual-history.json`
-(фактичні відключення) і журнал.
+The app's data lives in Electron's `userData` folder. For the installed app that
+is `%APPDATA%\Blackout Widget` on Windows and
+`~/Library/Application Support/Blackout Widget` on macOS; during development it
+is `%APPDATA%\blackoutwidget`. It holds, among others, `settings.json`
+(addresses and settings), `snapshots.json` (the last schedules), `secrets.json`
+(the encrypted EcoFlow secrets), `actual-history.json` (actual outages) and the
+log.
 
-Журнал — `logs\app.log`, до ~1 МБ; попередній файл — `app.log.1`. Точний шлях
-показує вікно помилки запуску. Туди пишуться:
+The log is `logs\app.log`, up to ~1 MB; the previous file is `app.log.1`. The
+startup error window shows the exact path. It records:
 
-- помилки джерел;
-- яке JSON-джерело ДТЕК не спрацювало і навіщо відкривалася сторінка;
-- сирі поля поточного відключення з відповіді ДТЕК;
-- невідомі статуси годин;
-- події EcoFlow.
+- source errors;
+- which DTEK JSON source failed and why the page was opened;
+- the raw fields of the current outage from the DTEK response;
+- unknown hour statuses;
+- EcoFlow events;
+- on macOS, failures of the desktop pinning and the native glass.
 
-### Пам’ять
+### Memory
 
-У звичайній роботі на Windows застосунок займає близько 110 МБ (раніше було
-~275). Сторінка ДТЕК не тримається відкритою, а на Windows вимкнене апаратне
-прискорення. GPU- і мережевий сервіс Chromium працюють у головному процесі
-(`src/main/index.ts`). Виміряти пам’ять можна скриптом `smoke-memory.js`.
+In normal operation on Windows the app takes about 110 MB (it used to be
+~275). The DTEK page is not kept open, and hardware acceleration is off on
+Windows. Chromium's GPU and network services run in the main process
+(`src/main/index.ts`). The `smoke-memory.js` script measures memory.
 
-## Збірка
+## Building
 
 ### Windows
 
@@ -338,15 +353,16 @@ npm run build      # збірка в out/
 npm run dist:win
 ```
 
-Результат: `dist/Blackout Widget Setup <версія>.exe` (NSIS, x64, встановлення
-для поточного користувача без прав адміністратора).
+Result: `dist/Blackout Widget Setup <version>.exe` (NSIS, x64, installs for the
+current user without administrator rights).
 
 ### macOS
 
-electron-builder не збирає dmg на Windows, тому macOS-збірку робить ручний
-workflow GitHub Actions `.github/workflows/build-mac.yml`. Він працює на
-`macos-14` (arm64) і виконує `npm ci`, `npm run typecheck` та
-`npm run dist:mac`.
+electron-builder doesn't build a dmg on Windows, so the macOS build is made by
+the manual GitHub Actions workflow `.github/workflows/build-mac.yml`. It runs on
+`macos-14` (arm64) and does `npm ci`, a smoke test of the Objective-C bindings
+against the real runtime (`tests/main/widget/objc-darwin.smoke.test.ts`),
+`npm run typecheck` and `npm run dist:mac`.
 
 ```
 gh workflow run build-mac.yml --ref main
@@ -354,53 +370,54 @@ gh run list --workflow build-mac.yml
 gh run download <id> -n blackout-widget-mac-arm64
 ```
 
-Артефакт `blackout-widget-mac-arm64` містить `Blackout Widget-<версія>-arm64.dmg`
-і зберігається 14 днів. Збірка має ad-hoc-підпис (`identity: '-'`), без
-нотаризації та hardened runtime; значка в Dock немає (`LSUIElement`). На самому
-Mac те саме робить `npm run dist:mac`.
+The `blackout-widget-mac-arm64` artifact holds
+`Blackout Widget-<version>-arm64.dmg` and is kept for 14 days. The build is
+ad-hoc signed (`identity: '-'`), without notarization or hardened runtime; there
+is no Dock icon (`LSUIElement`). On a Mac itself, `npm run dist:mac` does the
+same.
 
-### Реліз
+### Release
 
-1. Підніміть `version` у `package.json`: версія 1.0.0 уже зайнята тегом `v1.0.0`.
-2. Зберіть інсталятор Windows локально, а dmg — через Actions.
-3. Перейменуйте файли без пробілів (`Blackout-Widget-Setup-<версія>.exe`,
-   `Blackout-Widget-<версія>-arm64.dmg`) і створіть реліз:
-   `gh release create v<версія> <файли> --notes-file <нотатки>`.
+1. Bump `version` in `package.json` when the version is already taken by a tag.
+2. Build the Windows installer locally and the dmg through Actions.
+3. Rename the files without spaces (`Blackout-Widget-Setup-<version>.exe`,
+   `Blackout-Widget-<version>-arm64.dmg`) and create the release:
+   `gh release create v<version> <files> --notes-file <notes>`.
 
-## Як додати нове джерело
+## Adding a source
 
-1. Реалізуйте інтерфейс `ScheduleProvider` (див. `src/main/providers/types.ts`)
-   у `src/main/providers/<id>/`. Для сайту чи API зі звичайними HTTPS-запитами
-   беріть за зразок `toe/` або `loe/` (спільна обв’язка — `http-source.ts`,
-   `resolve.ts`, `snapshot.ts`). Для сторінки, яку треба відкривати в
-   прихованому вікні, зразком буде `dtek/` (`browser-session.ts`).
-2. Додайте запис у `PROVIDERS` у `src/shared/providers.ts`: назва, коротка
-   назва, регіон, сторінка графіка. Порядок записів задає порядок карток у
-   майстрі.
-3. Додайте один рядок у `make` у `src/main/providers/registry.ts`.
-4. Фікстури покладіть у `tests/fixtures/<id>/`, а тести — у `tests/providers/`
-   (за зразком `toe-parse.test.ts` і `toe-provider.test.ts`).
-5. Живу перевірку додайте як `src/main/smoke-<id>.ts` і впишіть її в
-   `rollupOptions.input` у `electron.vite.config.ts`.
+1. Implement the `ScheduleProvider` interface (see `src/main/providers/types.ts`)
+   in `src/main/providers/<id>/`. For a site or API with plain HTTPS requests,
+   follow `toe/` or `loe/` (the shared plumbing is `http-source.ts`,
+   `resolve.ts`, `snapshot.ts`). For a page that has to be opened in a hidden
+   window, follow `dtek/` (`browser-session.ts`).
+2. Add an entry to `PROVIDERS` in `src/shared/providers.ts`: the name, short
+   name, region and schedule page. The order of the entries is the order of the
+   cards in the wizard.
+3. Add one line to `make` in `src/main/providers/registry.ts`.
+4. Put fixtures in `tests/fixtures/<id>/` and tests in `tests/providers/`
+   (follow `toe-parse.test.ts` and `toe-provider.test.ts`).
+5. Add a live check as `src/main/smoke-<id>.ts` and list it in
+   `rollupOptions.input` in `electron.vite.config.ts`.
 
-## Відомі обмеження
+## Known limitations
 
-- macOS: віджет не прикріплений до робочого столу. Це звичайне безрамкове вікно,
-  яке інші вікна можуть перекривати, і скла зі шпалер у нього немає. Над
-  прикріпленням ведеться робота.
-- macOS: збірка є лише для Apple Silicon і не нотаризована.
-- Windows: окремі шпалери на різних моніторах не підтримуються, бо скло віджета
-  бере одні шпалери для всіх моніторів.
-- Windows: при перетягуванні віджета між моніторами з різним масштабом (DPI)
-  вміст може масштабуватися неправильно до перезапуску. Запасний шлях — пункт
-  «Перемістити віджет» у треї.
-- Windows: GPU- і мережевий сервіс працюють у головному процесі, тож збій
-  будь-якого з них закриває застосунок (окремий процес Chromium перезапустив
-  би).
-- Графіки ДТЕК залежать від YASNO і стороннього дзеркала outage-data-ua. Якщо
-  вони не дають свіжого графіка, застосунок читає сторінку ДТЕК, але під час
-  оновлень не частіше ніж раз на 30 хвилин для кожного сайту.
-- Миколаївобленерго: справжнього дня з відключеннями застосунок ще не бачив.
-  Якщо черги будинку прийдуть у незнайомому вигляді, графік на сьогодні буде
-  невідомий.
-- Обмеження EcoFlow описані в розділі «Фактичний стан (EcoFlow)».
+- macOS: the build is for Apple Silicon only and is not notarized.
+- macOS: if a native call of the desktop pinning or the glass ever crashes the
+  app, both turn off for that app version, so the app doesn't crash on every
+  start: the widget is then an ordinary window with the plain tinted glass. To try
+  again, delete `pin-darwin.pending` in the app data folder.
+- Windows: separate wallpapers on different monitors are not supported, because
+  the widget's glass takes one wallpaper for all monitors.
+- Windows: when the widget is dragged between monitors with different scaling
+  (DPI), its content may scale wrongly until a restart. The fallback is «Перемістити
+  віджет» (Move widget) in the tray.
+- Windows: the GPU and network services run in the main process, so a crash of
+  either closes the app (as a separate process, Chromium would have restarted
+  it).
+- DTEK schedules depend on YASNO and the third-party outage-data-ua mirror. If
+  they don't give a fresh schedule, the app reads the DTEK page, but during
+  refreshes at most once per 30 minutes per site.
+- Mykolaivoblenergo: the app hasn't seen a real outage day yet. If the house's
+  queues come in an unfamiliar form, today's schedule will be unknown.
+- The EcoFlow limitations are in «Actual state (EcoFlow)».
