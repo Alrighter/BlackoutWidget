@@ -6,10 +6,13 @@ import { WIDGET_RADII, WIDGET_SIZES } from '../../shared/widget-sizes';
 import { silentLogger, type Logger } from '../log';
 import type { AppStore } from '../store';
 import type { DesktopPinner } from './desktop-pin';
+import type { NativeGlass } from './glass-darwin';
 import { placeWidget } from './position';
 import { roundedShape } from './shape';
 
 const REBUILD_MS = 1000;
+const NATIVE: WidgetBackground = { kind: 'native' };
+const TINT: WidgetBackground = { kind: 'tint' };
 
 export interface WidgetWindowDeps {
   locationId: string;
@@ -22,12 +25,17 @@ export interface WidgetWindowDeps {
   otherBounds(): Rectangle[];
   /** True once the app is quitting. */
   quitting(): boolean;
+  /** macOS: the windows' native glass, shared by every widget; absent or null elsewhere (Windows paints the wallpaper crop instead). */
+  glass?: NativeGlass | null;
+  /** Test seam; defaults to process.platform. */
+  platform?: NodeJS.Platform;
 }
 
 /**
  * One location's desktop widget: a transparent frameless window pinned to the desktop. It owns its DIP bounds
  * (a pinned child window's own idea of its bounds is not trusted) and saves the position to its own location after
- * every drag / move mode. Main keeps one per location and disposes it, for good, when the location is deleted.
+ * every drag / move mode. Main keeps one per location and disposes it, for good, when the location is deleted. On macOS
+ * its glass is native vibrancy, rounded to the card of the current style, and it sends the renderer `native` or `tint`.
  */
 export class WidgetWindow {
   readonly locationId: string;
@@ -37,6 +45,8 @@ export class WidgetWindow {
   private dragFrom: { x: number; y: number; screenX: number; screenY: number } | null = null;
   private moveMode = false;
   private background: WidgetBackground | null = null;
+  /** macOS: the current window was created with the native glass's vibrancy, not yet taken off. */
+  private vibrant = false;
   private disposed = false;
   private rebuild: ReturnType<typeof setTimeout> | null = null;
   private readonly movedListeners = new Set<() => void>();
@@ -60,7 +70,10 @@ export class WidgetWindow {
     if (!location || location.widgetStyle === this.style) return;
     this.style = location.widgetStyle;
     this.setBounds(this.layout(location.widgetPosition).rect);
-    if (this.win) this.applyShape(this.win);
+    if (this.win) {
+      this.applyShape(this.win);
+      this.applyGlass(this.win); // every style change, from the settings or the tray, comes through here
+    }
     this.emitMoved();
   }
 
@@ -148,7 +161,7 @@ export class WidgetWindow {
     this.moveMode = false;
     this.dragFrom = null;
     this.commit(this.bounds);
-    win.setAlwaysOnTop(false);
+    win.setAlwaysOnTop(false); // before the pin: on macOS setAlwaysOnTop rewrites the window level the pin sets
     this.deps.pinner.pin(win);
     this.send(IPC.widgetMoveMode, false);
     this.emitMoved();
@@ -203,7 +216,7 @@ export class WidgetWindow {
    * and icons show there (a pinned window's transparent pixels still hide them) and clicks there reach it.
    */
   private applyShape(win: BrowserWindow): void {
-    if (process.platform !== 'win32' || win.isDestroyed()) return;
+    if (this.platform() !== 'win32' || win.isDestroyed()) return;
     const { width, height } = WIDGET_SIZES[this.style];
     win.setShape(roundedShape(width, height, WIDGET_RADII[this.style]));
   }
@@ -213,10 +226,40 @@ export class WidgetWindow {
     return !this.deps.quitting() && !this.disposed;
   }
 
+  /**
+   * macOS: rounds the native glass to the current card and tells the renderer to draw over it (`native`). If that
+   * fails (the glass logged it), the vibrancy goes too, since unrounded it would show as a blurred rectangle around the
+   * card, and the renderer falls back to the tint glass; the glass stays off, so later windows get no vibrancy. The
+   * glass is shared: once another widget's rounding turned it off, this one drops its vibrancy the same way.
+   */
+  private applyGlass(win: BrowserWindow): void {
+    const glass = this.deps.glass;
+    if (!glass || win.isDestroyed()) return;
+    if (glass.enabled && glass.round(win, this.style)) {
+      if (this.background?.kind !== 'native') this.setBackground(NATIVE);
+      return;
+    }
+    if (!this.vibrant) return; // created without vibrancy (the glass was already off): the renderer keeps its tint
+    this.vibrant = false;
+    win.setVibrancy(null);
+    this.setBackground(TINT);
+  }
+
+  private platform(): NodeJS.Platform {
+    return this.deps.platform ?? process.platform;
+  }
+
   private create(): BrowserWindow {
+    // macOS: vibrancy with the window kept transparent (clear and non-opaque outside the rounded content); {} elsewhere.
+    const glassOptions = this.deps.glass?.windowOptions() ?? {};
+    this.vibrant = !!glassOptions.vibrancy;
     const win = new BrowserWindow({
       ...this.bounds, show: false,
       frame: false, transparent: true, resizable: false, skipTaskbar: true, focusable: true, hasShadow: false,
+      ...glassOptions,
+      // macOS, glass or not: the app (LSUIElement) is almost never active, so without acceptFirstMouse the first left
+      // press (open the schedule, start a drag, «Готово») would only activate it; and Cmd+M must not minimize the widget.
+      ...(this.platform() === 'darwin' ? { acceptFirstMouse: true, minimizable: false } : {}),
       // No background throttling: a pinned, occluded widget must keep its minute clock running.
       webPreferences: { preload: this.deps.preload, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
@@ -225,7 +268,9 @@ export class WidgetWindow {
       // and its first show re-applies its own (screen-coordinate) bounds; both must happen before it becomes a child.
       this.deps.pinner.setBounds(win, this.bounds);
       this.applyShape(win);
+      this.applyGlass(win); // after the vibrancy (applied at construction) and before the first frame shows
       win.showInactive();
+      // Last: on macOS nothing after the pin may reset the level (no setAlwaysOnTop / setVisibleOnAllWorkspaces).
       this.deps.pinner.pin(win);
     });
     win.on('close', e => { if (!this.deps.quitting()) e.preventDefault(); }); // e.g. Alt+F4 must not remove the widget

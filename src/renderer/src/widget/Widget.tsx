@@ -15,8 +15,9 @@ const emptyView = (now: Date): WidgetView => ({
 
 /**
  * Purely presentational; fills its window exactly (the window is transparent, the rounded card is the visible shape).
- * Layers: the blurred wallpaper under the window (or the theme's solid underlay), the glass tinted by the state, content,
- * and `children` over it all (move mode), clipped to the card.
+ * Layers: the blurred wallpaper under the window (or the theme's solid underlay; for `native`, nothing: the macOS
+ * window's own vibrancy shows through), the glass tinted by the state, content, and `children` over it all (move mode),
+ * clipped to the card.
  */
 export function Widget({ state, now, background, children }: {
   state: WidgetState; now: Date; background: WidgetBackground; children?: ReactNode;

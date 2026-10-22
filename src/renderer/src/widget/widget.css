@@ -59,6 +59,8 @@ body { user-select: none; -webkit-user-select: none; cursor: default; }
   border-radius: var(--bw-r-compact); box-shadow: var(--bw-shadow);
 }
 .w-bg-tint { background: var(--w-underlay); }
+/* macOS native glass: the window's vibrancy blurs the desktop under the card, so no underlay; glass, edge and tint stay. */
+.w-bg-native { --w-underlay: transparent; }
 .w-bg { position: absolute; inset: -30px; background-size: cover; background-position: center; filter: blur(18px) saturate(160%); }
 .w-glass {
   position: absolute; inset: 0; box-sizing: border-box; border: 1px solid var(--bw-glass-edge); border-radius: inherit;

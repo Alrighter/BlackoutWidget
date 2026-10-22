@@ -29,7 +29,7 @@ import { RefreshScheduler, startDelays, type TriggerReason } from './scheduler';
 import { AppStore, LocationError } from './store';
 import { AppTray } from './tray';
 import { buildWidgetMenu, type TrayActions } from './tray-menu';
-import { createDesktopPinner } from './widget/desktop-pin';
+import { createDesktopNative } from './widget/desktop-pin';
 import { startGlassUpdater } from './widget/glass-updater';
 import { placeNewWidget } from './widget/position';
 import { WidgetWindow } from './widget/widget-window';
@@ -92,6 +92,8 @@ async function bootstrap(log: Logger): Promise<void> {
   const actualSources = createActualSources({ fetch: electronFetch, connect: mqttConnect, ble: bleLink });
   const preload = join(__dirname, '../preload/index.js');
   const mainWindow = new MainWindow(preload);
+  // The widgets' native side, once per process: on macOS one crash guard for every widget's pinner and the shared glass.
+  const native = createDesktopNative(log, { userData, version: app.getVersion() });
   // The widgets' close guard and explorer-restart rebuild read this: once the app quits, they close for good.
   let quitting = false;
   app.on('before-quit', () => { quitting = true; });
@@ -103,7 +105,8 @@ async function bootstrap(log: Logger): Promise<void> {
 
   // One scheduler and one widget per location (location-runtime.ts). The first reconcile with real settings is the
   // boot: its locations start staggered per provider, each delay used once; a location added later refreshes at once.
-  // Each widget has its own pinner and, on Windows, its own glass updater.
+  // Each widget has its own pinner and, on Windows, its own glass updater. macOS has no updater: the window's own
+  // vibrancy blurs the desktop, and the widget sends the renderer `native` (or `tint` with the native glass off).
   const runtime = new LocationRuntime<RefreshScheduler, { window: WidgetWindow; stopGlass(): void }>({
     log,
     createScheduler: (id, delayMs) => {
@@ -114,11 +117,11 @@ async function bootstrap(log: Logger): Promise<void> {
     disposeScheduler: scheduler => scheduler.stop(),
     // A create that throws is tried again by the next reconcile, so whatever it built so far is disposed first.
     createWidget: id => {
-      const pinner = createDesktopPinner(log);
+      const pinner = native.createPinner();
       let window: WidgetWindow;
       try {
         window = new WidgetWindow({
-          locationId: id, store, pinner, preload, log,
+          locationId: id, store, pinner, glass: native.glass, preload, log,
           otherBounds: () => liveWidgets().filter(w => w.locationId !== id).map(w => w.getBoundsDip()),
           quitting: () => quitting,
         });
@@ -315,6 +318,7 @@ async function bootstrap(log: Logger): Promise<void> {
   publish(); // the first reconcile: the schedulers start (staggered) and the widgets show
   app.on('will-quit', () => {
     runtime.clear(); // each widget's glass updater and pinner, then the schedulers
+    native.release(); // macOS: drops the crash marker still held after the last native call
     stopActualUpdates();
     stopLive();
     livePush.dispose();

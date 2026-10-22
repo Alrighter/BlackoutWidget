@@ -79,17 +79,38 @@ const WALLPAPERS = {
   },
 };
 
-let background;
-/** What main's glass updater would send: the wallpaper under the widget, or the flat tint. */
-function widgetBackground() {
-  if (background) return background;
-  const { kind, width, height } = cfg.wallpaper;
-  if (kind === 'none') return (background = { kind: 'tint' });
+/** One of WALLPAPERS on a canvas the size of the window, as a PNG data URL. */
+function paintWallpaper(kind, width, height) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   WALLPAPERS[kind](canvas.getContext('2d'), width, height);
-  return (background = { kind: 'image', dataUrl: canvas.toDataURL('image/png') });
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Stand-in for the macOS vibrancy under a `native` card (rig only, never in the app's CSS): the theme's wallpaper behind
+ * the glass, blurred as in the mockup (blur 30 px, saturate 180 %) and clipped by the card, as the window's rounded
+ * layer clips the real blur.
+ */
+function standInForVibrancy(dataUrl) {
+  const style = document.createElement('style');
+  style.textContent = `.w-bg-native::before { content: ''; position: absolute; inset: -30px; ` +
+    `background: url("${dataUrl}") center / cover; filter: blur(30px) saturate(180%); }`;
+  document.head.append(style);
+}
+
+let background;
+/** What main would send: the wallpaper under the widget (Windows' glass updater), the flat tint, or macOS's `native`. */
+function widgetBackground() {
+  if (background) return background;
+  const { kind, theme, width, height } = cfg.wallpaper;
+  if (kind === 'none') return (background = { kind: 'tint' });
+  if (kind === 'native') {
+    standInForVibrancy(paintWallpaper(theme, width, height));
+    return (background = { kind: 'native' });
+  }
+  return (background = { kind: 'image', dataUrl: paintWallpaper(kind, width, height) });
 }
 
 const noop = () => {};

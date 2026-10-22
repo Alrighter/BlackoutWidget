@@ -23,7 +23,7 @@ Rebuild after every source change: the rig only sees `out/`.
 | `--view` | `schedule`, `settings`, `setup` (app only, the `?view=` query the main window loads) | `schedule` |
 | `--out` | output directory (keep task captures in `.superpowers/design-refresh/captures/<task>/`) | `.superpowers/design-refresh/captures` |
 | `--now` | `HH:MM` (Kyiv, on 2026-10-17) or an ISO date-time; overrides the scenario's clock | the scenario's |
-| `--wallpaper` | `auto` (= theme), `light`, `dark`, `busy`, `none` (no image: `{ kind: 'tint' }`) | `auto` |
+| `--wallpaper` | `auto` (= theme), `light`, `dark`, `busy`, `none` (no image: `{ kind: 'tint' }`), `native` (macOS: `{ kind: 'native' }` over a stand-in for the vibrancy, see below) | `auto` |
 | `--move-mode` | flag: the widget is told it is in move mode (`onMoveMode(true)`) | off |
 | `--locations` | `1`, `2`: with 2 the app also has «Батьки» (id `parents`, its own address, the same fake schedule); the widget then shows its name | `1` |
 | `--widget-location` | id of the location the widget shows (`home`, `parents`) | the first |
@@ -77,6 +77,11 @@ byte-identical PNGs, so comparing hashes shows whether a change altered the look
 - **Widget background:** the preload paints the mockup's wallpapers (`WP` in `widget-compact-states.html`) on a canvas
   the size of the window. It sends the result as `WidgetBackground { kind: 'image', dataUrl }`, as main's glass
   updater sends the wallpaper crop under the widget. `busy` is the mockup's «строкаті шпалери».
+- **`--wallpaper native`:** the page gets `{ kind: 'native' }`, as main sends on macOS when the window's vibrancy and
+  rounded corners are in place, so the card draws no underlay. The rig has no vibrancy, so the preload stands in for
+  it: a rule of its own puts the theme's wallpaper under the glass (`.w-bg-native::before`, blur 30 px and saturate
+  180 % as in the mockup), clipped by the card as the window's rounded layer clips the real blur. The rule exists only
+  in the rig; the app's CSS has nothing under a `native` card.
 
 ## Clock
 

@@ -56,7 +56,8 @@ export interface AppState {
   settingsLoaded: boolean;
 }
 export interface WidgetState { location: LocationState; showName: boolean }
-export type WidgetBackground = { kind: 'image'; dataUrl: string } | { kind: 'tint' };
+/** Under the widget's glass: the wallpaper crop (Windows), the solid underlay, or the window's own blur (macOS vibrancy). */
+export type WidgetBackground = { kind: 'image'; dataUrl: string } | { kind: 'tint' } | { kind: 'native' };
 export type EcoflowRegion = 'eu' | 'us';
 export type ActualPower = 'on' | 'off' | 'unknown';
 export interface ActualSegment { power: ActualPower; start: string; end?: string; startApprox?: boolean }
