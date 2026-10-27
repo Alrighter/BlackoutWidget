@@ -1,5 +1,6 @@
+import { CancellationToken } from 'electron-updater';
 import type { Logger } from '../log';
-import type { UpdateBackend } from './backend';
+import { DOWNLOAD_STALL_MS, type UpdateBackend } from './backend';
 import { releasePage } from './feed';
 import { checkNewer, type UpdaterLike } from './updater';
 
@@ -11,6 +12,7 @@ import { checkNewer, type UpdaterLike } from './updater';
 export class WinBackend implements UpdateBackend {
   constructor(
     private readonly u: UpdaterLike, private readonly openExternal: (url: string) => void, private readonly log: Logger,
+    private readonly stallMs = DOWNLOAD_STALL_MS,
   ) {}
 
   async check(): Promise<string | null> {
@@ -25,13 +27,23 @@ export class WinBackend implements UpdateBackend {
     this.openExternal(releasePage(version));
   }
 
+  /** Cancelled after `stallMs` without a progress event; electron-updater then removes the partial file. */
   async download(_version: string, onProgress: (percent: number) => void): Promise<void> {
-    const progress = (p: { percent: number }): void => onProgress(p.percent);
+    const token = new CancellationToken();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = (): void => { clearTimeout(timer); timer = setTimeout(() => token.cancel(), this.stallMs); };
+    const progress = (p: { percent: number }): void => { arm(); onProgress(p.percent); };
     this.u.on('download-progress', progress);
+    arm();
     try {
-      await this.u.downloadUpdate();
+      await this.u.downloadUpdate(token);
+    } catch (err) {
+      if (token.cancelled) throw new Error(`the download stalled: no data for ${this.stallMs / 1000} s`, { cause: err });
+      throw err;
     } finally {
+      clearTimeout(timer);
       this.u.off('download-progress', progress);
+      token.dispose();
     }
   }
 

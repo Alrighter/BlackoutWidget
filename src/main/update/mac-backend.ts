@@ -6,18 +6,20 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { UpdateInfo } from 'electron-updater';
 import type { Logger } from '../log';
-import type { UpdateBackend } from './backend';
+import { DOWNLOAD_STALL_MS, type UpdateBackend } from './backend';
 import { downloadBase, releasePage } from './feed';
 import { HELPER_SCRIPT, helperArgs } from './mac-helper';
 import { checkNewer, type UpdaterLike } from './updater';
 
 export interface MacBackendDeps {
   updater: UpdaterLike; feed: string; exePath: string; tempDir: string; helperLog: string; pid: number;
-  fetch(url: string): Promise<Response>;
+  fetch(url: string, init: { signal: AbortSignal }): Promise<Response>;
   /** Stdout; rejects on a non-zero exit. */
   exec(cmd: string, args: string[]): Promise<string>;
   spawnDetached(cmd: string, args: string[]): void;
   quit(): void; openExternal(url: string): void; log: Logger;
+  /** Tests shorten it; DOWNLOAD_STALL_MS otherwise. */
+  stallMs?: number;
 }
 
 const APP_NAME = 'Blackout Widget.app';
@@ -111,23 +113,40 @@ export class MacBackend implements UpdateBackend {
   private async fetchVerified(
     url: string, file: string, size: number | undefined, sha512: string, onProgress: (percent: number) => void,
   ): Promise<void> {
-    const res = await this.d.fetch(url);
-    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status} for ${url}`);
-    const total = size ?? Number(res.headers.get('content-length') ?? 0);
+    // No data for stallMs (before the headers or mid-body) aborts the request and the write.
+    const stallMs = this.d.stallMs ?? DOWNLOAD_STALL_MS;
+    const stall = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = (): void => {
+      clearTimeout(timer);
+      timer = setTimeout(() => stall.abort(new Error(`the download stalled: no data for ${stallMs / 1000} s`)), stallMs);
+    };
     const hash = createHash('sha512');
     let received = 0;
-    await pipeline(
-      Readable.fromWeb(res.body as WebReadableStream<Uint8Array>),
-      async function* (source: AsyncIterable<Buffer>) {
-        for await (const chunk of source) {
-          hash.update(chunk);
-          received += chunk.length;
-          if (total > 0) onProgress(Math.min(100, (received / total) * 100));
-          yield chunk;
-        }
-      },
-      createWriteStream(file),
-    );
+    arm();
+    try {
+      const res = await this.d.fetch(url, { signal: stall.signal });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status} for ${url}`);
+      const total = size ?? Number(res.headers.get('content-length') ?? 0);
+      await pipeline(
+        Readable.fromWeb(res.body as WebReadableStream<Uint8Array>),
+        async function* (source: AsyncIterable<Buffer>) {
+          for await (const chunk of source) {
+            arm();
+            hash.update(chunk);
+            received += chunk.length;
+            if (total > 0) onProgress(Math.min(100, (received / total) * 100));
+            yield chunk;
+          }
+        },
+        createWriteStream(file),
+        { signal: stall.signal },
+      );
+    } catch (err) {
+      throw stall.signal.aborted ? stall.signal.reason : err;
+    } finally {
+      clearTimeout(timer);
+    }
     if (size !== undefined && received !== size) throw new Error(`the download is ${received} bytes, the feed's size is ${size}`);
     if (hash.digest('base64') !== sha512) throw new Error(`the download's sha512 differs from the feed's`);
   }

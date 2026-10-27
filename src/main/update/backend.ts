@@ -1,3 +1,9 @@
+/**
+ * A download that gets no data for this long fails (and a click starts it again). On mobile data a dead connection
+ * usually stalls rather than resets, and neither Chromium nor electron-updater would end it soon.
+ */
+export const DOWNLOAD_STALL_MS = 60_000;
+
 /** One platform's way of finding, fetching and installing a newer release. The controller decides when. */
 export interface UpdateBackend {
   /** The newer version on the feed, or null. Never downloads. */

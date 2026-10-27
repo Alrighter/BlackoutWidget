@@ -1,4 +1,4 @@
-import type { UpdateInfo } from 'electron-updater';
+import type { CancellationToken, UpdateInfo } from 'electron-updater';
 import type { Logger } from '../log';
 import { feedConfig, type FeedConfig } from './feed';
 
@@ -7,7 +7,7 @@ export interface UpdaterLike {
   autoDownload: boolean; autoInstallOnAppQuit: boolean; allowDowngrade: boolean; logger: unknown;
   setFeedURL(options: FeedConfig): void;
   checkForUpdates(): Promise<{ isUpdateAvailable: boolean; updateInfo: UpdateInfo } | null>;
-  downloadUpdate(): Promise<unknown>;
+  downloadUpdate(token?: CancellationToken): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
   on(event: 'download-progress', cb: (p: { percent: number }) => void): unknown;
   on(event: 'error', cb: (e: Error) => void): unknown;

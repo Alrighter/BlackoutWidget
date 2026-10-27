@@ -268,7 +268,7 @@ async function bootstrap(log: Logger): Promise<void> {
       openExternal: url => { shell.openExternal(url).catch(err => log.error('opening the release page failed', err)); },
       mac: {
         exePath: app.getPath('exe'), tempDir: app.getPath('temp'), helperLog, pid: process.pid,
-        fetch: url => net.fetch(url),
+        fetch: (url, init) => net.fetch(url, init),
         exec: async (cmd, args) => (await execFileP(cmd, args)).stdout,
         spawnDetached: (cmd, args) => {
           const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });

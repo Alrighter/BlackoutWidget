@@ -43,7 +43,7 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
  * A backend over real temp dirs. The fake `ditto` unpacks a `<appName>` whose plist `plutil` reads as `plistVersion`;
  * every command is recorded.
  */
-function setup(o: { appName?: string; plistVersion?: string; response?: () => Response; exePath?: string } = {}) {
+function setup(o: { appName?: string; plistVersion?: string; response?: () => Response; exePath?: string; stallMs?: number } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'bw-mac-'));
   const tempDir = join(root, 'tmp'); mkdirSync(tempDir);
   const apps = join(root, 'Applications'); mkdirSync(apps);
@@ -62,6 +62,7 @@ function setup(o: { appName?: string; plistVersion?: string; response?: () => Re
       return '';
     }),
     spawnDetached: vi.fn(), quit: vi.fn(), openExternal: vi.fn(), log,
+    ...(o.stallMs === undefined ? {} : { stallMs: o.stallMs }),
   };
   const versionDir = join(tempDir, 'blackout-widget-update', '1.0.2');
   return { b: new MacBackend(deps), deps, updater, commands, versionDir, apps, root };
@@ -79,7 +80,7 @@ test('download streams the zip, reports percent, verifies, unpacks, checks the p
   await b.check();
   const seen: number[] = [];
   await b.download('1.0.2', p => seen.push(p));
-  expect(deps.fetch).toHaveBeenCalledWith(`https://github.com/Alrighter/BlackoutWidget/releases/download/v1.0.2/${ZIP_NAME}`);
+  expect(deps.fetch).toHaveBeenCalledWith(`https://github.com/Alrighter/BlackoutWidget/releases/download/v1.0.2/${ZIP_NAME}`, { signal: expect.any(AbortSignal) });
   expect(seen.at(-1)).toBe(100);
   expect(seen.length).toBeGreaterThan(1);
   const appDir = join(versionDir, 'app'); const app = join(appDir, 'Blackout Widget.app');
@@ -208,4 +209,30 @@ test('openManual opens the release page', () => {
   const { b, deps } = setup();
   b.openManual('1.0.2');
   expect(deps.openExternal).toHaveBeenCalledWith('https://github.com/Alrighter/BlackoutWidget/releases/tag/v1.0.2');
+});
+
+/** One chunk, then silence: a connection that stalls (mobile data) instead of failing. */
+function stalls(data: Buffer): ReadableStream<Uint8Array> {
+  let sent = false;
+  return new ReadableStream({
+    pull(c) {
+      if (sent) return new Promise<void>(() => {});
+      sent = true; c.enqueue(new Uint8Array(data.subarray(0, 1000)));
+    },
+  });
+}
+
+test('a download that stalls fails after the stall time and leaves no partial file', async () => {
+  const { b, commands, versionDir } = setup({ response: () => new Response(stalls(ZIP)), stallMs: 50 });
+  await b.check();
+  await expect(b.download('1.0.2', () => {})).rejects.toThrow(/stalled/);
+  expect(commands).toEqual([]);
+  expect(existsSync(versionDir)).toBe(false);
+});
+
+test('the fetch gets an abort signal for the stall', async () => {
+  const { b, deps } = setup();
+  await b.check();
+  await b.download('1.0.2', () => {});
+  expect(vi.mocked(deps.fetch).mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
 });

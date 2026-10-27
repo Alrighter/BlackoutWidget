@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { UpdateInfo } from 'electron-updater';
+import type { CancellationToken, UpdateInfo } from 'electron-updater';
 import type { Logger } from '../../../src/main/log';
 import type { FeedConfig } from '../../../src/main/update/feed';
 import { configureUpdater, type UpdaterLike } from '../../../src/main/update/updater';
@@ -13,7 +13,7 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
   autoDownload = true; autoInstallOnAppQuit = true; allowDowngrade = true; logger: unknown = null;
   setFeedURL = vi.fn<(o: FeedConfig) => void>();
   checkForUpdates = vi.fn<UpdaterLike['checkForUpdates']>(async () => null);
-  downloadUpdate = vi.fn<() => Promise<unknown>>(async () => []);
+  downloadUpdate = vi.fn<(token?: CancellationToken) => Promise<unknown>>(async () => []);
   quitAndInstall = vi.fn<(isSilent?: boolean, isForceRunAfter?: boolean) => void>();
 }
 
@@ -91,4 +91,26 @@ test('canInstall is true; openManual opens releasePage(version)', () => {
   expect(b.canInstall()).toBe(true);
   b.openManual('1.0.2');
   expect(open).toHaveBeenCalledWith('https://github.com/Alrighter/BlackoutWidget/releases/tag/v1.0.2');
+});
+
+/** A download that only ends when its token is cancelled. */
+const hangs = (u: FakeUpdater) => u.downloadUpdate.mockImplementationOnce(token =>
+  new Promise((_, reject) => token!.on('cancel', () => reject(new Error('cancelled')))));
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+test('a download with no progress for the stall time is cancelled and rejects', async () => {
+  const u = new FakeUpdater(); const b = new WinBackend(u, vi.fn(), logger(), 40);
+  hangs(u);
+  await expect(b.download('1.0.2', () => {})).rejects.toThrow(/stalled/);
+  expect(u.listenerCount('download-progress')).toBe(0);
+});
+
+test('progress keeps a slow download alive', async () => {
+  const u = new FakeUpdater(); const b = new WinBackend(u, vi.fn(), logger(), 40);
+  u.downloadUpdate.mockImplementationOnce(async token => {
+    for (let i = 0; i < 5; i++) { await sleep(20); u.emit('download-progress', { percent: i * 20 }); }
+    expect(token!.cancelled).toBe(false);
+    return [];
+  });
+  await expect(b.download('1.0.2', () => {})).resolves.toBeUndefined();
 });
