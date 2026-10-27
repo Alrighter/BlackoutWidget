@@ -364,3 +364,49 @@ test('back from the wizard the settings show the EcoFlow form closed', async () 
   expect(screen.getByRole('tab', { name: 'Налаштування' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.queryByLabelText('Email')).toBeNull();
 });
+
+describe('the update button', () => {
+  const OFFER = 'Оновити застосунок до 1.0.2';
+
+  test('no update button when idle', async () => {
+    pinDate();
+    render(<App api={fake(appState([locOf(HOME)], { update: { phase: 'idle' } })).api} view="schedule" />);
+    expect(await screen.findByRole('button', { name: 'Оновити зараз' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Оновити застосунок|Завантаження оновлення|Встановлення|Не вдалося оновити/ })).toBeNull();
+  });
+
+  test('an available update shows «Оновити застосунок до 1.0.2» on both tabs; a click calls installUpdate', async () => {
+    pinDate();
+    const f = fake(appState([locOf(HOME)], { update: { phase: 'available', version: '1.0.2' } }), { installUpdate: vi.fn(async () => {}) });
+    render(<App api={f.api} view="schedule" />);
+    const button = await screen.findByRole('button', { name: OFFER });
+    expect(button).toHaveAttribute('title', OFFER);
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    expect(f.api.installUpdate).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('tab', { name: 'Налаштування' }));
+    expect(screen.getByRole('button', { name: OFFER })).toBeInTheDocument();
+  });
+
+  test('downloading: disabled, named «Завантаження оновлення… 42 %»', async () => {
+    pinDate();
+    render(<App api={fake(appState([locOf(HOME)], { update: { phase: 'downloading', version: '1.0.2', percent: 42 } })).api} view="schedule" />);
+    expect(await screen.findByRole('button', { name: 'Завантаження оновлення… 42 %' })).toBeDisabled();
+  });
+
+  test('installing: disabled, named «Встановлення…»', async () => {
+    pinDate();
+    render(<App api={fake(appState([locOf(HOME)], { update: { phase: 'installing', version: '1.0.2' } })).api} view="schedule" />);
+    expect(await screen.findByRole('button', { name: 'Встановлення…' })).toBeDisabled();
+  });
+
+  test('error: named «Не вдалося оновити. Натисніть, щоб спробувати ще раз», clickable', async () => {
+    pinDate();
+    const f = fake(appState([locOf(HOME)], { update: { phase: 'error', version: '1.0.2' } }), { installUpdate: vi.fn(async () => {}) });
+    render(<App api={f.api} view="schedule" />);
+    const button = await screen.findByRole('button', { name: 'Не вдалося оновити. Натисніть, щоб спробувати ще раз' });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    expect(f.api.installUpdate).toHaveBeenCalledTimes(1);
+  });
+});

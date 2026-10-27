@@ -4,6 +4,7 @@ import type { AppState, WidgetStyle } from '../../../shared/types';
 import { Banner, ScheduleView } from './ScheduleView';
 import { SettingsView } from './SettingsView';
 import { SetupWizard, type WizardMode } from './SetupWizard';
+import { UpdateButton } from './UpdateButton';
 
 type Tab = 'schedule' | 'settings';
 /**
@@ -115,6 +116,7 @@ export function App({ api, view, locationId }: { api: RendererApi; view: MainVie
               <svg className="app-pick-chev" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
             </span>
           )}
+          <UpdateButton status={state.update} api={api} />
           {tab === 'schedule' && (
             <button className="app-refresh" aria-label="Оновити зараз" title="Оновити зараз" onClick={() => {
               // A location deleted meanwhile is refused by main; the next state drops it, so there is nothing to show.

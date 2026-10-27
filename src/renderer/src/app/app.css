@@ -61,6 +61,17 @@ p { margin: 6px 0; }
 }
 .app-refresh svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .app-refresh:hover, .sv-btn:hover { background: var(--bw-ctl-on); }
+/* The app update: the refresh button's twin. A ring fills while it downloads; a dot marks a failed try. */
+.app-update { position: relative; }
+/* Busy, not unavailable: the progress stays at full strength. */
+.app-update:disabled { opacity: 1; cursor: default; }
+.app-update:disabled:hover { background: var(--bw-btn); }
+.app-update .app-update-track { stroke-opacity: 0.2; stroke-width: 2.2; }
+.app-update .app-update-ring { stroke: var(--bw-accent); stroke-width: 2.2; stroke-linecap: round; }
+.app-update-dot {
+  position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--bw-danger-icon); box-shadow: 0 0 0 1.5px var(--bw-btn);
+}
 .app-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
 /* Settings that cannot be read yet: the note alone, with no tab row above it. */
 .app-body.app-unread { padding-top: 20px; }
