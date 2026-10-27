@@ -1,17 +1,20 @@
-import type { ActualStatus, AppState, LocationState, Settings, WidgetState } from '../shared/types';
+import type { ActualStatus, AppState, LocationState, Settings, UpdateStatus, WidgetState } from '../shared/types';
 
 /**
  * The state the windows get. `actual` (the station's own status) goes on AppState for the EcoFlow card, and onto
- * the one LocationState whose id is `settings.actualLocationId` — no other location carries it.
+ * the one LocationState whose id is `settings.actualLocationId` — no other location carries it. `update` only when
+ * the updater runs.
  */
 export function composeAppState(
   settings: Settings, locations: LocationState[], actual: ActualStatus | null | undefined, settingsLoaded: boolean,
+  update?: UpdateStatus,
 ): AppState {
   return {
     settings,
     locations: locations.map(l => (l.location.id === settings.actualLocationId ? { ...l, actual } : l)),
     actual,
     settingsLoaded,
+    ...(update ? { update } : {}),
   };
 }
 

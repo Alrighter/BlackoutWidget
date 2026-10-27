@@ -41,6 +41,8 @@ export interface IpcDeps {
   getSettings(): Settings;
   /** The Bluetooth link's live line; asked only while the saved source is `ecoflow-ble`. */
   bleLive: { getLive(): ActualLive | null };
+  /** The update button's click; never rejects (a failure is the error state). Nothing without an updater. */
+  installUpdate(): Promise<void>;
 }
 
 /** One of the app's own windows; the hidden DTEK session window never gets app state. */
@@ -118,6 +120,8 @@ export function registerIpc(deps: IpcDeps): void {
   handle(IPC.ecoflowSave, (i: unknown, device: unknown) => deps.actualActions.save(i, device));
   handle(IPC.actualDisconnect, () => deps.actualActions.disconnect());
   handle(IPC.getActualLive, () => (deps.getSettings().actualSource?.id === 'ecoflow-ble' ? deps.bleLive.getLive() : null));
+  // The main window's button only: a widget has none.
+  ipcMain.handle(IPC.installUpdate, async e => { if (!widgetOf(e)) await deps.installUpdate(); });
 
   ipcMain.on(IPC.openMainWindow, (e, view?: unknown) => {
     const widget = widgetOf(e);

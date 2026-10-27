@@ -1,11 +1,11 @@
 import type { UpdateInfo } from 'electron-updater';
 import type { Logger } from '../log';
-import { feedConfig } from './feed';
+import { feedConfig, type FeedConfig } from './feed';
 
 /** What both backends use of electron-updater's AppUpdater (tests pass a fake). */
 export interface UpdaterLike {
   autoDownload: boolean; autoInstallOnAppQuit: boolean; allowDowngrade: boolean; logger: unknown;
-  setFeedURL(options: object): void;
+  setFeedURL(options: FeedConfig): void;
   checkForUpdates(): Promise<{ isUpdateAvailable: boolean; updateInfo: UpdateInfo } | null>;
   downloadUpdate(): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;

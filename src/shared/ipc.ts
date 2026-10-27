@@ -17,6 +17,7 @@ export const IPC = {
   ecoflowTest: 'actual:ecoflow-test', ecoflowPreview: 'actual:ecoflow-preview', ecoflowSave: 'actual:ecoflow-save',
   actualDisconnect: 'actual:disconnect', openEcoflowHelp: 'actual:ecoflow-help', openProviderSite: 'addr:provider-site',
   actualLive: 'actual:live', getActualLive: 'actual:get-live', ecoflowScan: 'actual:ecoflow-scan',
+  installUpdate: 'update:install',
 } as const;
 
 /** Message of the Error that main-process handlers throw when the source asks for a captcha (class is lost over IPC). */
@@ -108,6 +109,8 @@ export interface RendererApi {
   getActualLive(): Promise<ActualLive | null>;
   /** Live line pushes to the main window, at most one a second; null once nothing is watched. */
   onActualLive(cb: (live: ActualLive | null) => void): () => void;
+  /** The update button: downloads the offered release, installs it and restarts. Progress comes as AppState.update. */
+  installUpdate(): Promise<void>;
 }
 
 declare global { interface Window { api: RendererApi } }

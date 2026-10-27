@@ -11,7 +11,10 @@ const OWNER = 'Alrighter';
 const REPO = 'BlackoutWidget';
 const RELEASES = `https://github.com/${OWNER}/${REPO}/releases`;
 
-export function feedConfig(feed: string): object {
+/** What setFeedURL takes: a generic feed (the test override) or the GitHub releases. */
+export type FeedConfig = { provider: 'generic'; url: string } | { provider: 'github'; owner: string; repo: string };
+
+export function feedConfig(feed: string): FeedConfig {
   return feed ? { provider: 'generic', url: feed } : { provider: 'github', owner: OWNER, repo: REPO };
 }
 

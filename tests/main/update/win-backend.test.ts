@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { UpdateInfo } from 'electron-updater';
 import type { Logger } from '../../../src/main/log';
+import type { FeedConfig } from '../../../src/main/update/feed';
 import { configureUpdater, type UpdaterLike } from '../../../src/main/update/updater';
 import { WinBackend } from '../../../src/main/update/win-backend';
 
@@ -10,7 +11,7 @@ const info = (version: string): UpdateInfo =>
 /** electron-updater's AppUpdater as far as the backends use it: an EventEmitter with the four calls as spies. */
 class FakeUpdater extends EventEmitter implements UpdaterLike {
   autoDownload = true; autoInstallOnAppQuit = true; allowDowngrade = true; logger: unknown = null;
-  setFeedURL = vi.fn<(o: object) => void>();
+  setFeedURL = vi.fn<(o: FeedConfig) => void>();
   checkForUpdates = vi.fn<UpdaterLike['checkForUpdates']>(async () => null);
   downloadUpdate = vi.fn<() => Promise<unknown>>(async () => []);
   quitAndInstall = vi.fn<(isSilent?: boolean, isForceRunAfter?: boolean) => void>();

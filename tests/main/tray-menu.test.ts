@@ -7,7 +7,7 @@ import type { ActualStatus, AppState, Location, LocationState, RefreshPhase, Wid
 import { fixtureSnapshot } from '../helpers/snapshot';
 
 const noop = () => {};
-const actions = { showWindow: noop, showSchedule: noop, refreshAll: noop, setStyle: noop, moveWidget: noop, openSettings: noop, toggleAutostart: noop, solveCaptcha: noop, quit: noop };
+const actions = { showWindow: noop, showSchedule: noop, refreshAll: noop, setStyle: noop, moveWidget: noop, openSettings: noop, toggleAutostart: noop, solveCaptcha: noop, installUpdate: noop, quit: noop };
 
 interface LocOpts { id?: string; style?: WidgetStyle; snapshot?: boolean; phase?: RefreshPhase }
 const locState = (name: string, o: LocOpts = {}): LocationState => {
@@ -54,6 +54,33 @@ test('captcha on the second location shows Пройти перевірку', () 
   (m[0].click as () => void)();
   expect(solveCaptcha).toHaveBeenCalled();
   expect(labels(menu(two(), 'win32'))).not.toContain('Пройти перевірку');
+});
+
+test('an available update puts «Оновити застосунок до 1.0.2» first, then a separator; it calls installUpdate', () => {
+  const installUpdate = vi.fn();
+  const s: AppState = { ...one(), update: { phase: 'available', version: '1.0.2' } };
+  const m = menu(s, 'win32', T0, { ...actions, installUpdate });
+  expect(labels(m.slice(0, 3))).toEqual(['Оновити застосунок до 1.0.2', '—', 'Показати графік']);
+  expect(m[0].enabled).toBe(true);
+  (m[0].click as () => void)();
+  expect(installUpdate).toHaveBeenCalledTimes(1);
+});
+
+test('the update item goes after the captcha item, and on macOS after the status header', () => {
+  const update = { phase: 'available', version: '1.0.2' } as const;
+  expect(labels(menu({ ...one({ phase: 'captcha' }), update }, 'win32').slice(0, 5)))
+    .toEqual(['Пройти перевірку', '—', 'Оновити застосунок до 1.0.2', '—', 'Показати графік']);
+  expect(labels(menu({ ...one(), update }, 'darwin').slice(0, 5)))
+    .toEqual(['Світло є', 'Вимкнення о 15:00 · через 3 год 10 хв', '—', 'Оновити застосунок до 1.0.2', '—']);
+});
+
+test('while downloading the update item is disabled and shows the percent', () => {
+  const m = menu({ ...one(), update: { phase: 'downloading', version: '1.0.2', percent: 42 } }, 'win32');
+  expect(m[0]).toMatchObject({ label: 'Завантаження оновлення… 42 %', enabled: false });
+});
+
+test('an idle update adds nothing', () => {
+  expect(labels(menu({ ...one(), update: { phase: 'idle' } }, 'win32'))).toEqual(labels(menu(one(), 'win32')));
 });
 
 test('Windows has no status header, whatever the state', () => {
