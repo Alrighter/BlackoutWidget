@@ -43,6 +43,12 @@ mac:
     - target: dmg
       arch:
         - arm64
+    # The update: the app downloads this zip (named in latest-mac.yml) and swaps itself (src/main/update/mac-backend.ts).
+    - target: zip
+      arch:
+        - arm64
+  # No spaces: the names in latest-mac.yml must be the assets' names on the GitHub release.
+  artifactName: Blackout-Widget-${version}-${arch}.${ext}
   category: public.app-category.utilities
   # No Apple Developer ID yet: ad-hoc signature so Apple Silicon will run it (Gatekeeper still asks once).
   identity: '-'
@@ -51,3 +57,6 @@ mac:
   extendInfo:
     LSUIElement: true
     NSBluetoothAlwaysUsageDescription: 'Blackout Widget читає зарядну станцію EcoFlow через Bluetooth.'
+dmg:
+  # The dmg target keeps its own default name otherwise.
+  artifactName: Blackout-Widget-${version}-${arch}.${ext}

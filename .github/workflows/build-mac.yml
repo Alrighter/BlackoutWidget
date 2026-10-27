@@ -1,8 +1,14 @@
 name: Build macOS
 
-# Manual only: macOS runners use private-repo minutes at 10x. Run: gh workflow run build-mac.yml
+# Manual only: a release build is made on demand (the repo is public). Run: gh workflow run build-mac.yml
+# A test build of the updater: gh workflow run build-mac.yml -f update_feed=<the test pre-release's download URL>
 on:
   workflow_dispatch:
+    inputs:
+      update_feed:
+        description: 'Update feed override for a test build (BW_UPDATE_FEED); empty for a release'
+        required: false
+        default: ''
 
 jobs:
   dmg:
@@ -17,11 +23,19 @@ jobs:
       - run: npm ci
       # The real koffi against the real Objective-C runtime: a wrong FFI declaration fails here, not on the Mac.
       - run: npx vitest run tests/main/widget/objc-darwin.smoke.test.ts
+      # The update code, with the swap helper run by the real /bin/sh and BSD tools.
+      - run: npx vitest run tests/main/update
       - run: npm run typecheck
       - run: npm run dist:mac
+        env:
+          BW_UPDATE_FEED: ${{ inputs.update_feed }}
       - uses: actions/upload-artifact@v4
         with:
           name: blackout-widget-mac-arm64
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-mac.yml
           if-no-files-found: error
           retention-days: 14

@@ -14,8 +14,9 @@ is pinned to the desktop.
 ## Installation
 
 Builds are on the releases page:
-<https://github.com/Alrighter/BlackoutWidget/releases>. There is no auto-update:
-download a new version from the same page and install it over the old one.
+<https://github.com/Alrighter/BlackoutWidget/releases>. From 1.0.1 on, the app
+updates itself (see «Updates» under «Features»). Version 1.0.0 can't: install
+1.0.1 over it by hand once.
 
 ### Windows
 
@@ -85,7 +86,29 @@ each address. Menu items: «Показати графік» (Show schedule), «�
 (Refresh now), «Стиль віджета» (Widget style), «Перемістити віджет» (Move
 widget), «Налаштування» (Settings), «Автозапуск» (Autostart), «Вийти» (Quit).
 «Пройти перевірку» (Pass the check) appears when the DTEK site asks for a
-verification. On macOS the menu starts with the state lines.
+verification, and «Оновити застосунок до <version>» (Update the app) when an
+update is out. On macOS the menu starts with the state lines.
+
+**Updates.** The app checks the latest release on GitHub 2 minutes after it
+starts and then every 6 hours, quietly: no dialogs and no notifications. When a
+newer version is out, a down-arrow button appears in the main window's header,
+next to «Оновити зараз», with «Оновити застосунок до <version>» (Update the app
+to <version>); the tray gets the same item. One click downloads the update (the
+button shows the progress), installs it and restarts the app; addresses,
+widgets, settings and EcoFlow stay. Nothing is downloaded before the click. If
+something fails, the button gets a red dot and «Не вдалося оновити. Натисніть,
+щоб спробувати ще раз» (Update failed, click to try again), and the running
+version keeps working.
+
+- **Windows:** electron-updater runs the new installer silently, for the
+  current user as before.
+- **macOS:** the app downloads the release's zip, checks its size and sha512,
+  unpacks it, and after it quits a small helper swaps the app in its folder and
+  opens it. If the app can't replace itself (it runs from the mounted dmg, or its
+  folder isn't writable for the user), the button opens the release page
+  instead. macOS may ask again for Bluetooth access, and to let the app use its
+  «Blackout Widget Safe Storage» Keychain item, after an update: the app is only
+  ad-hoc signed, so every build has a new signature.
 
 **Autostart.** On by default, but it works only in the installed app: nothing is
 registered during development. It is toggled in «Налаштування» («Запускати
@@ -95,7 +118,8 @@ the tray («Автозапуск»).
 ## Where the data comes from
 
 The app talks only to the hosts below (the one exception is the verification on
-the DTEK site, see below). There is no telemetry and no auto-update.
+the DTEK site, see below), plus GitHub's release hosts for updates. There is no
+telemetry.
 
 | Company | id | Region | Where the schedule comes from |
 | --- | --- | --- | --- |
@@ -338,7 +362,11 @@ startup error window shows the exact path. It records:
 - the raw fields of the current outage from the DTEK response;
 - unknown hour statuses;
 - EcoFlow events;
+- update checks and downloads, and why one failed;
 - on macOS, failures of the desktop pinning and the native glass.
+
+On macOS the update helper runs after the app has quit, so it writes its
+failures to `logs/update-helper.log`; the next start moves them into `app.log`.
 
 ### Memory
 
@@ -355,16 +383,18 @@ Windows. Chromium's GPU and network services run in the main process
 npm run dist:win
 ```
 
-Result: `dist/Blackout Widget Setup <version>.exe` (NSIS, x64, installs for the
-current user without administrator rights).
+Result: `dist/Blackout-Widget-Setup-<version>.exe` (NSIS, x64, installs for
+the current user without administrator rights), its `.blockmap`, and
+`latest.yml` (the update feed: version, file name, sha512, size).
 
 ### macOS
 
 electron-builder doesn't build a dmg on Windows, so the macOS build is made by
 the manual GitHub Actions workflow `.github/workflows/build-mac.yml`. It runs on
 `macos-14` (arm64) and does `npm ci`, a smoke test of the Objective-C bindings
-against the real runtime (`tests/main/widget/objc-darwin.smoke.test.ts`),
-`npm run typecheck` and `npm run dist:mac`.
+against the real runtime (`tests/main/widget/objc-darwin.smoke.test.ts`), the
+update tests (`tests/main/update`, with the swap helper run by the real
+`/bin/sh`), `npm run typecheck` and `npm run dist:mac`.
 
 ```
 gh workflow run build-mac.yml --ref main
@@ -373,18 +403,55 @@ gh run download <id> -n blackout-widget-mac-arm64
 ```
 
 The `blackout-widget-mac-arm64` artifact holds
-`Blackout Widget-<version>-arm64.dmg` and is kept for 14 days. The build is
+`Blackout-Widget-<version>-arm64.dmg`, `Blackout-Widget-<version>-arm64.zip`
+(what the update downloads), their `.blockmap` files and `latest-mac.yml`, and
+is kept for 14 days. The build is
 ad-hoc signed (`identity: '-'`), without notarization or hardened runtime; there
 is no Dock icon (`LSUIElement`). On a Mac itself, `npm run dist:mac` does the
 same.
 
 ### Release
 
-1. Bump `version` in `package.json` when the version is already taken by a tag.
-2. Build the Windows installer locally and the dmg through Actions.
-3. Rename the files without spaces (`Blackout-Widget-Setup-<version>.exe`,
-   `Blackout-Widget-<version>-arm64.dmg`) and create the release:
-   `gh release create v<version> <files> --notes-file <notes>`.
+Installed apps update from the latest full release, so every release needs a new
+version, and its files must keep the names the builds give them (the
+`latest*.yml` files name them).
+
+1. Bump `version` in `package.json`. A version can't be published twice.
+2. Build the Windows files locally (`npm run dist:win`) and the macOS files
+   through Actions (`gh workflow run build-mac.yml --ref main`, then
+   `gh run download`).
+3. Create the release with every file, unrenamed:
+
+   ```
+   gh release create v<version> --notes-file <notes>      dist/Blackout-Widget-Setup-<version>.exe dist/Blackout-Widget-Setup-<version>.exe.blockmap dist/latest.yml      <mac>/Blackout-Widget-<version>-arm64.dmg <mac>/Blackout-Widget-<version>-arm64.dmg.blockmap      <mac>/Blackout-Widget-<version>-arm64.zip <mac>/Blackout-Widget-<version>-arm64.zip.blockmap <mac>/latest-mac.yml
+   ```
+
+   A release without `latest.yml` or `latest-mac.yml` hides updates from that
+   platform until the next full release, because the apps read the latest one
+   only. Drafts and pre-releases are never offered.
+
+### Testing an update
+
+A broken updater can't fix itself, so a new one is proven on a hidden feed
+before it is released: a GitHub pre-release (tag `update-test`) that normal
+builds never read.
+
+1. Build a test version with the feed baked in, say `1.0.1-test.1`:
+   - Windows:
+     `BW_UPDATE_FEED=https://github.com/Alrighter/BlackoutWidget/releases/download/update-test npm run dist:win`;
+   - macOS: `gh workflow run build-mac.yml --ref <branch> -f update_feed=<the same URL>`.
+
+   Install it by hand on each machine.
+2. Build the next test version (`1.0.1-test.2`) the same way and upload all of its
+   update files (as in «Release») to the `update-test` pre-release.
+3. On each machine, wait for the button (or restart the app and wait 2 minutes),
+   click it, and check that the app restarts on the new version with its
+   addresses, widgets and EcoFlow.
+4. Before deleting the pre-release, put the real release's update files on it
+   too, so the test machines move to the real version. They read only that feed.
+
+`BW_UPDATE_FEED` is read at build time only; a build without it has no feed
+override, and there is no setting for it.
 
 ## Adding a source
 
