@@ -236,3 +236,12 @@ test('the fetch gets an abort signal for the stall', async () => {
   await b.download('1.0.2', () => {});
   expect(vi.mocked(deps.fetch).mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
 });
+
+test('a helper that did not start: install rejects and the app keeps running', async () => {
+  const { b, deps } = setup();
+  vi.mocked(deps.spawnDetached).mockImplementation(() => { throw new Error('the swap helper did not start (/bin/sh)'); });
+  await b.check();
+  await b.download('1.0.2', () => {});
+  await expect(b.install()).rejects.toThrow('did not start');
+  expect(deps.quit).not.toHaveBeenCalled();
+});

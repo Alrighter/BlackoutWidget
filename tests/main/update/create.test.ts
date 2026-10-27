@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { Logger } from '../../../src/main/log';
-import { createUpdates } from '../../../src/main/update';
+import { createUpdates, detachedSpawner } from '../../../src/main/update';
 import { UpdateController } from '../../../src/main/update/controller';
 import { MacBackend } from '../../../src/main/update/mac-backend';
 import type { UpdaterLike } from '../../../src/main/update/updater';
@@ -50,4 +50,20 @@ test('linux leaves the updater alone', () => {
   const u = new FakeUpdater();
   make('linux', u);
   expect(u.setFeedURL).not.toHaveBeenCalled();
+});
+
+/** What spawn returns, as far as detachedSpawner uses it. */
+const child = (pid: number | undefined) => Object.assign(new EventEmitter(), { pid, unref: vi.fn() });
+
+test('detachedSpawner starts the helper detached, with no stdio, and lets it outlive the app', () => {
+  const c = child(4321);
+  const spawn = vi.fn(() => c);
+  detachedSpawner(spawn, log)('/bin/sh', ['swap.sh', '1']);
+  expect(spawn).toHaveBeenCalledWith('/bin/sh', ['swap.sh', '1'], { detached: true, stdio: 'ignore' });
+  expect(c.unref).toHaveBeenCalled();
+});
+
+test('a helper that did not start throws, so the app does not quit', () => {
+  const spawn = vi.fn(() => child(undefined));
+  expect(() => detachedSpawner(spawn, log)('/bin/sh', ['swap.sh'])).toThrow(/did not start/);
 });

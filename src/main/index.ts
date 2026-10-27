@@ -32,7 +32,7 @@ import { RefreshScheduler, startDelays, type TriggerReason } from './scheduler';
 import { AppStore, LocationError } from './store';
 import { AppTray } from './tray';
 import { buildWidgetMenu, type TrayActions } from './tray-menu';
-import { createUpdates } from './update';
+import { createUpdates, detachedSpawner } from './update';
 import type { UpdateController } from './update/controller';
 import { drainHelperLog } from './update/helper-log';
 import { createDesktopNative } from './widget/desktop-pin';
@@ -270,11 +270,7 @@ async function bootstrap(log: Logger): Promise<void> {
         exePath: app.getPath('exe'), tempDir: app.getPath('temp'), helperLog, pid: process.pid,
         fetch: (url, init) => net.fetch(url, init),
         exec: async (cmd, args) => (await execFileP(cmd, args)).stdout,
-        spawnDetached: (cmd, args) => {
-          const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
-          child.on('error', err => log.error('update: the swap helper failed to start', err));
-          child.unref();
-        },
+        spawnDetached: detachedSpawner(spawn, log),
         // Through before-quit and will-quit: the widgets close for good, the BLE host and the EcoFlow session end.
         quit: () => app.quit(),
         openExternal: url => { shell.openExternal(url).catch(err => log.error('opening the release page failed', err)); },

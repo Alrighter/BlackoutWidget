@@ -2,7 +2,8 @@
  * The macOS swap helper: a /bin/sh script the app starts detached right before it quits. It waits for the app's
  * process to exit (the single-instance lock), moves the old bundle aside, moves the new one in and opens it. Any
  * failure puts the old bundle back and opens that. It writes only failures, to its log, which the app moves into its
- * own log on the next start (helper-log.ts).
+ * own log on the next start (helper-log.ts). Whatever happens, it ends by opening an app: the new one, the old one
+ * (if the app was too slow to quit, `open` only brings the running one forward), or the old one where it was set aside.
  *
  * Arguments: the app's pid, its bundle, the new bundle (unpacked and checked), the log. Environment, for tests:
  * BW_OPEN (default `open`), BW_WAIT_S (seconds to wait for the app to quit, default 60).
@@ -14,7 +15,7 @@ export const HELPER_SCRIPT = [
   'i=0',
   'while kill -0 "$pid" 2>/dev/null; do',
   '  i=$((i+1))',
-  '  if [ "$i" -gt $((wait_s*5)) ]; then echo "the app did not quit" >>"$log"; exit 1; fi',
+  '  if [ "$i" -gt $((wait_s*5)) ]; then echo "the app did not quit" >>"$log"; "$opener" "$old"; exit 1; fi',
   '  sleep 0.2',
   'done',
   'backup="$old.old-$$"',
@@ -23,7 +24,8 @@ export const HELPER_SCRIPT = [
   '  if mv "$backup" "$old" 2>>"$log"; then',
   '    echo "the new version could not be moved in; the old one is back" >>"$log"',
   '  else',
-  '    echo "the new version could not be moved in, nor the old one back: it is at $backup" >>"$log"; exit 1',
+  '    echo "the new version could not be moved in, nor the old one back: it is at $backup" >>"$log"',
+  '    "$opener" "$backup"; exit 1',
   '  fi',
   'else',
   '  echo "the old version could not be moved aside" >>"$log"',
