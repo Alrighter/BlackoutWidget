@@ -54,7 +54,16 @@ export interface AppState {
   actual?: ActualStatus | null;
   /** False until a read of settings.json has succeeded: the settings shown are then only a display fallback. */
   settingsLoaded: boolean;
+  /** The app update; absent = idle (no newer release known, or the updater doesn't run). */
+  update?: UpdateStatus;
 }
+/** Where the one-click app update stands. `version` is the release being offered. */
+export type UpdateStatus =
+  | { phase: 'idle' }
+  | { phase: 'available'; version: string }
+  | { phase: 'downloading'; version: string; percent: number }
+  | { phase: 'installing'; version: string }
+  | { phase: 'error'; version: string };
 export interface WidgetState { location: LocationState; showName: boolean }
 /** Under the widget's glass: the wallpaper crop (Windows), the solid underlay, or the window's own blur (macOS vibrancy). */
 export type WidgetBackground = { kind: 'image'; dataUrl: string } | { kind: 'tint' } | { kind: 'native' };

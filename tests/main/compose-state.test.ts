@@ -45,3 +45,9 @@ test("widgetStateOf never includes another location's snapshot or actual", () =>
   expect(w.location.actual).toBeUndefined();
   expect(Object.keys(w).sort()).toEqual(['location', 'showName']);
 });
+
+test('update is passed through, and absent when not given', () => {
+  const update = { phase: 'available', version: '1.0.2' } as const;
+  expect(composeAppState(settings(null, 'a'), [ls('a', 'a')], undefined, true, update).update).toEqual(update);
+  expect('update' in composeAppState(settings(null, 'a'), [ls('a', 'a')], undefined, true)).toBe(false);
+});

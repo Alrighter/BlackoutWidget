@@ -43,6 +43,7 @@ const api: RendererApi = {
   openProviderSite: (providerId: string) => ipcRenderer.send(IPC.openProviderSite, providerId),
   getActualLive: () => ipcRenderer.invoke(IPC.getActualLive),
   onActualLive: cb => subscribe(IPC.actualLive, cb),
+  installUpdate: () => ipcRenderer.invoke(IPC.installUpdate),
 };
 
 contextBridge.exposeInMainWorld('api', api);

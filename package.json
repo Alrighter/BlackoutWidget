@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dist:win": "electron-vite build && electron-builder --win --x64",
+    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "ui:capture": "electron scripts/ui-capture/capture.cjs",
@@ -21,6 +21,7 @@
   "dependencies": {
     "@noble/curves": "2.4.0",
     "@stoprocent/noble": "2.8.0",
+    "electron-updater": "6.8.11",
     "koffi": "^3.3.3",
     "mqtt": "5.16.0",
     "react": "^19.3.1",

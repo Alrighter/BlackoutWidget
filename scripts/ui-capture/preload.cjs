@@ -140,6 +140,7 @@ contextBridge.exposeInMainWorld('api', {
   setActualLocation: () => done(undefined),
   setAutostart: () => done(undefined),
   refreshNow: () => done(undefined),
+  installUpdate: () => done(undefined),
   solveCaptcha: () => done(undefined),
   openMainWindow: noop,
   onNavigate: () => noop,

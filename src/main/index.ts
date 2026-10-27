@@ -1,5 +1,8 @@
 import { app, dialog, net, powerMonitor, screen, shell } from 'electron';
+import { autoUpdater } from 'electron-updater';
+import { execFile, spawn } from 'node:child_process';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { IPC } from '../shared/ipc';
 import { UNKNOWN_LOCATION } from '../shared/locations';
 import { providerSiteUrl } from '../shared/providers';
@@ -29,6 +32,9 @@ import { RefreshScheduler, startDelays, type TriggerReason } from './scheduler';
 import { AppStore, LocationError } from './store';
 import { AppTray } from './tray';
 import { buildWidgetMenu, type TrayActions } from './tray-menu';
+import { createUpdates, detachedSpawner } from './update';
+import type { UpdateController } from './update/controller';
+import { drainHelperLog } from './update/helper-log';
 import { createDesktopNative } from './widget/desktop-pin';
 import { startGlassUpdater } from './widget/glass-updater';
 import { placeNewWidget } from './widget/position';
@@ -83,6 +89,9 @@ async function bootstrap(log: Logger): Promise<void> {
   log.info(`Blackout Widget ${app.getVersion()} starting`);
 
   const userData = app.getPath('userData');
+  const helperLog = join(userData, 'logs', 'update-helper.log');
+  // What the macOS swap helper could not do after the last quit.
+  if (app.isPackaged) drainHelperLog(helperLog, log);
   const store = new AppStore(userData);
   const providers = createProviders(o => new BrowserSession(o, log), log, { fetch: electronHttp, isOnline: () => net.isOnline() });
   const service = new RefreshService({ store, getProvider: id => findProvider(providers, id), log });
@@ -151,13 +160,15 @@ async function bootstrap(log: Logger): Promise<void> {
     // Dev runs must never write a bare electron.exe into HKCU Run.
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: store.getSettings().autostart });
   };
+  // The app update (src/main/update): only in the packaged app, built once `publish` exists.
+  let updates: UpdateController | null = null;
   // Every state that reaches a window or the tray goes through composeAppState.
   const actualStatus = safeActualStatus(() => actualService.getStatus(), log);
   const getState = (): AppState => {
     const settings = store.getSettings();
     // Read right after `settings`: whether they are real ones and not the fallback of an unreadable file.
     const loaded = store.settingsLoaded;
-    return composeAppState(settings, service.getStates(), actualStatus(), loaded);
+    return composeAppState(settings, service.getStates(), actualStatus(), loaded, updates?.status());
   };
   const publish = () => {
     const state = getState();
@@ -245,9 +256,27 @@ async function bootstrap(log: Logger): Promise<void> {
     openSettings: () => mainWindow.open('settings'),
     toggleAutostart: () => updateSettings({ autostart: !store.getSettings().autostart }),
     solveCaptcha: () => { solveCaptcha().catch(err => log.error('showVerification failed', err)); },
+    installUpdate: () => { updates?.install().catch(err => log.error('update: install failed', err)); },
     quit: () => app.quit(),
   };
   const tray = new AppTray(actions);
+
+  if (app.isPackaged) {
+    const execFileP = promisify(execFile);
+    updates = createUpdates({
+      platform: process.platform, log, updater: autoUpdater, onChange: () => publish(),
+      openExternal: url => { shell.openExternal(url).catch(err => log.error('opening the release page failed', err)); },
+      mac: {
+        exePath: app.getPath('exe'), tempDir: app.getPath('temp'), helperLog, pid: process.pid,
+        fetch: (url, init) => net.fetch(url, init),
+        exec: async (cmd, args) => (await execFileP(cmd, args)).stdout,
+        spawnDetached: detachedSpawner(spawn, log),
+        // Through before-quit and will-quit: the widgets close for good, the BLE host and the EcoFlow session end.
+        quit: () => app.quit(),
+        openExternal: url => { shell.openExternal(url).catch(err => log.error('opening the release page failed', err)); },
+      },
+    });
+  }
 
   /** The widget's right-click menu, bound to its own location: its style, its refresh, its settings. */
   const showWidgetMenu = (w: WidgetWindow) => {
@@ -293,6 +322,7 @@ async function bootstrap(log: Logger): Promise<void> {
     },
     getSettings: () => store.getSettings(),
     bleLive: bleLink,
+    installUpdate: async () => { await updates?.install(); },
   });
 
   service.onState(() => publish());
@@ -316,7 +346,9 @@ async function bootstrap(log: Logger): Promise<void> {
   applyAutostart();
   restartActual();
   publish(); // the first reconcile: the schedulers start (staggered) and the widgets show
+  updates?.start(); // the first check in 2 min, after the first refreshes
   app.on('will-quit', () => {
+    updates?.stop();
     runtime.clear(); // each widget's glass updater and pinner, then the schedulers
     native.release(); // macOS: drops the crash marker still held after the last native call
     stopActualUpdates();

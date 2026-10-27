@@ -1,11 +1,12 @@
 import type { MenuItemConstructorOptions } from 'electron';
 import type { AppState, LocationState, WidgetStyle } from '../shared/types';
+import { trayUpdateItem } from '../shared/update-text';
 import { computeWidgetView, type WidgetView } from '../shared/widget-state';
 
 export interface TrayActions {
   showWindow(): void; showSchedule(): void; refreshAll(): void;
   setStyle(locationId: string, s: WidgetStyle): void; moveWidget(locationId: string): void;
-  openSettings(): void; toggleAutostart(): void; solveCaptcha(): void; quit(): void;
+  openSettings(): void; toggleAutostart(): void; solveCaptcha(): void; installUpdate(): void; quit(): void;
 }
 
 /** The longest tooltip Windows shows (a NOTIFYICONDATA szTip is 128 characters with its terminator). */
@@ -64,6 +65,8 @@ export function buildTrayMenu(
   if (locations.some(l => l.phase === 'captcha')) {
     menu.push({ label: 'Пройти перевірку', click: () => a.solveCaptcha() }, { type: 'separator' });
   }
+  const update = trayUpdateItem(state.update);
+  if (update) menu.push({ ...update, click: () => a.installUpdate() }, { type: 'separator' });
   menu.push(
     { label: 'Показати графік', click: () => a.showSchedule() },
     { label: 'Оновити зараз', click: () => a.refreshAll() },
