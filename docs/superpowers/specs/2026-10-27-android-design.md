@@ -113,21 +113,21 @@ version number. electron-updater reads only the latest release, so a release mis
 desktop update from Windows users. A phone-only fix therefore also publishes a desktop build; its notes say «no changes
 for desktop». The Mac prompts this can cause (Bluetooth, Keychain) are the known cost.
 
-**To confirm with the user (provisional defaults below):**
+**Confirmed by the user («ок», 2026-10-27):**
 - **DTEK's hidden page in the background.** The desktop uses the page for the house check (emergency badge), a YASNO
   emergency day, the fallback when no feed is usable, and a captcha. Running a hidden WebView inside a WorkManager job,
   with no screen open, is the most fragile native piece, and the site's bot protection may treat it differently.
-  - *Provisional default:* try it, keeping parity. If it proves unreliable on the S25, the background job falls back to
+  - *Decided:* try it, keeping parity. If it proves unreliable on the S25, the background job falls back to
     the feeds only, and page work (house check, fallback) runs while the app is open.
   - A captcha in the background never blocks: the widget keeps the last schedule, and the app shows «Пройти
     перевірку».
   - The cost of feeds-only: a DTEK emergency badge can lag until the app is opened.
 - **Widget style: per widget or per address.** The desktop stores the style on the address (wizard step, Settings
   thumbnails, `setWidgetStyle`). Android's picker naturally chooses a style per widget.
-  - *Provisional default:* three picker entries, the style belongs to the widget, and the phone hides the wizard's
+  - *Decided:* three picker entries, the style belongs to the widget, and the phone hides the wizard's
     style step and the Settings style card.
   - The phone keeps its own table of widget id → address + style; `Location.widgetStyle` is unused there.
-  - The alternative is one picker entry with the style per address (exactly the desktop's model). Changing the style
+  - The rejected alternative was one picker entry with the style per address (exactly the desktop's model). Changing the style
     then restyles every widget of that address, but each widget keeps its home-screen size, so a new style may be
     letterboxed.
 
