@@ -7,6 +7,8 @@ export default defineConfig({
   // native koffi and noble .node binaries are never bundled. @noble/curves is
   // ESM-only, so it is bundled instead of left to require(esm) at runtime.
   main: {
+    // The update feed override (src/main/update/feed.ts): empty unless a test build sets BW_UPDATE_FEED.
+    define: { __UPDATE_FEED__: JSON.stringify(process.env.BW_UPDATE_FEED ?? '') },
     // settlements.json sits next to settlements.ts: resolve `./settlements` to the .ts first.
     resolve: { extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'] },
     build: {

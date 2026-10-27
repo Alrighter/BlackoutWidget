@@ -29,6 +29,13 @@ win:
 nsis:
   oneClick: true
   perMachine: false
+  # No spaces: the name in latest.yml must be the asset's name on the GitHub release.
+  artifactName: Blackout-Widget-Setup-${version}.${ext}
+# Makes the builds write latest.yml / latest-mac.yml and app-update.yml. Uploading stays manual (--publish never).
+publish:
+  provider: github
+  owner: Alrighter
+  repo: BlackoutWidget
 mac:
   # npm run app:icon; electron-builder makes the .icns from it.
   icon: build/icon.png
