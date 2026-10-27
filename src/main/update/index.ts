@@ -13,6 +13,7 @@ export function createUpdates(o: {
 }): UpdateController | null {
   const { platform, log, updater } = o;
   if (platform !== 'win32' && platform !== 'darwin') return null;
+  log.info(`update feed: ${UPDATE_FEED || 'GitHub releases of Alrighter/BlackoutWidget'}`);
   configureUpdater(updater, log, UPDATE_FEED);
   const backend = platform === 'win32'
     ? new WinBackend(updater, o.openExternal, log)

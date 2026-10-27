@@ -11,6 +11,22 @@ const OWNER = 'Alrighter';
 const REPO = 'BlackoutWidget';
 const RELEASES = `https://github.com/${OWNER}/${REPO}/releases`;
 
+/**
+ * The feed a build bakes in, from env BW_UPDATE_FEED (electron.vite.config.ts). Only a test version (one with a
+ * prerelease part, e.g. 1.0.1-test.1) may take one: a release built in a shell where the variable was left set would
+ * otherwise read the test feed for good, and could never update itself. Throws, so that build fails.
+ */
+export function buildFeed(env: string | undefined, version: string): string {
+  const feed = (env ?? '').trim().replace(/\/+$/, '');
+  if (!feed) return '';
+  if (!version.includes('-')) {
+    throw new Error(`BW_UPDATE_FEED is set, but ${version} is a release version: a release must read the GitHub releases. `
+      + 'Unset it (PowerShell: Remove-Item Env:BW_UPDATE_FEED) or build a test version (x.y.z-test.n).');
+  }
+  if (!/^https:\/\/[^/\s]+\/\S*$/.test(`${feed}/`)) throw new Error(`BW_UPDATE_FEED must be an https URL, not ${feed}`);
+  return feed;
+}
+
 /** What setFeedURL takes: a generic feed (the test override) or the GitHub releases. */
 export type FeedConfig = { provider: 'generic'; url: string } | { provider: 'github'; owner: string; repo: string };
 

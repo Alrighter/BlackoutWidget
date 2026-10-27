@@ -419,11 +419,17 @@ version, and its files must keep the names the builds give them (the
 1. Bump `version` in `package.json`. A version can't be published twice.
 2. Build the Windows files locally (`npm run dist:win`) and the macOS files
    through Actions (`gh workflow run build-mac.yml --ref main`, then
-   `gh run download`).
+   `gh run download`). A release build refuses `BW_UPDATE_FEED` (see «Testing an
+   update»), and the app log names its feed at start: `update feed: GitHub
+   releases of Alrighter/BlackoutWidget`.
 3. Create the release with every file, unrenamed:
 
    ```
-   gh release create v<version> --notes-file <notes>      dist/Blackout-Widget-Setup-<version>.exe dist/Blackout-Widget-Setup-<version>.exe.blockmap dist/latest.yml      <mac>/Blackout-Widget-<version>-arm64.dmg <mac>/Blackout-Widget-<version>-arm64.dmg.blockmap      <mac>/Blackout-Widget-<version>-arm64.zip <mac>/Blackout-Widget-<version>-arm64.zip.blockmap <mac>/latest-mac.yml
+   gh release create v<version> --notes-file <notes> \
+     dist/Blackout-Widget-Setup-<version>.exe dist/Blackout-Widget-Setup-<version>.exe.blockmap dist/latest.yml \
+     <mac>/Blackout-Widget-<version>-arm64.dmg <mac>/Blackout-Widget-<version>-arm64.dmg.blockmap \
+     <mac>/Blackout-Widget-<version>-arm64.zip <mac>/Blackout-Widget-<version>-arm64.zip.blockmap \
+     <mac>/latest-mac.yml
    ```
 
    A release without `latest.yml` or `latest-mac.yml` hides updates from that
@@ -437,8 +443,14 @@ before it is released: a GitHub pre-release (tag `update-test`) that normal
 builds never read.
 
 1. Build a test version with the feed baked in, say `1.0.1-test.1`:
-   - Windows:
-     `BW_UPDATE_FEED=https://github.com/Alrighter/BlackoutWidget/releases/download/update-test npm run dist:win`;
+   - Windows (PowerShell):
+
+     ```
+     $env:BW_UPDATE_FEED = 'https://github.com/Alrighter/BlackoutWidget/releases/download/update-test'
+     npm run dist:win
+     Remove-Item Env:BW_UPDATE_FEED
+     ```
+
    - macOS: `gh workflow run build-mac.yml --ref <branch> -f update_feed=<the same URL>`.
 
    Install it by hand on each machine.
@@ -450,7 +462,9 @@ builds never read.
 4. Before deleting the pre-release, put the real release's update files on it
    too, so the test machines move to the real version. They read only that feed.
 
-`BW_UPDATE_FEED` is read at build time only; a build without it has no feed
+`BW_UPDATE_FEED` is read at build time only, and only a test version (one with a
+prerelease part, `x.y.z-test.n`) may take it: building a release version with
+it set fails, so a test feed can't ship. A build without it has no feed
 override, and there is no setting for it.
 
 ## Adding a source

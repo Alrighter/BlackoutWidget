@@ -40,6 +40,12 @@ test('configureUpdater ran with UPDATE_FEED', () => {
   expect(u.setFeedURL).toHaveBeenCalledWith({ provider: 'github', owner: 'Alrighter', repo: 'BlackoutWidget' });
 });
 
+test('the feed in use is logged once at start', () => {
+  vi.mocked(log.info).mockClear();
+  make('darwin');
+  expect(log.info).toHaveBeenCalledWith('update feed: GitHub releases of Alrighter/BlackoutWidget');
+});
+
 test('linux leaves the updater alone', () => {
   const u = new FakeUpdater();
   make('linux', u);

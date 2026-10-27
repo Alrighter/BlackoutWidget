@@ -1,14 +1,16 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'electron-vite';
 import react from '@vitejs/plugin-react';
+import { version } from './package.json';
+import { buildFeed } from './src/main/update/feed';
 
 export default defineConfig({
   // Dependencies of main/preload stay external (electron-vite default) so the
   // native koffi and noble .node binaries are never bundled. @noble/curves is
   // ESM-only, so it is bundled instead of left to require(esm) at runtime.
   main: {
-    // The update feed override (src/main/update/feed.ts): empty unless a test build sets BW_UPDATE_FEED.
-    define: { __UPDATE_FEED__: JSON.stringify(process.env.BW_UPDATE_FEED ?? '') },
+    // The update feed override (src/main/update/feed.ts): empty unless a test version is built with BW_UPDATE_FEED.
+    define: { __UPDATE_FEED__: JSON.stringify(buildFeed(process.env.BW_UPDATE_FEED, version)) },
     // settlements.json sits next to settlements.ts: resolve `./settlements` to the .ts first.
     resolve: { extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'] },
     build: {
